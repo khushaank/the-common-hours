@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>The Common Hours — An independent journal</title>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="journal.js"></script>
+</head>
+<body id="top">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="wrap mast">
+    <a class="brand" href="./">The Common Hours<span aria-hidden="true">.</span></a>
+    <nav aria-label="Main navigation">
+      <a href="./" id="journal-link">Journal</a><a href="?view=archive" id="archive-link">Archive</a><a href="?view=about" id="about-link">About</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <section class="hero" id="hero" aria-labelledby="journal-title">
+    <div class="hero-copy">
+      <p class="eyebrow">An independent journal</p>
+      <h1 id="journal-title">The Common<br><em>Hours.</em></h1>
+      <p class="intro">Essays on time, attention, and the way we live.</p>
+      <a class="signature" href="?view=about">By Ellis Vale</a>
+    </div>
+    <div class="cover"><img src="cover.jpg" width="1200" height="800" alt="A wooden jetty reaches into a mist-covered lake" fetchpriority="high"></div>
+  </section>
+  <div class="layout">
+    <section id="content" tabindex="-1" aria-label="Journal entries"><p class="status" role="status">Loading entries…</p></section>
+    <aside id="sidebar" aria-label="Blog archive"></aside>
+  </div>
+  <noscript><p>Enable JavaScript to browse entries and leave comments.</p></noscript>
+</main>
+<footer class="site-footer">
+  <div class="wrap"><a class="footer-brand" href="./">The Common Hours.</a><a href="#top">Back to top <span aria-hidden="true">↑</span></a></div>
+</footer>
+</body>
+</html>

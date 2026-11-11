@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>Writing desk — The Common Hours</title>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="desk.js"></script>
+</head>
+<body>
+<main>
+<header><div><p class="label">THE COMMON HOURS</p><h1>Writing desk</h1></div><button id="logout" hidden>Sign out</button></header>
+<p id="status" role="status"></p>
+<form id="login" method="post">
+  <label>Email<input name="email" type="email" autocomplete="username" required></label>
+  <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+  <button disabled>Sign in</button>
+</form>
+<div id="desk" hidden>
+  <div class="desk">
+    <section><h2>Entries</h2><button id="new-post">New entry</button><ul id="posts"></ul></section>
+    <section>
+      <h2 id="editor-title">New entry</h2>
+      <form id="editor" method="post">
+        <label>Title<input name="title" maxlength="180" required></label>
+        <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title if left blank"></label>
+        <div class="fields">
+          <label>Tag<input name="tag" maxlength="40" list="tags" required></label>
+          <label>Publication date<input name="published_on" type="date" required></label>
+        </div>
+        <datalist id="tags"></datalist>
+        <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
+        <label>Body<textarea name="body" rows="12" maxlength="100000" required placeholder="Separate paragraphs with a blank line"></textarea></label>
+        <div class="actions"><button value="draft">Save as draft</button><button value="publish">Publish</button></div>
+      </form>
+    </section>
+  </div>
+  <section class="moderation">
+    <div class="moderation-head"><h2>Comments</h2><button id="refresh-comments">Refresh comments</button></div>
+    <div id="comments"></div>
+  </section>
+</div>
+</main>
+</body>
+</html>

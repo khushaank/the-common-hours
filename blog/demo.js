@@ -1,0 +1,21 @@
+// Original sample entries for previewing an unconfigured journal.
+const entries = [
+  ["2026-11-10", "Attention", "The art of doing one thing slowly", "I took the long way home and found out how much of the city I had been walking past.", "The bakery on the corner has a blue door. I have walked past it for years and somehow thought it was green. Today I stopped long enough to find out it was blue.\n\nI am trying to leave a few minutes in the day with nothing assigned to them. So far those minutes have a better record of surprising me than the ones I planned."],
+  ["2026-11-08", "Change", "A small permission to begin again", "There is a particular relief in deciding that an old promise has done its job.", "I used to write in the evenings because that was when the house went quiet. Now I write before breakfast, with the kettle rattling. It took a long time to admit the old routine had finished serving me."],
+  ["2026-11-06", "Everyday", "Things the rain makes visible", "A wet pavement, a borrowed umbrella, and the brief intimacy of waiting together.", "At the bus stop, someone tilted an umbrella to cover a stranger’s grocery bag. For a minute we all watched to see whether the paper would hold."],
+  ["2026-11-04", "Attention", "On leaving a little room", "I wanted a better calendar. What I needed was a little blank space between appointments.", "My calendar used to look like a wall of books with no room to slide another one in. These days I leave a little space beside each appointment. Usually that is where the actual conversation happens."],
+  ["2026-11-02", "Everyday", "The lamp in the upstairs window", "Every evening at six, a lamp goes on across the street. I have grown fond of its punctuality.", "The window is too far away to see much of the room. All I can see is that someone comes home and turns on the same warm lamp."],
+  ["2026-11-01", "Change", "A note on unfinished things", "Some unfinished things deserve a second look. Others are allowed to stay that way.", "At the back of the drawer I found a scarf with the needles still in it. I put it on, needles and all, to see how far I had come."],
+  ["2026-10-29", "Attention", "An hour with the window open", "A small experiment in listening to a familiar street.", "Without the glass in the way, the street had layers. The delivery bike was the loudest thing, but a child practising scales was the one I kept listening for."],
+  ["2026-10-24", "Everyday", "A good chair in a bad café", "I keep going back for the seat by the window.", "The coffee tastes a little burnt. The chair holds my back just right. Some afternoons that is an even trade."],
+  ["2026-10-17", "Change", "The year I stopped keeping score", "I was surprised by the things I kept doing after I stopped counting them.", "I stopped tracking my walks in October. A week later I was still taking the route past the trees. Apparently I liked it."],
+  ["2026-10-06", "Everyday", "Pockets full of paper", "A few receipts and a grocery list are sometimes enough to remember a whole afternoon.", "I washed a jacket and found a receipt afterwards, folded into a little square. Most of the ink was gone, except for the price of a peach."],
+  ["2026-09-28", "Attention", "How the light moves in September", "The same desk gets a different window every season.", "The light used to fall on my notebook at noon. Now it has crossed the room by the time I sit down. I moved my chair a little closer."],
+  ["2026-09-14", "Change", "When plans become stories", "I still remember the weekend by the thing we did on the way back.", "The ferry had stopped running, so we bought sandwiches and sat by the water instead. Years later I remember which rock I sat on, and nothing about the island."],
+  ["2026-09-02", "Everyday", "The ordinary cup", "Of all the things I own, I reach most often for the cup with a chip in it.", "I know where the chip is without looking. I turn the cup a little to the left and start the day."]
+];
+
+export default entries.map(([published_on, tag, title, excerpt, body]) => {
+  const slug = title.toLowerCase().replaceAll(" ", "-");
+  return { id: slug, slug, title, tag, excerpt, body, published_on };
+});
