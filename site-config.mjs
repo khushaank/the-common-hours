@@ -5,6 +5,7 @@ export const blogFiles = [
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
+export const adminFiles = ["index.html", "style.css", "desk.js"];
 
 export function readSiteConfig({ required = false } = {}) {
   try {
@@ -58,5 +59,5 @@ export function browserConfig({ origin, key }) {
 }
 
 export function withConnectSource(html, { origin }) {
-  return html.replace("connect-src 'self' https://*.supabase.co", "connect-src 'self'" + (origin ? " " + origin : ""));
+  return html.replace("connect-src 'self' https://*.supabase.co", "connect-src " + (origin || "'none'"));
 }

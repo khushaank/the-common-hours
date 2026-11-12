@@ -28,6 +28,6 @@ The blog asks readers for a display name and comment text. Comments start in mod
 2. Under **Settings → Secrets and variables → Actions**, create repository secrets named `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` with the same browser-safe values as your local `.env`.
 3. Under **Actions → Publish journal**, select **Run workflow** on the default branch. The deployment job links to the live site when it succeeds. Run it again to deploy future code changes. Posts published in the writing desk appear through Supabase without a site redeploy.
 
-The build publishes the journal files and generated browser configuration from `dist/`. Keep using the local preview for the writing desk. To publish with a different static host, run `node build.mjs` and upload only `dist/`.
+The build publishes the journal and the [writing desk](https://khushaank.github.io/the-common-hours/folio-80f54af81f7d/) from `dist/`. The desk uses Supabase Auth and the admin allowlist. The path is visible in this repository. To publish with a different static host, run `node build.mjs` and upload only `dist/`.
 
 The default Pages address includes your GitHub username. Set a custom domain in **Settings → Pages** before sharing the site if you want a standalone address. The GitHub repository is public and identifies its owner.

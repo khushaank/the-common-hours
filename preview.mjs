@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { blogFiles, browserConfig, readSiteConfig, withConnectSource } from "./site-config.mjs";
+import { adminFiles, blogFiles, browserConfig, readSiteConfig, withConnectSource } from "./site-config.mjs";
 
 const app = process.argv[2];
 if (app !== "blog" && app !== "admin") {
@@ -12,7 +12,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   console.error("Use a port from 0 to 65535. Port 0 picks an available port.");
   process.exit(1);
 }
-const files = new Set(app === "blog" ? [...blogFiles, "demo.js"] : ["index.html", "style.css", "desk.js"]);
+const files = new Set(app === "blog" ? [...blogFiles, "demo.js"] : adminFiles);
 files.add("config.js");
 const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", woff2: "font/woff2", txt: "text/plain" };
 let config;
