@@ -41,9 +41,13 @@ const commands = [
   ["heading", "Heading", "## Heading"],
   ["bold", "Bold", "**Bold text**"],
   ["italic", "Italic", "*Italic text*"],
-  ["list", "List", "- List item"],
+  ["list", "Bulleted list", "- List item"],
+  ["square", "Square list", "+ List item"],
+  ["numbered", "Numbered list", "1. List item"],
+  ["letters", "Lettered list", "1) List item"],
   ["quote", "Quote", "> Quote"],
   ["image", "Image"],
+  ["library", "Image library"],
   ["video", "Embed video"],
   ["file", "File"],
   ["pdf", "PDF"],
@@ -51,8 +55,17 @@ const commands = [
   ["divider", "Divider", "---"],
 ];
 
-export async function uploadImage(api, file) {
-  const [saved] = await api("media", { method: "POST", body: await encodeImage(file), prefer: "return=representation" });
+export async function uploadImage(api, file, alt) {
+  const record = await encodeImage(file);
+  if (alt) record.alt = alt;
+  let saved;
+  try {
+    [saved] = await api("media", { method: "POST", body: record, prefer: "return=representation" });
+  } catch (error) {
+    if (!alt || !["PGRST204", "42703"].includes(error.code)) throw error;
+    delete record.alt;
+    [saved] = await api("media", { method: "POST", body: record, prefer: "return=representation" });
+  }
   if (!saved?.id) throw new Error("The image could not be saved.");
   return saved;
 }
@@ -78,6 +91,7 @@ export function setupEditorTools(editor, api, attachments) {
   let active = 0;
   let matches = [];
   let attachmentId;
+  let library;
 
   function checkSpace(length, start, end) {
     if (body.value.length - (end - start) + length > body.maxLength) {
@@ -144,6 +158,16 @@ export function setupEditorTools(editor, api, attachments) {
   function choose([type, name, template]) {
     const { start, end } = command;
     closeMenu();
+    if (type === "library") {
+      library ??= import("./image-library.js").then(({ setupImageLibrary }) => setupImageLibrary(api, id => loadImage(api, id)));
+      void library.then(open => open(({ id, alt }) => {
+        replace("\n\n![" + markdownLabel(alt) + "](media:" + id + ")\n\n", start, end);
+      }, () => body.focus())).catch(() => {
+        library = undefined;
+        status.textContent = "The image library could not open. Try again.";
+      });
+      return;
+    }
     if (template) {
       try {
         const line = type === "bold" || type === "italic" ? template : "\n\n" + template + "\n\n";
@@ -185,7 +209,30 @@ export function setupEditorTools(editor, api, attachments) {
     if (event.relatedTarget !== body && !menu.contains(event.relatedTarget)) closeMenu();
   });
   body.addEventListener("keydown", event => {
-    if (menu.hidden || event.isComposing) return;
+    if (event.isComposing) return;
+    if (menu.hidden) {
+      if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const { value, selectionStart: start, selectionEnd: end } = body;
+        if (start !== end) return;
+        const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        const lineEnd = value.indexOf("\n", start);
+        const line = value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+        const item = /^([ \t]*)([-+*]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(line);
+        if (!item) return;
+        const [, indent, marker, spaces, content] = item;
+        if (start < lineStart + indent.length + marker.length + spaces.length) return;
+        event.preventDefault();
+        try {
+          if (!content.trim()) {
+            replace("", lineStart, lineStart + line.length);
+          } else {
+            const next = /^\d/.test(marker) ? Math.min(Number.parseInt(marker, 10) + 1, 999999999) + marker.at(-1) : marker;
+            replace("\n" + indent + next + " ", start, end);
+          }
+        } catch (error) { status.textContent = error.message; }
+      }
+      return;
+    }
     if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
@@ -227,14 +274,15 @@ export function setupEditorTools(editor, api, attachments) {
     button.disabled = cancel.disabled = true;
     insertStatus.textContent = "";
     try {
-      const label = markdownLabel(fields.get("label")?.trim() || "");
+      const plainLabel = fields.get("label")?.trim() || "";
+      const label = markdownLabel(plainLabel);
       const file = fields.get("file");
       let text;
       if (type === "image") {
         if (!label) throw new Error("Describe the image for readers who cannot see it.");
         checkSpace(label.length + 51, start, end);
         insertStatus.textContent = "Preparing image…";
-        const image = await uploadImage(api, file);
+        const image = await uploadImage(api, file, plainLabel);
         text = "\n\n![" + label + "](media:" + image.id + ")\n\n";
       } else if (type === "file" || type === "pdf") {
         if (!file?.size || file.size > attachmentLimit) throw new Error("Choose a file up to 25 MB.");
@@ -255,6 +303,7 @@ export function setupEditorTools(editor, api, attachments) {
         } else {
           if (!label) throw new Error("Enter link text.");
           text = "[" + label + "](<" + url.href.replaceAll(">", "%3E").replaceAll("<", "%3C") + ">)";
+          if (videoFrom(url.href)) text = "\n\n" + text + "\n\n";
         }
       }
       replace(text, start, end);

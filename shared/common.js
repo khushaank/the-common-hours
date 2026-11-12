@@ -8,7 +8,7 @@ export class RequestError extends Error {
   }
 }
 
-export async function request(path, { method = "GET", body, token, prefer, timeout = 12000, download = false } = {}) {
+export async function request(path, { method = "GET", body, token, prefer, timeout = 12000, download = false, keepalive = false } = {}) {
   const headers = { apikey: publishableKey };
   if (token) headers.Authorization = "Bearer " + token;
   if (prefer) headers.Prefer = prefer;
@@ -17,7 +17,7 @@ export async function request(path, { method = "GET", body, token, prefer, timeo
   let response;
   try {
     response = await fetch(getProjectOrigin() + path, {
-      method, headers, cache: "no-store", redirect: "error",
+      method, headers, cache: "no-store", redirect: "error", keepalive,
       signal: AbortSignal.timeout(timeout),
       body: binary || body === undefined ? body : JSON.stringify(body),
     });

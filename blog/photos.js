@@ -89,6 +89,7 @@ export async function startSlideshow(get, demo) {
     }
     if (loading !== revision) return;
     picture.alt = photo.alt;
+    picture.title = photo.alt;
     picture.width = data.width;
     picture.height = data.height;
     picture.src = data.src;
@@ -116,6 +117,7 @@ function photoDate(photo) {
 }
 
 async function showImage(get, picture, photo) {
+  picture.title = photo.alt;
   try {
     const data = await getImage(get, photo);
     picture.width = data.width;

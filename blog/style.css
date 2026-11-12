@@ -106,6 +106,8 @@ aside:empty { display: none; }
 .back { display: inline-block; margin-bottom: 20px; color: var(--accent); font-size: 13px; }
 .prose { max-width: 66ch; font: 19px/1.78 Georgia, serif; overflow-wrap: anywhere; }
 .prose p { white-space: pre-line; }
+.prose ul { list-style-type: disc; }
+.prose ul.square-list { list-style-type: square; }
 .prose h1, .prose h2 { font: 400 34px/1.12 var(--serif); margin: 1.4em 0 .35em; }
 .prose h3, .prose h4, .prose h5, .prose h6 { font: 400 27px/1.2 var(--serif); margin: 1.2em 0 .35em; }
 .prose a, .status a { color: var(--accent); text-decoration: underline; text-underline-offset: .17em; }
@@ -118,6 +120,7 @@ aside:empty { display: none; }
 .video { margin-block: 22px; }
 .video iframe, .video video { width: 100%; display: block; aspect-ratio: 16/9; border: 0; background: var(--soft); }
 .video-link { font: 13px var(--sans); }
+.video .video-caption { margin: 6px 0 0; font: 15px/1.4 var(--sans); }
 .prose .attachment { border: 1px solid var(--line); color: var(--accent); background: var(--soft); border-radius: 4px; padding: 9px 12px; font: 600 14px/1.4 var(--sans); min-height: 42px; overflow-wrap: anywhere; cursor: pointer; }
 .attachment-status:not(:empty) { display: block; font: 13px var(--sans); color: var(--muted); margin-top: 5px; }
 .post-nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin: 36px 0 30px; padding: 17px 0; border-block: 1px solid var(--line); }
@@ -143,8 +146,9 @@ button:disabled { opacity: .6; cursor: default; }
 @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
 .comments > div > .status { margin-top: 8px; }
-.site-footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
-.site-footer .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.site-footer { position: relative; isolation: isolate; min-height: clamp(98px, 12vw, 182px); border-top: 1px solid var(--line); color: var(--ink); font-size: 13px; }
+.footer-landscape { position: absolute; z-index: -1; bottom: 0; width: 100%; height: auto; display: block; }
+.site-footer .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
 
 @media (max-width: 760px) {
   .wrap { width: calc(100% - 36px); }

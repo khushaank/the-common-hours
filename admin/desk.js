@@ -29,6 +29,7 @@ let current;
 let posts = [];
 let baseline;
 let busy = false;
+let stats;
 
 function setSession(data) {
   session = { ...data, expires: Date.now() + (data.expires_in - 30) * 1000 };
@@ -235,6 +236,7 @@ logout.addEventListener("click", () => {
       inbox.replaceChildren();
       search.value = "";
       photoTools.clear();
+      stats?.clear();
       desk.hidden = true;
       logout.hidden = true;
       login.hidden = false;
@@ -334,6 +336,17 @@ async function openInbox() {
   ]);
 }
 
+async function openStats() {
+  try {
+    const { setupStats } = await import("./stats.js");
+    if (!session || document.querySelector("#stats-panel").hidden) return;
+    stats ??= setupStats(api, () => posts);
+    await stats.load();
+  } catch {
+    document.querySelector("#stats-status").textContent = "Stats could not open. Try again.";
+  }
+}
+
 document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
 for (const button of sections) {
   button.addEventListener("click", () => {
@@ -342,6 +355,7 @@ for (const button of sections) {
     showSection(section);
     if (section === "site") void photoTools.loadPhoto();
     if (section === "inbox") void openInbox();
+    if (section === "stats") void openStats();
   });
 }
 

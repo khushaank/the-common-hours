@@ -9,4 +9,8 @@ To enable file attachments and weekly photos on an existing site, run
 before running the **Publish journal** workflow. For a new database, run
 `supabase/install.sql` and `supabase/add-editorial-features.sql` first.
 
+Run `supabase/add-image-library-and-traffic.sql` next to store alt text for new
+uploads and enable the private traffic dashboard. Traffic counts begin when
+the updated journal goes live.
+
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

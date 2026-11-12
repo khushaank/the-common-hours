@@ -38,6 +38,21 @@ document.head.append(canonical);
 const get = (path, options) => request(table(path), options);
 const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
 
+function recordView(page, post = null) {
+  if (demo || navigator.globalPrivacyControl || navigator.doNotTrack === "1") return;
+  let visit = true;
+  try {
+    const key = "common-hours-last-view";
+    const now = Date.now();
+    const last = Number(sessionStorage.getItem(key));
+    visit = !last || now < last || now - last >= 30 * 60 * 1000;
+    sessionStorage.setItem(key, String(now));
+  } catch { /* Count the view if storage is unavailable. */ }
+  void request("/rest/v1/rpc/qmargin_b74_record_view", {
+    method: "POST", body: { p_page: page, p_post: post, p_visit: visit }, keepalive: true,
+  }).catch(() => {});
+}
+
 function grouped(posts, value) {
   const groups = new Map();
   for (const post of posts) {
@@ -177,6 +192,7 @@ async function renderPost(posts, index) {
     }
   }
   void loadComments();
+  recordView("post", post.id);
 }
 
 async function start() {
@@ -184,11 +200,13 @@ async function start() {
     const { renderLegal } = await import("./legal.js");
     document.title = (view === "privacy" ? "Privacy" : "Terms") + " — The Common Hours";
     renderLegal(content, view, demo);
+    recordView(view);
     return;
   }
   if (isPhoto) {
     const { renderPhotoView } = await import("./photos.js");
     await renderPhotoView(content, get, demo, view, params.get("photo"));
+    recordView(view);
     return;
   }
   const posts = demo ? (await import("./demo.js")).default : await allRows(get,
@@ -204,11 +222,13 @@ async function start() {
     ${topics.size ? `<section class="side-section"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topics, "tag", name => name, tag)}</ul></section>` : ""}`;
   if (view === "archive") {
     document.title = "Archive — The Common Hours";
+    recordView("archive");
     content.innerHTML = `<div class="section-head"><h1>Archive</h1></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
   } else if (slug) {
     await renderPost(posts, posts.findIndex(post => post.slug === slug));
   } else {
     renderList(posts);
+    recordView("journal");
   }
   sidebar.innerHTML = sidebarMarkup;
 }

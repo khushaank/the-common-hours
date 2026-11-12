@@ -27,6 +27,16 @@ md.renderer.rules.link_open = (tokens, index, options, env, self) => {
   return self.renderToken(tokens, index, options);
 };
 
+md.renderer.rules.bullet_list_open = (tokens, index, options, env, self) => {
+  if (tokens[index].markup === "+") tokens[index].attrSet("class", "square-list");
+  return self.renderToken(tokens, index, options);
+};
+
+md.renderer.rules.ordered_list_open = (tokens, index, options, env, self) => {
+  if (tokens[index].markup === ")") tokens[index].attrSet("type", "a");
+  return self.renderToken(tokens, index, options);
+};
+
 md.block.ruler.before("paragraph", "video", (state, line, endLine, silent) => {
   if (state.sCount[line] - state.blkIndent >= 4) return false;
   const start = state.bMarks[line] + state.tShift[line];
@@ -40,14 +50,44 @@ md.block.ruler.before("paragraph", "video", (state, line, endLine, silent) => {
   return true;
 }, { alt: ["paragraph", "blockquote", "list"] });
 
+md.core.ruler.after("inline", "linked_video", state => {
+  const tokens = state.tokens;
+  for (let index = tokens.length - 3; index >= 0; index--) {
+    if (tokens[index].type !== "paragraph_open" || tokens[index + 2].type !== "paragraph_close") continue;
+    const links = tokens[index + 1].children;
+    if (links?.[0]?.type !== "link_open" || links.at(-1)?.type !== "link_close") continue;
+    const linkText = links.slice(1, -1);
+    if (linkText.some(token => token.type === "link_open" || token.type === "link_close")) continue;
+    const video = videoFrom(links[0].attrGet("href") || "");
+    if (!video) continue;
+    const token = new state.Token("video", "", 0);
+    token.meta = { ...video, title: md.renderer.renderInlineAsText(linkText, md.options, state.env) };
+    tokens.splice(index, 3, token);
+  }
+});
+
 md.renderer.rules.video = (tokens, index) => {
-  const { src, href, label } = tokens[index].meta;
+  const { src, href, label, title } = tokens[index].meta;
   const player = label
-    ? '<iframe title="' + label + ' video" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen src="' + escape(src) + '"></iframe>'
+    ? '<iframe title="' + escape(title || label + " video") + '" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen src="' + escape(src) + '"></iframe>'
     : '<video controls playsinline preload="none" src="' + escape(src) + '"></video>';
-  return '<div class="video">' + player + '<a class="video-link" rel="noreferrer" href="' + escape(href) +
+  return '<div class="video">' + player + (title ? '<p class="video-caption">' + escape(title) + '</p>' : "") +
+    '<a class="video-link" rel="noreferrer" href="' + escape(href) +
     '">Watch ' + (label ? "on " + label : "video") + ' ↗</a></div>';
 };
+
+export function imageReferences(body) {
+  if (!body.startsWith(markdownMarker)) return [];
+  const references = [];
+  for (const block of md.parse(body.slice(markdownMarker.length), {})) {
+    for (const token of block.children || []) {
+      if (token.type !== "image") continue;
+      const id = assetId(token.attrGet("src") || "", "media:");
+      if (id) references.push({ id, alt: md.renderer.renderInlineAsText(token.children, md.options, {}) });
+    }
+  }
+  return references;
+}
 
 export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment } = {}) {
   if (!markdown) {
@@ -69,6 +109,7 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
       if (!src) throw new Error();
       const picture = new Image(image.width, image.height);
       picture.alt = slot.dataset.alt;
+      if (picture.alt) picture.title = picture.alt;
       picture.decoding = "async";
       picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
       picture.src = src;
