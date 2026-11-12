@@ -42,12 +42,13 @@ export function renderLegal(content, view, demo) {
   const form = contact.querySelector("form");
   const status = form.querySelector("[role=status]");
   const button = form.querySelector("button");
-  if (demo) {
+  if (demo || !window.isSecureContext) {
     button.disabled = true;
-    status.textContent = "Requests are unavailable in local preview.";
+    status.textContent = demo ? "Requests are unavailable in local preview." : "Use the HTTPS address to send a privacy request.";
   }
   form.addEventListener("submit", async event => {
     event.preventDefault();
+    if (demo || !window.isSecureContext) return;
     const data = new FormData(form);
     const email = data.get("email").trim();
     const message = data.get("message").trim();

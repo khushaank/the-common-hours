@@ -161,6 +161,11 @@ async function renderPost(posts, index) {
   const list = document.querySelector("#comment-list");
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
+  const button = form.querySelector("button");
+  if (!window.isSecureContext) {
+    button.disabled = true;
+    status.textContent = "Use the HTTPS address to leave a comment.";
+  }
   const storageKey = "qmargin-preview:" + post.slug;
 
   function showComments(comments) {
@@ -170,6 +175,7 @@ async function renderPost(posts, index) {
 
   form.addEventListener("submit", async event => {
     event.preventDefault();
+    if (!window.isSecureContext) return;
     const fields = new FormData(form);
     const display_name = fields.get("display_name").trim();
     const body = fields.get("body").trim();
@@ -177,7 +183,6 @@ async function renderPost(posts, index) {
       status.textContent = "Enter a display name and comment.";
       return;
     }
-    const button = form.querySelector("button");
     button.disabled = true;
     status.textContent = "Submitting…";
     try {
