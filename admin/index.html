@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data: blob:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Writing desk — The Common Hours</title>
 <link rel="stylesheet" href="style.css">
 <script type="module" src="desk.js"></script>
 </head>
 <body>
 <main>
-<header><div><p class="label">THE COMMON HOURS</p><h1>Writing desk</h1></div><button id="logout" hidden>Sign out</button></header>
+<header><h1>Writing desk</h1><button id="logout" hidden>Sign out</button></header>
 <p id="status" role="status"></p>
 <form id="login" method="post">
   <label>Email<input name="email" type="email" autocomplete="username" required></label>
@@ -20,8 +20,17 @@
   <button disabled>Sign in</button>
 </form>
 <div id="desk" hidden>
-  <div class="desk">
-    <section><h2>Entries</h2><button id="new-post">New entry</button><ul id="posts"></ul></section>
+  <nav class="desk-nav" aria-label="Writing desk sections">
+    <button type="button" aria-pressed="true" data-section="entries">Entries</button>
+    <button type="button" aria-pressed="false" data-section="site">Site</button>
+    <button type="button" aria-pressed="false" data-section="inbox">Inbox</button>
+  </nav>
+  <div class="desk" id="entries-panel">
+    <details id="entry-list" open><summary>Entries</summary>
+      <button type="button" id="new-post">New entry</button>
+      <label>Find an entry<input id="find-entry" type="search" autocomplete="off"></label>
+      <ul id="posts"></ul>
+    </details>
     <section>
       <h2 id="editor-title">New entry</h2>
       <form id="editor" method="post">
@@ -33,16 +42,60 @@
         </div>
         <datalist id="tags"></datalist>
         <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
-        <label>Body<textarea name="body" rows="12" maxlength="100000" required placeholder="Separate paragraphs with a blank line"></textarea></label>
+        <div class="editor-body">
+          <div class="toolbar" role="group" aria-label="Formatting">
+            <button type="button" data-format="heading">Heading</button>
+            <button type="button" data-format="bold">Bold</button>
+            <button type="button" data-format="italic">Italic</button>
+            <button type="button" data-format="list">List</button>
+            <button type="button" data-format="quote">Quote</button>
+            <button type="button" data-insert="link">Link</button>
+            <button type="button" data-insert="image">Image</button>
+            <button type="button" data-insert="video">YouTube</button>
+          </div>
+          <label>Body<textarea name="body" rows="12" maxlength="99960" required placeholder="Write here. Markdown formatting is supported."></textarea></label>
+          <button type="button" id="preview-entry" aria-expanded="false" aria-controls="entry-preview">Preview entry</button>
+          <div class="prose" id="entry-preview" hidden></div>
+        </div>
         <div class="actions"><button value="draft">Save as draft</button><button value="publish">Publish</button></div>
       </form>
     </section>
   </div>
-  <section class="moderation">
-    <div class="moderation-head"><h2>Comments</h2><button id="refresh-comments">Refresh comments</button></div>
-    <div id="comments"></div>
-  </section>
+  <div id="site-panel" hidden>
+    <section>
+      <h2>Photo of the month</h2>
+      <form id="photo-form" method="post">
+        <label>Month <input name="month" type="month" required pattern="[0-9]{4}-(0[1-9]|1[0-2])" placeholder="YYYY-MM"></label>
+        <img id="photo-preview" alt="" draggable="false" hidden>
+        <label>Photo <input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
+        <label>Image description <input name="alt" maxlength="200" required></label>
+        <label>Caption <input name="caption" maxlength="240"></label>
+        <p id="photo-status" role="status"></p>
+        <button>Save monthly photo</button>
+      </form>
+    </section>
+  </div>
+  <div id="inbox-panel" hidden>
+    <section class="moderation">
+      <div class="moderation-head"><h2>Comments</h2><button id="refresh-comments">Refresh</button></div>
+      <div id="comments"></div>
+    </section>
+    <section class="moderation">
+      <div class="moderation-head"><h2>Privacy requests</h2><button id="refresh-privacy">Refresh</button></div>
+      <div id="privacy-requests"></div>
+    </section>
+  </div>
 </div>
+<dialog id="insert-dialog" aria-labelledby="insert-title">
+  <form id="insert-form" method="dialog">
+    <h2 id="insert-title">Insert</h2>
+    <label id="insert-label">Link text <input name="label" maxlength="200"></label>
+    <label id="insert-url">HTTPS URL <input name="url" type="url" maxlength="2000"></label>
+    <label id="insert-file" hidden>Image <input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
+    <p id="insert-status" role="status"></p>
+    <div class="actions"><button type="submit">Insert</button><button type="button" id="cancel-insert">Cancel</button></div>
+  </form>
+</dialog>
 </main>
 </body>
 </html>

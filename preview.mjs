@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { adminFiles, blogFiles, browserConfig, readSiteConfig, withConnectSource } from "./site-config.mjs";
+import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
 
 const app = process.argv[2];
 if (app !== "blog" && app !== "admin") {
@@ -13,6 +13,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   process.exit(1);
 }
 const files = new Set(app === "blog" ? [...blogFiles, "demo.js"] : adminFiles);
+for (const file of sharedFiles) files.add(file);
 files.add("config.js");
 const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", woff2: "font/woff2", txt: "text/plain" };
 let config;
@@ -28,7 +29,7 @@ const server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname;
     const file = path === "/" ? "index.html" : path.slice(1);
     if (!files.has(file)) throw new Error("Unknown path");
-    let data = file === "config.js" ? browserConfig(config) : await readFile(new URL(`./${app}/${file}`, import.meta.url));
+    let data = file === "config.js" ? browserConfig(config) : await readFile(assetSource(app, file));
     if (file === "index.html") data = withConnectSource(data.toString("utf8"), config);
     response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + "; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY" });
     response.end(data);

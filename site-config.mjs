@@ -1,11 +1,13 @@
 import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
-  "index.html", "style.css", "journal.js", "cover.jpg",
+  "index.html", "404.html", "style.css", "start.js", "journal.js", "legal.js", "cover.jpg",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
-export const adminFiles = ["index.html", "style.css", "desk.js"];
+export const adminFiles = ["index.html", "style.css", "desk.js", "editor-tools.js"];
+export const sharedFiles = ["common.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt"];
+export const assetSource = (app, file) => new URL("./" + (sharedFiles.includes(file) ? "shared" : app) + "/" + file, import.meta.url);
 
 export function readSiteConfig({ required = false } = {}) {
   try {

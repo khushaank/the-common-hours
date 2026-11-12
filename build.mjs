@@ -1,5 +1,5 @@
 import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { adminFiles, blogFiles, browserConfig, readSiteConfig, withConnectSource } from "./site-config.mjs";
+import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
 
 const deskPath = "folio-80f54af81f7d";
 
@@ -10,7 +10,8 @@ async function buildApp(app, destination, files, config, childDirectory) {
     throw new Error("Use a regular directory for " + destination + ".");
   }
   const output = new URL(destination + "/", import.meta.url);
-  const allowedFiles = new Set([...files, "config.js"]);
+  const assets = [...files, ...sharedFiles];
+  const allowedFiles = new Set([...assets, "config.js"]);
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
@@ -18,8 +19,8 @@ async function buildApp(app, destination, files, config, childDirectory) {
     throw new Error("Clear the extra files from " + destination + " before building.");
   }
 
-  for (const file of files) {
-    const source = new URL("./" + app + "/" + file, import.meta.url);
+  for (const file of assets) {
+    const source = assetSource(app, file);
     const target = new URL(file, output);
     if (file === "index.html") {
       await writeFile(target, withConnectSource(await readFile(source, "utf8"), config));

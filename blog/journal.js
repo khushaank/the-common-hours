@@ -1,18 +1,16 @@
-import { url, publishableKey, getProjectOrigin } from "./config.js";
+import { url, publishableKey } from "./config.js";
+import { allRows, escape, imageSource, markdownMarker, monthNow, request, showFailure, table } from "./common.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = params.get("view");
+const view = ["archive", "privacy", "terms"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
 const demo = !url && !publishableKey;
 const pageSize = 5;
 
-const escape = value => String(value).replace(/[&<>"']/g, char => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-})[char]);
 const link = values => "?" + escape(new URLSearchParams(values).toString());
 const format = (date, options) => new Date(date).toLocaleDateString("en", { timeZone: "UTC", ...options });
 const dateLabel = date => format(date, { month: "short", day: "numeric", year: "numeric" });
@@ -20,32 +18,64 @@ const monthLabel = date => format(date + "-01", { month: "long", year: "numeric"
 const postLink = post => link({ post: post.slug });
 const isJournal = !view && !slug && !month && !tag && !params.has("page");
 
-document.querySelector("#hero").hidden = !isJournal;
-const currentNav = view === "about" ? "about" : view === "archive" || month ? "archive" : "journal";
-document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
-
-async function request(path, body) {
-  const headers = { apikey: publishableKey };
-  if (body) {
-    headers["Content-Type"] = "application/json";
-    headers.Prefer = "return=minimal";
-  }
-  const response = await fetch(getProjectOrigin() + "/rest/v1/qmargin_b74_" + path, {
-    headers, cache: "no-store", method: body ? "POST" : "GET",
-    body: body ? JSON.stringify(body) : undefined
-  });
-  if (!response.ok) throw new Error("The journal could not reach its data.");
-  if (!body) return response.json();
+const isLegal = view === "privacy" || view === "terms";
+if (!isLegal) {
+  const currentNav = view === "archive" || month ? "archive" : "journal";
+  document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
+} else {
+  document.querySelector(".layout").classList.add("legal-layout");
 }
+const canonical = document.createElement("link");
+canonical.rel = "canonical";
+const canonicalUrl = new URL("https://commonhours.qd.je/");
+for (const key of ["view", "post", "month", "tag", "page"]) {
+  const value = key === "view" ? view : params.get(key);
+  if (value) canonicalUrl.searchParams.set(key, value);
+}
+canonical.href = canonicalUrl;
+document.head.append(canonical);
 
-async function allRows(path) {
-  const rows = [];
-  // Supabase projects can cap the number of rows returned in one response.
-  while (true) {
-    const batch = await request(path + "&limit=100&offset=" + rows.length);
-    if (!batch.length) return rows;
-    rows.push(...batch);
+const get = (path, options) => request(table(path), options);
+const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
+
+async function photoOfTheMonth() {
+  const figure = document.querySelector("#month-photo");
+  const picture = figure.querySelector("img");
+  let photo;
+  if (!demo) {
+    try {
+      [photo] = await get("photos?select=alt,caption,media:qmargin_b74_media(encoded,width,height)&month=eq." +
+        monthNow() + "-01", { timeout: 3200 });
+    } catch {
+      // The cover also works before monthly photos are configured.
+    }
   }
+  const source = imageSource(photo?.media);
+  const setCover = () => {
+    photo = undefined;
+    picture.src = "cover.jpg";
+    picture.alt = "A wooden jetty reaches into a mist-covered lake";
+    picture.width = 1200;
+    picture.height = 800;
+  };
+  if (source) {
+    picture.src = source;
+    picture.alt = photo.alt;
+    picture.width = photo.media.width;
+    picture.height = photo.media.height;
+  } else {
+    setCover();
+  }
+  try {
+    await picture.decode();
+  } catch {
+    if (!source) return;
+    setCover();
+    try { await picture.decode(); } catch { return; }
+  }
+  document.querySelector("#photo-label").textContent = photo ? "Photo of the month · " + monthLabel(monthNow()) : "From the journal";
+  document.querySelector("#photo-caption").textContent = photo?.caption || "";
+  return figure;
 }
 
 function grouped(posts, value) {
@@ -79,11 +109,11 @@ function renderList(posts) {
   const pageLink = number => link({ ...(month && { month }), ...(tag && { tag }), page: number });
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
     .filter(number => number === 1 || number === totalPages || Math.abs(page - number) <= 1);
-  content.innerHTML = `<div class="section-head"><${heading}>${escape(title)}</${heading}><span class="section-note">${filtered.length} ${filtered.length === 1 ? "ENTRY" : "ENTRIES"}</span></div>
+  content.innerHTML = `<div class="section-head"><${heading}>${escape(title)}</${heading}><span class="section-note">${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}</span></div>
     ${entries.map(post => `<article class="entry">${metadata(post)}
       <${entryHeading} class="entry-title"><a href="${postLink(post)}"><span class="headline">${escape(post.title)}</span><span class="arrow" aria-hidden="true">↗</span></a></${entryHeading}>
       <p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>"}
-    ${filtered.length ? `<nav class="pagination" aria-label="Journal pages">
+    ${totalPages > 1 ? `<nav class="pagination" aria-label="Journal pages">
       ${page > 1 ? `<a href="${pageLink(page - 1)}" rel="prev" aria-label="Previous page">←</a>` : ""}
       ${pages.map((number, i) => `${i && number - pages[i - 1] > 1 ? " … " : ""}<a href="${pageLink(number)}" aria-label="Page ${number}" ${number === page ? 'aria-current="page"' : ""}>${number}</a>`).join("")}
       ${page < totalPages ? `<a href="${pageLink(page + 1)}" rel="next" aria-label="Next page">→</a>` : ""}
@@ -98,23 +128,36 @@ async function renderPost(posts, index) {
     return;
   }
   if (!demo) {
-    const [detail] = await request("posts?" + new URLSearchParams({ select: "body", id: "eq." + post.id, published: "eq.true" }));
+    const [detail] = await get("posts?" + new URLSearchParams({ select: "body", id: "eq." + post.id, published: "eq.true" }));
     if (!detail) return renderPost([], 0);
     post.body = detail.body;
   }
+  const hasFormatting = post.body.startsWith(markdownMarker);
+  const renderer = hasFormatting ? await import("./rich.js").catch(() => null) : null;
   document.title = post.title + " — The Common Hours";
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article">
     <h1>${escape(post.title)}</h1>${metadata(post, true)}
-    <div class="prose">${post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("")}</div></article>
+    <div class="prose" id="entry-body"></div></article>
     <nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>
     <section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div>
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
     <label>Display name <input name="display_name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
-    <p class="status">${demo ? "Preview mode. Comments stay in this browser." : "Comments appear after moderation."}</p>
+    <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="?view=privacy">Privacy</a>'}</p>
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form></section>`;
+  const bodyElement = document.querySelector("#entry-body");
+  if (renderer) {
+    renderer.renderText(bodyElement, post.body, async id => {
+      const [image] = await get("media?select=encoded,width,height&id=eq." + id);
+      return image;
+    });
+  } else if (hasFormatting) {
+    showFailure(bodyElement, "The article could not load.", () => location.reload());
+  } else {
+    bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
+  }
   const list = document.querySelector("#comment-list");
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
@@ -136,6 +179,7 @@ async function renderPost(posts, index) {
     }
     const button = form.querySelector("button");
     button.disabled = true;
+    status.textContent = "Submitting…";
     try {
       if (demo) {
         const comments = JSON.parse(localStorage.getItem(storageKey) || "[]");
@@ -143,7 +187,7 @@ async function renderPost(posts, index) {
         localStorage.setItem(storageKey, JSON.stringify(comments));
         showComments(comments);
       } else {
-        await request("comments", { post_id: post.id, display_name, body });
+        await insert("comments", { post_id: post.id, display_name, body });
       }
       form.reset();
       status.textContent = demo ? "Comment saved in this browser." : "Comment submitted for moderation.";
@@ -154,35 +198,43 @@ async function renderPost(posts, index) {
     }
   });
 
-  try {
-    const comments = demo ? JSON.parse(localStorage.getItem(storageKey) || "[]") : await allRows(
-      "comments?select=display_name,body&approved=eq.true&order=created_at.asc,id.asc&post_id=eq." + encodeURIComponent(post.id)
-    );
-    showComments(comments);
-  } catch {
-    list.textContent = "Comments could not be loaded.";
+  async function loadComments() {
+    list.setAttribute("aria-busy", "true");
+    try {
+      const comments = demo ? JSON.parse(localStorage.getItem(storageKey) || "[]") : await allRows(get,
+        "comments?select=display_name,body&approved=eq.true&order=created_at.asc,id.asc&post_id=eq." + encodeURIComponent(post.id)
+      );
+      showComments(comments);
+    } catch {
+      showFailure(list, "Comments could not load.", loadComments);
+    } finally {
+      list.setAttribute("aria-busy", "false");
+    }
   }
+  void loadComments();
 }
 
 async function start() {
-  if (view === "about") {
-    document.title = "About — The Common Hours";
-    content.innerHTML = `<article class="about"><h1>About the journal</h1>
-      <div class="prose"><p>I write here as Ellis Vale. I started The Common Hours to make sense of the small things that rarely make it into conversation.</p>
-      <p>The essays tend to come back to time: how we spend it, what we notice, and what we remember.</p></div></article>`;
+  if (isLegal) {
+    const { renderLegal } = await import("./legal.js");
+    document.title = (view === "privacy" ? "Privacy" : "Terms") + " — The Common Hours";
+    renderLegal(content, view, demo);
+    return;
   }
-  const posts = demo ? (await import("./demo.js")).default : await allRows(
+  const photoPromise = isJournal ? photoOfTheMonth() : null;
+  const posts = demo ? (await import("./demo.js")).default : await allRows(get,
     "posts?select=id,slug,title,tag,excerpt,published_on&published=eq.true&order=published_on.desc,id.desc"
   );
+  const figure = await photoPromise;
+  if (figure) figure.hidden = false;
   const months = grouped(posts, post => post.published_on.slice(0, 7));
-  const topics = grouped(posts, post => post.tag);
+  const topics = new Map([...grouped(posts, post => post.tag)].sort(([a], [b]) => a.localeCompare(b)));
   const archives = sideLinks(months, "month", monthLabel, month);
-  sidebar.innerHTML = `<section class="side-section"><h2 class="side-title">Blog archive</h2>
+  const sidebarMarkup = `<section class="side-section"><h2 class="side-title">Blog archive</h2>
     <ul class="side-list">${sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month)}</ul>
     ${months.size > 8 ? '<p><a class="back" href="?view=archive">All months →</a></p>' : ""}
     ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
     ${topics.size ? `<section class="side-section"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topics, "tag", name => name, tag)}</ul></section>` : ""}`;
-  if (view === "about") return;
   if (view === "archive") {
     document.title = "Archive — The Common Hours";
     content.innerHTML = `<div class="section-head"><h1>Archive</h1></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
@@ -191,10 +243,18 @@ async function start() {
   } else {
     renderList(posts);
   }
+  sidebar.innerHTML = sidebarMarkup;
 }
 
-start().catch(() => {
-  const message = "<p role=\"alert\">The journal could not load. Please try again shortly.</p>";
-  if (view === "about") sidebar.innerHTML = message;
-  else content.innerHTML = message;
-});
+async function load() {
+  content.setAttribute("aria-busy", "true");
+  try {
+    await start();
+  } catch {
+    showFailure(content, "The journal could not load. Check your connection and try again.", load);
+  } finally {
+    content.setAttribute("aria-busy", "false");
+  }
+}
+
+void load();
