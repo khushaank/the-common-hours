@@ -1,10 +1,10 @@
 import { url, publishableKey } from "./config.js";
-import { allRows, escape, imageSource, markdownMarker, monthNow, request, showFailure, table } from "./common.js";
+import { allRows, escape, fetchAttachment, markdownMarker, request, showFailure, table } from "./common.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = ["archive", "privacy", "terms"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "privacy", "terms", "photo", "photos"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
@@ -19,16 +19,16 @@ const postLink = post => link({ post: post.slug });
 const isJournal = !view && !slug && !month && !tag && !params.has("page");
 
 const isLegal = view === "privacy" || view === "terms";
+const isPhoto = view === "photo" || view === "photos";
 if (!isLegal) {
-  const currentNav = view === "archive" || month ? "archive" : "journal";
+  const currentNav = isPhoto ? "photos" : view === "archive" || month ? "archive" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
-} else {
-  document.querySelector(".layout").classList.add("legal-layout");
 }
+if (isLegal || isPhoto) document.querySelector(".layout").classList.add(isLegal ? "legal-layout" : "photo-layout");
 const canonical = document.createElement("link");
 canonical.rel = "canonical";
 const canonicalUrl = new URL("https://commonhours.qd.je/");
-for (const key of ["view", "post", "month", "tag", "page"]) {
+for (const key of ["view", "post", "month", "tag", "page", "photo"]) {
   const value = key === "view" ? view : params.get(key);
   if (value) canonicalUrl.searchParams.set(key, value);
 }
@@ -37,46 +37,6 @@ document.head.append(canonical);
 
 const get = (path, options) => request(table(path), options);
 const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
-
-async function photoOfTheMonth() {
-  const figure = document.querySelector("#month-photo");
-  const picture = figure.querySelector("img");
-  let photo;
-  if (!demo) {
-    try {
-      [photo] = await get("photos?select=alt,caption,media:qmargin_b74_media(encoded,width,height)&month=eq." +
-        monthNow() + "-01", { timeout: 3200 });
-    } catch {
-      // The cover also works before monthly photos are configured.
-    }
-  }
-  const source = imageSource(photo?.media);
-  const setCover = () => {
-    photo = undefined;
-    picture.src = "cover.jpg";
-    picture.alt = "A wooden jetty reaches into a mist-covered lake";
-    picture.width = 1200;
-    picture.height = 800;
-  };
-  if (source) {
-    picture.src = source;
-    picture.alt = photo.alt;
-    picture.width = photo.media.width;
-    picture.height = photo.media.height;
-  } else {
-    setCover();
-  }
-  try {
-    await picture.decode();
-  } catch {
-    if (!source) return;
-    setCover();
-    try { await picture.decode(); } catch { return; }
-  }
-  document.querySelector("#photo-label").textContent = photo ? "Photo of the month · " + monthLabel(monthNow()) : "From the journal";
-  document.querySelector("#photo-caption").textContent = photo?.caption || "";
-  return figure;
-}
 
 function grouped(posts, value) {
   const groups = new Map();
@@ -152,7 +112,7 @@ async function renderPost(posts, index) {
     renderer.renderText(bodyElement, post.body, async id => {
       const [image] = await get("media?select=encoded,width,height&id=eq." + id);
       return image;
-    });
+    }, { loadAttachment: fetchAttachment });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
   } else {
@@ -226,12 +186,14 @@ async function start() {
     renderLegal(content, view, demo);
     return;
   }
-  const photoPromise = isJournal ? photoOfTheMonth() : null;
+  if (isPhoto) {
+    const { renderPhotoView } = await import("./photos.js");
+    await renderPhotoView(content, get, demo, view, params.get("photo"));
+    return;
+  }
   const posts = demo ? (await import("./demo.js")).default : await allRows(get,
     "posts?select=id,slug,title,tag,excerpt,published_on&published=eq.true&order=published_on.desc,id.desc"
   );
-  const figure = await photoPromise;
-  if (figure) figure.hidden = false;
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topics = new Map([...grouped(posts, post => post.tag)].sort(([a], [b]) => a.localeCompare(b)));
   const archives = sideLinks(months, "month", monthLabel, month);
@@ -263,3 +225,6 @@ async function load() {
 }
 
 void load();
+if (isJournal) {
+  void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {});
+}

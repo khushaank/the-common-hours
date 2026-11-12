@@ -6,11 +6,12 @@ const notice = `<h1>Privacy</h1><div class="prose">
   <p>You can read without an account. If you leave a comment, the journal stores your display name, comment, the entry it belongs to, and when it was submitted. The editor reviews it before publication. An approved comment and its display name are public. Choose a display name you are comfortable sharing.</p>
   <p>If you send a privacy request, the journal stores your reply email, your message, and when you sent it. The editor uses this information to handle your request. Please avoid including documents or other sensitive information.</p>
   <h2>Services and embeds</h2>
-  <p>GitHub Pages hosts the website and logs visitor IP addresses for security. Supabase hosts the journal database and processes requests to it. The journal does not include analytics or advertising scripts. If you choose to load a video, your browser connects to YouTube. YouTube handles that connection under its own privacy policy.</p>
+  <p>GitHub Pages hosts the website and logs visitor IP addresses for security. Supabase hosts the journal database and downloadable files and processes requests to them. The journal does not include analytics or advertising scripts. When an embedded video loads, your browser connects to its provider, such as YouTube or Vimeo. The provider handles that connection under its own privacy policy.</p>
   <ul>
     <li><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a></li>
     <li><a href="https://supabase.com/privacy">Supabase privacy policy</a></li>
     <li><a href="https://policies.google.com/privacy">Google and YouTube privacy policy</a></li>
+    <li><a href="https://vimeo.com/privacy">Vimeo privacy policy</a></li>
   </ul>
   <h2>Retention and requests</h2>
   <p>Comments remain in the journal database until removed by the editor. You can ask to access, correct, or remove information you submitted, withdraw permission to display your comment, or raise a privacy concern using the form below. Include the entry title and display name for a comment request. The editor may need to verify which submission is yours.</p>

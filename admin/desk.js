@@ -1,6 +1,7 @@
 import { getProjectOrigin } from "./config.js";
-import { allRows, markdownMarker, missingFeature, request, showFailure, table } from "./common.js";
+import { allRows, fetchAttachment, journalToday, markdownMarker, missingFeature, request, showFailure, table, uploadAttachment } from "./common.js";
 import { setupEditorTools } from "./editor-tools.js";
+import { setupPhotoTools } from "./photo-tools.js";
 
 const login = document.querySelector("#login");
 const editor = document.querySelector("#editor");
@@ -15,8 +16,12 @@ const entryList = document.querySelector("#entry-list");
 const search = document.querySelector("#find-entry");
 const inbox = document.querySelector("#privacy-requests");
 const sections = [...document.querySelectorAll("[data-section]")];
-const narrow = matchMedia("(max-width: 700px)");
-const editorTools = setupEditorTools(editor, api);
+const narrow = matchMedia("(max-width: 760px)");
+const editorTools = setupEditorTools(editor, api, {
+  upload: async (id, file) => uploadAttachment(id, file, await sessionToken()),
+  download: async id => fetchAttachment(id, await sessionToken()),
+});
+const photoTools = setupPhotoTools(api);
 let originalBody = "";
 let session;
 let refresh;
@@ -29,7 +34,7 @@ function setSession(data) {
   session = { ...data, expires: Date.now() + (data.expires_in - 30) * 1000 };
 }
 
-async function api(path, options = {}) {
+async function sessionToken() {
   if (!session) throw new Error("Sign in again to continue.");
   if (session.expires < Date.now()) {
     refresh ??= request("/auth/v1/token?grant_type=refresh_token", {
@@ -39,12 +44,25 @@ async function api(path, options = {}) {
     }).finally(() => { refresh = undefined; });
     await refresh;
   }
-  return request(table(path), { ...options, token: session.access_token });
+  return session.access_token;
 }
 
+async function api(path, options = {}) {
+  return request(table(path), { ...options, token: await sessionToken() });
+}
 
 const snapshot = () => JSON.stringify([...new FormData(editor)]);
 const dirty = () => snapshot() !== baseline;
+
+function preventExit(event) {
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+function updateExitWarning() {
+  if (session && dirty()) window.addEventListener("beforeunload", preventExit);
+  else window.removeEventListener("beforeunload", preventExit);
+}
 
 async function run(button, action) {
   if (busy) return;
@@ -100,18 +118,18 @@ function renderPostList() {
 function openEditor(post) {
   current = post?.id;
   editor.reset();
-  editorTools.closePreview();
   originalBody = post?.body || "";
   for (const key of ["title", "slug", "tag", "excerpt", "published_on"]) {
     editor.elements.namedItem(key).value = post?.[key] ?? "";
   }
   editor.elements.namedItem("body").value = originalBody.startsWith(markdownMarker)
     ? originalBody.slice(markdownMarker.length) : originalBody;
-  if (!post) editor.elements.namedItem("published_on").value =
-    new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Kolkata" });
+  if (!post) editor.elements.namedItem("published_on").value = journalToday();
   document.querySelector("#editor-title").textContent = post ? "Edit entry" : "New entry";
   editor.querySelector('[value="publish"]').textContent = post?.published ? "Update published entry" : "Publish";
   baseline = snapshot();
+  editorTools.refresh();
+  updateExitWarning();
   renderPostList();
 }
 
@@ -200,6 +218,7 @@ login.addEventListener("submit", event => {
     login.hidden = true;
     desk.hidden = false;
     logout.hidden = false;
+    void photoTools.loadOverview();
   });
 });
 
@@ -215,7 +234,7 @@ logout.addEventListener("click", () => {
       comments.replaceChildren();
       inbox.replaceChildren();
       search.value = "";
-      editorTools.clearPhoto();
+      photoTools.clear();
       desk.hidden = true;
       logout.hidden = true;
       login.hidden = false;
@@ -260,6 +279,7 @@ editor.addEventListener("submit", event => {
 });
 
 search.addEventListener("input", renderPostList);
+editor.addEventListener("input", updateExitWarning);
 
 function showSection(section) {
   for (const button of sections) {
@@ -320,11 +340,13 @@ for (const button of sections) {
     if (busy || button.getAttribute("aria-pressed") === "true") return;
     const section = button.dataset.section;
     showSection(section);
-    if (section === "site") void editorTools.loadPhoto();
+    if (section === "site") void photoTools.loadPhoto();
     if (section === "inbox") void openInbox();
   });
 }
 
-window.addEventListener("beforeunload", event => {
-  if (!desk.hidden && dirty()) event.preventDefault();
+document.querySelector("#manage-photos").addEventListener("click", () => {
+  if (busy) return;
+  showSection("site");
+  void photoTools.loadPhoto();
 });

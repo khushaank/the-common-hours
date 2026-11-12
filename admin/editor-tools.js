@@ -1,11 +1,11 @@
-import { imageSource, missingFeature, monthNow } from "./common.js";
-import { renderText, youtubeId } from "./rich.js";
+import { attachmentLimit, missingFeature, videoFrom } from "./common.js";
+
 
 const MAX_INPUT = 15 * 1024 * 1024;
 const MAX_IMAGE = 1000000;
 const allowedImages = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
 
-async function encodeImage(file) {
+export async function encodeImage(file) {
   if (!file?.size || !allowedImages.has(file.type)) throw new Error("Choose a JPEG, PNG, WebP, GIF, or AVIF image.");
   if (file.size > MAX_INPUT) throw new Error("Choose an image under 15 MB.");
   const url = URL.createObjectURL(file);
@@ -34,97 +34,190 @@ async function encodeImage(file) {
   }
 }
 
-const wrapText = (text, mark, placeholder) => mark + (text || placeholder) + mark;
-const markLines = (text, mark) => (text || "Text").split("\n").map(line => mark + line).join("\n");
-const markdownLabel = text => text.replace(/[\\[\]]/g, "\\$&").replace(/[\r\n]+/g, " ");
-const formats = {
-  heading: text => "\n\n## " + (text || "Heading") + "\n\n",
-  bold: text => wrapText(text, "**", "Bold text"),
-  italic: text => wrapText(text, "*", "Italic text"),
-  list: text => "\n\n" + markLines(text, "- ") + "\n\n",
-  quote: text => "\n\n" + markLines(text, "> ") + "\n\n",
-};
 
-export function setupEditorTools(editor, api) {
+const markdownLabel = text => text.replace(/[\\[\]*_`<>&]/g, "\\$&").replace(/[\r\n]+/g, " ");
+const imageTypes = [...allowedImages].join(",");
+const commands = [
+  ["heading", "Heading", "## Heading"],
+  ["bold", "Bold", "**Bold text**"],
+  ["italic", "Italic", "*Italic text*"],
+  ["list", "List", "- List item"],
+  ["quote", "Quote", "> Quote"],
+  ["image", "Image"],
+  ["video", "Embed video"],
+  ["file", "File"],
+  ["pdf", "PDF"],
+  ["link", "Link"],
+  ["divider", "Divider", "---"],
+];
+
+export async function uploadImage(api, file) {
+  const [saved] = await api("media", { method: "POST", body: await encodeImage(file), prefer: "return=representation" });
+  if (!saved?.id) throw new Error("The image could not be saved.");
+  return saved;
+}
+
+export async function loadImage(api, id) {
+  const [image] = await api("media?select=encoded,width,height&id=eq." + id);
+  return image;
+}
+
+export function setupEditorTools(editor, api, attachments) {
   const body = editor.elements.namedItem("body");
   const dialog = document.querySelector("#insert-dialog");
   const insert = document.querySelector("#insert-form");
   const insertStatus = document.querySelector("#insert-status");
+  const cancel = document.querySelector("#cancel-insert");
   const preview = document.querySelector("#entry-preview");
   const toggle = document.querySelector("#preview-entry");
-  const photoForm = document.querySelector("#photo-form");
-  const photoStatus = document.querySelector("#photo-status");
-  const photoPreview = document.querySelector("#photo-preview");
+  const menu = document.querySelector("#command-menu");
+  const count = document.querySelector("#word-count");
+  const status = document.querySelector("#status");
   let insertion;
-  let photo;
-  let photoLoad = 0;
-  let photoSaving = false;
+  let command;
+  let active = 0;
+  let matches = [];
+  let attachmentId;
 
-  async function upload(file) {
-    const record = await encodeImage(file);
-    const [saved] = await api("media", { method: "POST", body: record, prefer: "return=representation" });
-    if (!saved?.id) throw new Error("The image could not be saved.");
-    return saved;
-  }
-  async function loadImage(id) {
-    const [image] = await api("media?select=encoded,width,height&id=eq." + id);
-    return image;
-  }
-
-  function replace(text, start = body.selectionStart, end = body.selectionEnd) {
-    if (body.value.length - (end - start) + text.length > body.maxLength) {
+  function checkSpace(length, start, end) {
+    if (body.value.length - (end - start) + length > body.maxLength) {
       throw new Error("This entry has reached its length limit.");
     }
+  }
+
+  function replace(text, start, end, selection) {
+    checkSpace(text.length, start, end);
     body.setRangeText(text, start, end, "end");
     body.focus();
+    if (selection) body.setSelectionRange(start + selection[0], start + selection[1]);
     body.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function closePreview() {
     preview.hidden = true;
     preview.replaceChildren();
-    toggle.textContent = "Preview entry";
+    toggle.textContent = "Preview";
     toggle.setAttribute("aria-expanded", "false");
   }
 
-  body.addEventListener("input", closePreview);
-  editor.querySelector(".toolbar").addEventListener("click", event => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    const start = body.selectionStart;
-    const end = body.selectionEnd;
-    const selected = body.value.slice(start, end);
-    if (button.dataset.format) {
-      try { replace(formats[button.dataset.format](selected)); }
-      catch (error) { document.querySelector("#status").textContent = error.message; }
+  function closeMenu() {
+    command = undefined;
+    menu.hidden = true;
+    menu.replaceChildren();
+  }
+
+  function renderMenu() {
+    const options = matches.map(([key, name], index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.command = key;
+      button.classList.toggle("active", index === active);
+      button.textContent = name;
+      const shortcut = document.createElement("kbd");
+      shortcut.textContent = "/" + key;
+      button.append(shortcut);
+      return button;
+    });
+    menu.replaceChildren(...options);
+    menu.hidden = !options.length;
+    menu.querySelector(".active")?.scrollIntoView({ block: "nearest" });
+  }
+
+  function updateMenu() {
+    const end = body.selectionStart;
+    const match = /(?:^|\s)\/([a-z]*)$/i.exec(body.value.slice(0, end));
+    if (body.selectionEnd !== end || !match) { closeMenu(); return; }
+    const query = match[1].toLowerCase();
+    matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
+    command = { start: end - query.length - 1, end };
+    active = 0;
+    renderMenu();
+  }
+
+  function refresh() {
+    closePreview();
+    closeMenu();
+    const words = body.value.trim().split(/\s+/).filter(Boolean).length;
+    count.textContent = words + (words === 1 ? " word" : " words");
+  }
+
+  function choose([type, name, template]) {
+    const { start, end } = command;
+    closeMenu();
+    if (template) {
+      try {
+        const line = type === "bold" || type === "italic" ? template : "\n\n" + template + "\n\n";
+        const text = /[A-Za-z].*/.exec(template)?.[0].replace(/[*]+$/, "");
+        const at = text ? line.indexOf(text) : -1;
+        replace(line, start, end, at >= 0 ? [at, at + text.length] : undefined);
+      } catch (error) { status.textContent = error.message; }
       return;
     }
 
-    const type = button.dataset.insert;
     insertion = { type, start, end };
     insert.reset();
+    attachmentId = undefined;
     insertStatus.textContent = "";
-    document.querySelector("#insert-title").textContent =
-      type === "link" ? "Insert link" : type === "image" ? "Insert image" : "Insert YouTube video";
+    document.querySelector("#insert-title").textContent = type === "video" ? "Embed video" :
+      type === "pdf" ? "Insert PDF" : "Insert " + name.toLowerCase();
     const label = insert.elements.namedItem("label");
     const url = insert.elements.namedItem("url");
     const file = insert.elements.namedItem("file");
+    const isFile = ["image", "file", "pdf"].includes(type);
     label.parentElement.firstChild.textContent = type === "image" ? "Image description " : "Link text ";
-    label.parentElement.hidden = label.disabled = type === "video";
-    url.parentElement.hidden = url.disabled = type === "image";
-    file.parentElement.hidden = file.disabled = type !== "image";
-    label.required = type !== "video";
-    url.required = type !== "image";
-    file.required = type === "image";
-    if (type === "link") label.value = selected.slice(0, 200);
+    label.parentElement.hidden = label.disabled = !(type === "image" || type === "link");
+    url.parentElement.hidden = url.disabled = isFile;
+    file.parentElement.hidden = file.disabled = !isFile;
+    file.parentElement.firstChild.textContent = name + " ";
+    label.required = !label.disabled;
+    url.required = !url.disabled;
+    file.required = isFile;
+    file.accept = type === "image" ? imageTypes : type === "pdf" ? "application/pdf,.pdf" : "";
     dialog.showModal();
+  }
+
+  body.addEventListener("input", () => { refresh(); updateMenu(); });
+  body.addEventListener("click", updateMenu);
+  body.addEventListener("blur", event => {
+    if (!menu.contains(event.relatedTarget)) closeMenu();
+  });
+  menu.addEventListener("focusout", event => {
+    if (event.relatedTarget !== body && !menu.contains(event.relatedTarget)) closeMenu();
+  });
+  body.addEventListener("keydown", event => {
+    if (menu.hidden || event.isComposing) return;
+    if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      active = (active + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+      renderMenu();
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      choose(matches[active]);
+    }
+  });
+  menu.addEventListener("mousedown", event => event.preventDefault());
+  menu.addEventListener("click", event => {
+    const button = event.target.closest("[data-command]");
+    if (button && command) choose(commands.find(([key]) => key === button.dataset.command));
+  });
+  body.addEventListener("paste", event => {
+    const raw = event.clipboardData?.getData("text/plain").trim();
+    if (!raw || !videoFrom(raw)) return;
+    const { selectionStart: start, selectionEnd: end, value } = body;
+    const before = value.slice(value.lastIndexOf("\n", start - 1) + 1, start);
+    const after = value.slice(end).split("\n", 1)[0];
+    if (before.trim() || after.trim()) return;
+    event.preventDefault();
+    try { replace("\n\n::video " + raw + "\n\n", start, end); }
+    catch (error) { status.textContent = error.message; }
   });
 
-  const cancel = document.querySelector("#cancel-insert");
   cancel.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("cancel", event => {
-    if (cancel.disabled) event.preventDefault();
-  });
+  dialog.addEventListener("close", () => body.focus());
+  dialog.addEventListener("cancel", event => { if (cancel.disabled) event.preventDefault(); });
+  insert.elements.namedItem("file").addEventListener("change", () => { attachmentId = undefined; });
   insert.addEventListener("submit", async event => {
     event.preventDefault();
     if (cancel.disabled) return;
@@ -132,22 +225,33 @@ export function setupEditorTools(editor, api) {
     const fields = new FormData(insert);
     const { type, start, end } = insertion;
     button.disabled = cancel.disabled = true;
-    insertStatus.textContent = type === "image" ? "Preparing image…" : "";
+    insertStatus.textContent = "";
     try {
       const label = markdownLabel(fields.get("label")?.trim() || "");
+      const file = fields.get("file");
       let text;
       if (type === "image") {
         if (!label) throw new Error("Describe the image for readers who cannot see it.");
-        const image = await upload(fields.get("file"));
+        checkSpace(label.length + 51, start, end);
+        insertStatus.textContent = "Preparing image…";
+        const image = await uploadImage(api, file);
         text = "\n\n![" + label + "](media:" + image.id + ")\n\n";
+      } else if (type === "file" || type === "pdf") {
+        if (!file?.size || file.size > attachmentLimit) throw new Error("Choose a file up to 25 MB.");
+        if (type === "pdf" && !/\.pdf$/i.test(file.name)) throw new Error("Choose a PDF file.");
+        const filename = markdownLabel(file.name);
+        attachmentId ??= crypto.randomUUID();
+        text = "\n\n[" + filename + "](attachment:" + attachmentId + ")\n\n";
+        checkSpace(text.length, start, end);
+        insertStatus.textContent = "Uploading " + file.name + "…";
+        await attachments.upload(attachmentId, file);
       } else {
         const raw = fields.get("url").trim();
         const url = new URL(raw);
         if (url.protocol !== "https:" || url.username || url.password) throw new Error("Enter an HTTPS link.");
         if (type === "video") {
-          const id = youtubeId(raw);
-          if (!id) throw new Error("Enter a YouTube watch, Shorts, live, or share link.");
-          text = "\n\n::youtube " + id + "\n\n";
+          if (!videoFrom(raw)) throw new Error("Enter a YouTube, Vimeo, or direct MP4, WebM or Ogg video link.");
+          text = "\n\n::video " + raw + "\n\n";
         } else {
           if (!label) throw new Error("Enter link text.");
           text = "[" + label + "](<" + url.href.replaceAll(">", "%3E").replaceAll("<", "%3C") + ">)";
@@ -155,95 +259,32 @@ export function setupEditorTools(editor, api) {
       }
       replace(text, start, end);
       dialog.close();
-      body.focus();
     } catch (error) {
-      insertStatus.textContent = missingFeature(error) ? "Run the editorial features SQL to enable image uploads." :
-        error instanceof TypeError || error.name === "EncodingError" ? "Check the link or choose a readable image." : error.message;
+      insertStatus.textContent = missingFeature(error) ? "Apply the Supabase editorial upgrade to upload media." :
+        error instanceof TypeError || error.name === "EncodingError" ? "Check the link or choose a readable file." :
+        error.code === "BucketNotFound" || error.code === "NoSuchBucket" ? "Apply the Supabase writing desk upgrade to upload files." : error.message;
     } finally {
       button.disabled = cancel.disabled = false;
     }
   });
-  toggle.addEventListener("click", () => {
+  toggle.addEventListener("click", async () => {
     if (!preview.hidden) { closePreview(); return; }
-    renderText(preview, body.value || "Start writing to preview your entry.", loadImage, { markdown: true, loadVideos: false });
-    preview.hidden = false;
-    toggle.textContent = "Hide preview";
-    toggle.setAttribute("aria-expanded", "true");
-  });
-
-  function renderPhoto(record) {
-    photo = record;
-    photoForm.elements.namedItem("alt").value = record?.alt || "";
-    photoForm.elements.namedItem("caption").value = record?.caption || "";
-    const src = imageSource(record?.media);
-    photoPreview.hidden = !src;
-    if (src) {
-      photoPreview.src = src;
-      photoPreview.alt = record.alt;
-    } else {
-      photoPreview.removeAttribute("src");
-      photoPreview.alt = "";
-    }
-  }
-
-  async function loadPhoto() {
-    const revision = ++photoLoad;
-    const month = photoForm.elements.namedItem("month").value;
-    if (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month)) {
-      photoStatus.textContent = "Enter a month as YYYY-MM.";
-      return;
-    }
-    photoForm.elements.namedItem("file").value = "";
-    photoStatus.textContent = "Loading photo…";
-    const button = photoForm.querySelector("button");
-    button.disabled = true;
+    toggle.disabled = true;
     try {
-      const [record] = await api("photos?select=month,media_id,alt,caption,media:qmargin_b74_media(encoded,width,height)&month=eq." + month + "-01");
-      if (revision !== photoLoad) return;
-      renderPhoto(record);
-      photoStatus.textContent = record ? "" : "Choose a photo for this month.";
-    } catch (error) {
-      if (revision !== photoLoad) return;
-      renderPhoto(undefined);
-      photoStatus.textContent = missingFeature(error) ? "Run the editorial features SQL to enable monthly photos." : error.message;
+      const { renderText } = await import("./rich.js");
+      preview.hidden = false;
+      renderText(preview, body.value || "Start writing to preview your entry.", id => loadImage(api, id),
+        { markdown: true, loadAttachment: attachments.download });
+      toggle.textContent = "Hide preview";
+      toggle.setAttribute("aria-expanded", "true");
+      preview.scrollIntoView({ block: "nearest" });
+    } catch {
+      closePreview();
+      status.textContent = "Preview could not load. Try again.";
     } finally {
-      if (revision === photoLoad) button.disabled = false;
-    }
-  }
-  photoForm.elements.namedItem("month").value = monthNow();
-  photoForm.elements.namedItem("month").addEventListener("change", loadPhoto);
-  photoForm.addEventListener("submit", async event => {
-    event.preventDefault();
-    if (photoSaving) return;
-    const fields = new FormData(photoForm);
-    const month = fields.get("month") + "-01";
-    const alt = fields.get("alt").trim();
-    const caption = fields.get("caption").trim();
-    const file = fields.get("file");
-    if (!alt) { photoStatus.textContent = "Describe the photo."; return; }
-    const button = photoForm.querySelector("button");
-    photoSaving = true;
-    photoForm.inert = true;
-    button.disabled = true;
-    photoStatus.textContent = "Saving photo…";
-    try {
-      const image = file.size ? await upload(file) : photo?.month === month ? photo.media : null;
-      const media_id = file.size ? image.id : photo?.month === month ? photo.media_id : null;
-      if (!media_id) throw new Error("Choose a photo to upload.");
-      await api("photos?on_conflict=month", {
-        method: "POST", body: { month, media_id, alt, caption }, prefer: "resolution=merge-duplicates,return=minimal",
-      });
-      renderPhoto({ month, media_id, alt, caption, media: image });
-      photoForm.elements.namedItem("file").value = "";
-      photoStatus.textContent = "Monthly photo saved.";
-    } catch (error) {
-      photoStatus.textContent = missingFeature(error) ? "Run the editorial features SQL to enable monthly photos." : error.message;
-    } finally {
-      photoSaving = false;
-      photoForm.inert = false;
-      button.disabled = false;
+      toggle.disabled = false;
     }
   });
 
-  return { closePreview, loadPhoto, clearPhoto() { photoLoad++; photoForm.reset(); photoForm.elements.namedItem("month").value = monthNow(); renderPhoto(undefined); } };
+  return { refresh };
 }

@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>The Common Hours — An independent journal</title>
 <link rel="stylesheet" href="style.css">
+<link rel="modulepreload" href="journal.js">
 <script type="module" src="start.js"></script>
 </head>
 <body id="top">
@@ -16,14 +17,30 @@
   <div class="wrap mast">
     <a class="brand" href="./">The Common Hours</a>
     <nav aria-label="Main navigation">
-      <a href="./" id="journal-link">Journal</a><a href="?view=archive" id="archive-link">Archive</a>
+      <a href="./" id="journal-link">Journal</a><a href="?view=archive" id="archive-link">Archive</a><a href="?view=photos" id="photos-link">Photos</a>
     </nav>
   </div>
 </header>
 <main class="wrap">
-  <figure class="month-photo" id="month-photo" hidden>
-    <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
-    <figcaption><span id="photo-label"></span><span id="photo-caption"></span></figcaption>
+  <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" hidden>
+    <div class="slide">
+      <a id="featured-photo-link" href="?view=photo&amp;photo=cover" aria-label="Open the featured photo">
+        <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
+        <span class="slide-label">Photo of the Week</span>
+      </a>
+      <div id="slide-controls" hidden>
+        <button id="slide-prev" type="button" aria-label="Previous photo">‹</button>
+        <button id="slide-next" type="button" aria-label="Next photo">›</button>
+      </div>
+    </div>
+    <figcaption>
+      <span id="photo-caption">Photo of the Week</span>
+      <span class="slide-actions">
+        <span id="slide-count"></span>
+        <button id="slide-toggle" type="button" hidden>Pause slideshow</button>
+        <a href="?view=photos">Photo archive ↗</a>
+      </span>
+    </figcaption>
   </figure>
   <div class="layout">
     <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true"><p class="loading" role="status">Loading journal…</p></section>

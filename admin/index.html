@@ -5,97 +5,120 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data: blob:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Writing desk — The Common Hours</title>
 <link rel="stylesheet" href="style.css">
 <script type="module" src="desk.js"></script>
 </head>
 <body>
-<main>
-<header><h1>Writing desk</h1><button id="logout" hidden>Sign out</button></header>
-<p id="status" role="status"></p>
-<form id="login" method="post">
-  <label>Email<input name="email" type="email" autocomplete="username" required></label>
-  <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-  <button disabled>Sign in</button>
-</form>
-<div id="desk" hidden>
-  <nav class="desk-nav" aria-label="Writing desk sections">
-    <button type="button" aria-pressed="true" data-section="entries">Entries</button>
-    <button type="button" aria-pressed="false" data-section="site">Site</button>
-    <button type="button" aria-pressed="false" data-section="inbox">Inbox</button>
-  </nav>
-  <div class="desk" id="entries-panel">
-    <details id="entry-list" open><summary>Entries</summary>
-      <button type="button" id="new-post">New entry</button>
-      <label>Find an entry<input id="find-entry" type="search" autocomplete="off"></label>
-      <ul id="posts"></ul>
-    </details>
-    <section>
-      <h2 id="editor-title">New entry</h2>
-      <form id="editor" method="post">
-        <label>Title<input name="title" maxlength="180" required></label>
-        <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title if left blank"></label>
-        <div class="fields">
-          <label>Tag<input name="tag" maxlength="40" list="tags" required></label>
-          <label>Publication date<input name="published_on" type="date" required></label>
-        </div>
-        <datalist id="tags"></datalist>
-        <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
-        <div class="editor-body">
-          <div class="toolbar" role="group" aria-label="Formatting">
-            <button type="button" data-format="heading">Heading</button>
-            <button type="button" data-format="bold">Bold</button>
-            <button type="button" data-format="italic">Italic</button>
-            <button type="button" data-format="list">List</button>
-            <button type="button" data-format="quote">Quote</button>
-            <button type="button" data-insert="link">Link</button>
-            <button type="button" data-insert="image">Image</button>
-            <button type="button" data-insert="video">YouTube</button>
-          </div>
-          <label>Body<textarea name="body" rows="12" maxlength="99960" required placeholder="Write here. Markdown formatting is supported."></textarea></label>
-          <button type="button" id="preview-entry" aria-expanded="false" aria-controls="entry-preview">Preview entry</button>
-          <div class="prose" id="entry-preview" hidden></div>
-        </div>
-        <div class="actions"><button value="draft">Save as draft</button><button value="publish">Publish</button></div>
-      </form>
-    </section>
-  </div>
-  <div id="site-panel" hidden>
-    <section>
-      <h2>Photo of the month</h2>
-      <form id="photo-form" method="post">
-        <label>Month <input name="month" type="month" required pattern="[0-9]{4}-(0[1-9]|1[0-2])" placeholder="YYYY-MM"></label>
-        <img id="photo-preview" alt="" draggable="false" hidden>
-        <label>Photo <input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
-        <label>Image description <input name="alt" maxlength="200" required></label>
-        <label>Caption <input name="caption" maxlength="240"></label>
-        <p id="photo-status" role="status"></p>
-        <button>Save monthly photo</button>
-      </form>
-    </section>
-  </div>
-  <div id="inbox-panel" hidden>
-    <section class="moderation">
-      <div class="moderation-head"><h2>Comments</h2><button id="refresh-comments">Refresh</button></div>
-      <div id="comments"></div>
-    </section>
-    <section class="moderation">
-      <div class="moderation-head"><h2>Privacy requests</h2><button id="refresh-privacy">Refresh</button></div>
-      <div id="privacy-requests"></div>
-    </section>
-  </div>
-</div>
-<dialog id="insert-dialog" aria-labelledby="insert-title">
-  <form id="insert-form" method="dialog">
-    <h2 id="insert-title">Insert</h2>
-    <label id="insert-label">Link text <input name="label" maxlength="200"></label>
-    <label id="insert-url">HTTPS URL <input name="url" type="url" maxlength="2000"></label>
-    <label id="insert-file" hidden>Image <input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
-    <p id="insert-status" role="status"></p>
-    <div class="actions"><button type="submit">Insert</button><button type="button" id="cancel-insert">Cancel</button></div>
+<main class="shell">
+  <header class="mast">
+    <a class="desk-brand" href="./">Writing desk</a>
+    <div class="mast-actions"><a href="../">View journal ↗</a><button id="logout" type="button" hidden>Sign out</button></div>
+  </header>
+  <p id="status" role="status"></p>
+  <form id="login" class="card login" method="post">
+    <h1>Sign in</h1>
+    <label>Email<input name="email" type="email" autocomplete="username" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" disabled>Sign in</button>
   </form>
-</dialog>
+  <div id="desk" hidden>
+    <nav class="desk-nav" aria-label="Writing desk sections">
+      <button type="button" aria-pressed="true" data-section="entries">Entries</button>
+      <button type="button" aria-pressed="false" data-section="site">Photos</button>
+      <button type="button" aria-pressed="false" data-section="inbox">Inbox</button>
+    </nav>
+    <div class="workspace">
+      <div class="entries-panel" id="entries-panel">
+        <div class="compose">
+          <div class="section-heading"><h1 id="editor-title">New entry</h1><button type="button" id="new-post">New entry</button></div>
+          <form id="editor" method="post">
+            <div class="card metadata">
+              <div class="fields">
+                <label>Title<input name="title" maxlength="180" required></label>
+                <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title"></label>
+                <label>Tag<input name="tag" maxlength="40" list="tags" required></label>
+                <label>Publication date<input name="published_on" type="date" required></label>
+              </div>
+              <datalist id="tags"></datalist>
+              <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
+            </div>
+            <div class="card editor-body">
+              <div class="body-heading"><label for="entry-text">Body</label><span id="word-count">0 words</span></div>
+              <textarea id="entry-text" name="body" rows="15" maxlength="99960" required aria-describedby="command-help" aria-controls="command-menu" placeholder="Start writing…"></textarea>
+              <div id="command-menu" class="command-menu" role="group" aria-label="Insert and format" hidden></div>
+              <p id="command-help" class="editor-help"><kbd>/</kbd> for formatting and media. Paste a video URL on its own line to embed it.</p>
+            </div>
+            <div class="card prose" id="entry-preview" hidden></div>
+            <div class="actions compose-actions">
+              <button type="submit" value="draft">Save draft</button>
+              <button type="button" id="preview-entry" aria-expanded="false" aria-controls="entry-preview">Preview</button>
+              <button type="submit" class="primary" value="publish">Publish</button>
+            </div>
+          </form>
+        </div>
+        <aside class="entry-aside">
+          <details class="card entry-list" id="entry-list" open><summary>Entries</summary>
+            <label>Find an entry<input id="find-entry" type="search" autocomplete="off"></label>
+            <ul id="posts"></ul>
+          </details>
+          <section class="card photo-overview">
+            <h2>Photo of the Week</h2>
+            <img id="weekly-preview" alt="" decoding="async" hidden>
+            <p id="weekly-summary">Feature photographs on the journal homepage.</p>
+            <div class="actions"><button type="button" id="manage-photos">Manage photos</button><a href="../?view=photos">Photo archive ↗</a></div>
+          </section>
+        </aside>
+      </div>
+      <section id="site-panel" hidden>
+        <div class="section-heading"><h1>Photo of the Week</h1><a href="../?view=photos">Photo archive ↗</a></div>
+        <p class="muted">The homepage plays the latest featured week on a continuous 10-second slideshow.</p>
+        <div class="photo-workspace">
+          <section class="card">
+            <div class="body-heading"><h2>Weekly photos</h2><button type="button" id="new-photo">Add photos</button></div>
+            <label>Week of <input id="photo-week" type="date" required></label>
+            <ul id="weekly-photos"></ul>
+          </section>
+          <form id="photo-form" class="card" method="post">
+            <h2 id="photo-editor-title">Add photos</h2>
+            <img id="photo-preview" alt="" decoding="async" hidden>
+            <label id="photo-files">Photos <input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
+            <p id="photo-upload-help" class="muted">Select one or more photos. You can edit the details for each photo after adding it.</p>
+            <div id="photo-details" hidden>
+              <label>Title <input name="title" maxlength="160"></label>
+              <label>Alt text <input name="alt" maxlength="200"></label>
+              <label>Description <textarea name="description" maxlength="4000" rows="5"></textarea></label>
+              <label class="checkbox"><input name="featured" type="checkbox" checked> Include in the slideshow</label>
+            </div>
+            <p id="photo-status" role="status"></p>
+            <button class="primary" type="submit" id="save-photo">Add to this week</button>
+          </form>
+        </div>
+      </section>
+      <div id="inbox-panel" hidden>
+        <div class="section-heading"><h1>Inbox</h1></div>
+        <section class="card moderation">
+          <div class="body-heading"><h2>Comments</h2><button id="refresh-comments" type="button">Refresh</button></div>
+          <div id="comments"></div>
+        </section>
+        <section class="card moderation">
+          <div class="body-heading"><h2>Privacy requests</h2><button id="refresh-privacy" type="button">Refresh</button></div>
+          <div id="privacy-requests"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <dialog id="insert-dialog" aria-labelledby="insert-title">
+    <form id="insert-form" method="dialog">
+      <h2 id="insert-title">Insert</h2>
+      <label id="insert-label">Link text <input name="label" maxlength="200"></label>
+      <label id="insert-url">HTTPS URL <input name="url" type="url" maxlength="2000"></label>
+      <label id="insert-file" hidden>File <input name="file" type="file"></label>
+      <p id="insert-status" role="status"></p>
+      <div class="actions"><button type="button" id="cancel-insert">Cancel</button><button class="primary" type="submit">Insert</button></div>
+    </form>
+  </dialog>
 </main>
 </body>
 </html>
