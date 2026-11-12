@@ -35,6 +35,17 @@ export async function request(path, { method = "GET", body, token, prefer, timeo
 
 export const table = path => "/rest/v1/qmargin_b74_" + path;
 export const missingFeature = error => ["PGRST205", "42P01"].includes(error?.code);
+export const missingColumn = error => ["PGRST204", "42703"].includes(error?.code);
+
+export async function readMediaImage(api, id, options) {
+  let image;
+  try { [image] = await api("media?select=encoded,width,height,alt&id=eq." + id, options); }
+  catch (error) {
+    if (!missingColumn(error)) throw error;
+    [image] = await api("media?select=encoded,width,height&id=eq." + id, options);
+  }
+  return image;
+}
 
 export async function allRows(get, path) {
   const rows = [];
@@ -65,6 +76,18 @@ export async function uploadAttachment(id, file, token) {
 }
 export const fetchAttachment = (id, token = publishableKey) =>
   request(attachmentPath(id), { token, timeout: 120000, download: true });
+
+export async function listAttachments(token) {
+  const files = [];
+  for (let offset = 0; ; offset += 100) {
+    const rows = await request("/storage/v1/object/list/qmargin-b74-attachments", {
+      method: "POST", token, body: { prefix: "", limit: 100, offset, sortBy: { column: "name", order: "asc" } },
+    });
+    if (!Array.isArray(rows)) throw new Error("The attachment list could not load.");
+    files.push(...rows);
+    if (rows.length < 100) return files;
+  }
+}
 
 export const mediaId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 export const markdownMarker = "<!-- common-hours-markdown -->\n";

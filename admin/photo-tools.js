@@ -1,4 +1,4 @@
-import { allRows, imageSource, journalToday, missingFeature, weekOf } from "./common.js";
+import { allRows, imageSource, journalToday, missingColumn, missingFeature, weekOf } from "./common.js";
 import { loadImage, uploadImage } from "./editor-tools.js";
 
 const fields = "id,week,media_id,title,alt,description,featured";
@@ -19,6 +19,7 @@ export function setupPhotoTools(api) {
   let pending = [];
   let revision = 0;
   let overviewRevision = 0;
+  let supportsSeries = true;
 
   week.value = weekOf();
 
@@ -50,10 +51,10 @@ export function setupPhotoTools(api) {
     document.querySelector("#photo-upload-help").hidden = Boolean(photo);
     files.required = !photo;
     details.hidden = !photo;
-    for (const name of ["title", "alt", "description"]) {
+    for (const name of ["title", "alt", "description", "series"]) {
       const field = form.elements.namedItem(name);
       field.value = photo?.[name] || "";
-      field.required = Boolean(photo) && name !== "description";
+      field.required = Boolean(photo) && (name === "title" || name === "alt");
     }
     form.elements.namedItem("featured").checked = photo?.featured ?? true;
     save.textContent = photo ? "Save photo" : "Add to this week";
@@ -83,7 +84,14 @@ export function setupPhotoTools(api) {
     list.textContent = "Loading photos…";
     save.disabled = newPhoto.disabled = true;
     try {
-      const photos = await allRows(api, "weekly_photos?select=" + fields + "&week=eq." + start + "&order=created_at.asc,id.asc");
+      const filter = "&week=eq." + start + "&order=created_at.asc,id.asc";
+      let photos;
+      try { photos = await allRows(api, "weekly_photos?select=" + fields + ",series" + filter); }
+      catch (error) {
+        if (!missingColumn(error)) throw error;
+        supportsSeries = false;
+        photos = await allRows(api, "weekly_photos?select=" + fields + filter);
+      }
       if (loading !== revision) return;
       list.replaceChildren();
       if (!photos.length) {
@@ -136,6 +144,9 @@ export function setupPhotoTools(api) {
           title: formData.get("title").trim(), alt: formData.get("alt").trim(),
           description: formData.get("description").trim(), featured: formData.has("featured"),
         };
+        const series = formData.get("series").trim();
+        if (supportsSeries) record.series = series;
+        else if (series) throw new Error("Apply the editor upgrade to save photo series.");
         if (!record.title || !record.alt) throw new Error("Enter a title and alt text.");
         status.textContent = "Saving photo…";
         const [saved] = await api("weekly_photos?id=eq." + current.id, {

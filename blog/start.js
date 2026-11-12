@@ -1,4 +1,7 @@
+if (!location.search) document.querySelector("#hero-skeleton").hidden = false;
 import("./journal.js").catch(() => {
+  document.body.removeAttribute("data-loading");
+  document.querySelector("#hero-skeleton").hidden = true;
   const content = document.querySelector("#content");
   content.setAttribute("aria-busy", "false");
   const message = document.createElement("p");

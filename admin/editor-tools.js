@@ -1,4 +1,4 @@
-import { attachmentLimit, missingFeature, videoFrom } from "./common.js";
+import { attachmentLimit, missingFeature, readMediaImage, videoFrom } from "./common.js";
 
 
 const MAX_INPUT = 15 * 1024 * 1024;
@@ -52,6 +52,8 @@ const commands = [
   ["file", "File"],
   ["pdf", "PDF"],
   ["link", "Link"],
+  ["entry", "Link to entry"],
+  ["footnote", "Footnote", "^[Footnote text]"],
   ["divider", "Divider", "---"],
 ];
 
@@ -70,28 +72,35 @@ export async function uploadImage(api, file, alt) {
   return saved;
 }
 
-export async function loadImage(api, id) {
-  const [image] = await api("media?select=encoded,width,height&id=eq." + id);
-  return image;
-}
+export const loadImage = readMediaImage;
 
-export function setupEditorTools(editor, api, attachments) {
+export function setupEditorTools(editor, api, attachments, getEntries) {
   const body = editor.elements.namedItem("body");
   const dialog = document.querySelector("#insert-dialog");
   const insert = document.querySelector("#insert-form");
   const insertStatus = document.querySelector("#insert-status");
   const cancel = document.querySelector("#cancel-insert");
   const preview = document.querySelector("#entry-preview");
+  const previewBody = document.querySelector("#preview-body");
+  const workspace = document.querySelector("#editor-workspace");
   const toggle = document.querySelector("#preview-entry");
   const menu = document.querySelector("#command-menu");
   const count = document.querySelector("#word-count");
   const status = document.querySelector("#status");
+  const entryDialog = document.querySelector("#entry-link-dialog");
+  const entrySearch = document.querySelector("#entry-link-search");
+  const entryResults = document.querySelector("#entry-link-results");
   let insertion;
   let command;
   let active = 0;
   let matches = [];
   let attachmentId;
+  let linkRange;
   let library;
+  let previewTimer;
+  let previewRevision = 0;
+  let previousBody;
+  const previewImages = new Map();
 
   function checkSpace(length, start, end) {
     if (body.value.length - (end - start) + length > body.maxLength) {
@@ -108,8 +117,12 @@ export function setupEditorTools(editor, api, attachments) {
   }
 
   function closePreview() {
+    clearTimeout(previewTimer);
+    previewRevision++;
     preview.hidden = true;
-    preview.replaceChildren();
+    workspace.classList.remove("with-preview");
+    previewBody.replaceChildren();
+    previousBody = undefined;
     toggle.textContent = "Preview";
     toggle.setAttribute("aria-expanded", "false");
   }
@@ -149,7 +162,6 @@ export function setupEditorTools(editor, api, attachments) {
   }
 
   function refresh() {
-    closePreview();
     closeMenu();
     const words = body.value.trim().split(/\s+/).filter(Boolean).length;
     count.textContent = words + (words === 1 ? " word" : " words");
@@ -168,10 +180,18 @@ export function setupEditorTools(editor, api, attachments) {
       });
       return;
     }
+    if (type === "entry") {
+      linkRange = { start, end };
+      entrySearch.value = "";
+      renderEntryLinks();
+      entryDialog.showModal();
+      entrySearch.focus();
+      return;
+    }
     if (template) {
       try {
-        const line = type === "bold" || type === "italic" ? template : "\n\n" + template + "\n\n";
-        const text = /[A-Za-z].*/.exec(template)?.[0].replace(/[*]+$/, "");
+        const line = ["bold", "italic", "footnote"].includes(type) ? template : "\n\n" + template + "\n\n";
+        const text = /[A-Za-z].*/.exec(template)?.[0].replace(/[*\]]+$/, "");
         const at = text ? line.indexOf(text) : -1;
         replace(line, start, end, at >= 0 ? [at, at + text.length] : undefined);
       } catch (error) { status.textContent = error.message; }
@@ -199,6 +219,29 @@ export function setupEditorTools(editor, api, attachments) {
     file.accept = type === "image" ? imageTypes : type === "pdf" ? "application/pdf,.pdf" : "";
     dialog.showModal();
   }
+
+  function renderEntryLinks() {
+    const query = entrySearch.value.trim().toLowerCase();
+    const entries = getEntries().filter(entry => entry.published && entry.title.toLowerCase().includes(query)).slice(0, 20);
+    entryResults.replaceChildren();
+    if (!entries.length) entryResults.textContent = "No matching published entries.";
+    for (const entry of entries) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = entry.title;
+      button.addEventListener("click", () => {
+        try {
+          replace("[" + markdownLabel(entry.title) + "](?post=" + entry.slug + ")", linkRange.start, linkRange.end);
+          entryDialog.close();
+        } catch (error) { entryResults.textContent = error.message; }
+      });
+      entryResults.append(button);
+    }
+  }
+
+  entrySearch.addEventListener("input", renderEntryLinks);
+  document.querySelector("#entry-link-close").addEventListener("click", () => entryDialog.close());
+  entryDialog.addEventListener("close", () => body.focus());
 
   body.addEventListener("input", () => { refresh(); updateMenu(); });
   body.addEventListener("click", updateMenu);
@@ -316,24 +359,53 @@ export function setupEditorTools(editor, api, attachments) {
       button.disabled = cancel.disabled = false;
     }
   });
-  toggle.addEventListener("click", async () => {
-    if (!preview.hidden) { closePreview(); return; }
-    toggle.disabled = true;
+  async function renderPreview() {
+    if (preview.hidden) return;
+    const revision = ++previewRevision;
+    const fields = editor.elements;
+    document.querySelector("#preview-title").textContent = fields.namedItem("title").value.trim() || "Untitled entry";
+    document.querySelector("#preview-meta").textContent = [fields.namedItem("published_on").value, fields.namedItem("tag").value].filter(Boolean).join(" · ");
+    document.querySelector("#preview-excerpt").textContent = fields.namedItem("excerpt").value;
+    const value = body.value;
+    if (value === previousBody) return;
     try {
       const { renderText } = await import("./rich.js");
-      preview.hidden = false;
-      renderText(preview, body.value || "Start writing to preview your entry.", id => loadImage(api, id),
-        { markdown: true, loadAttachment: attachments.download });
-      toggle.textContent = "Hide preview";
-      toggle.setAttribute("aria-expanded", "true");
-      preview.scrollIntoView({ block: "nearest" });
+      if (revision !== previewRevision || preview.hidden) return;
+      previousBody = value;
+      renderText(previewBody, value || "Start writing to preview your entry.", id => {
+        if (!previewImages.has(id)) previewImages.set(id, loadImage(api, id).catch(error => {
+          previewImages.delete(id);
+          throw error;
+        }));
+        return previewImages.get(id);
+      },
+        { markdown: true, loadAttachment: attachments.download, preview: true });
     } catch {
-      closePreview();
-      status.textContent = "Preview could not load. Try again.";
-    } finally {
-      toggle.disabled = false;
+      if (revision === previewRevision) previewBody.textContent = "Preview could not load. Try again.";
     }
+  }
+
+  editor.addEventListener("input", () => {
+    if (preview.hidden) return;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(renderPreview, 250);
+  });
+  toggle.addEventListener("click", () => {
+    if (!preview.hidden) { closePreview(); return; }
+    preview.hidden = false;
+    workspace.classList.add("with-preview");
+    toggle.textContent = "Hide preview";
+    toggle.setAttribute("aria-expanded", "true");
+    void renderPreview();
   });
 
-  return { refresh };
+  return {
+    refresh() {
+      refresh();
+      previewImages.clear();
+      previousBody = undefined;
+      void renderPreview();
+    },
+    closePreview,
+  };
 }

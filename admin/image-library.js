@@ -1,5 +1,5 @@
-import { allRows, imageSource, missingFeature } from "./common.js";
-import { imageReferences } from "./rich.js";
+import { imageSource } from "./common.js";
+import { loadCatalog } from "./media-catalog.js";
 
 const pageSize = 12;
 
@@ -16,19 +16,6 @@ export function setupImageLibrary(api, loadImage) {
   let pick;
   let restoreFocus;
   const sources = new Map();
-
-  async function readOptional(path) {
-    try { return await allRows(api, path); }
-    catch (error) { if (missingFeature(error)) return []; throw error; }
-  }
-
-  async function readMedia() {
-    try { return await allRows(api, "media?select=id,alt&order=id"); }
-    catch (error) {
-      if (!["42703", "PGRST204"].includes(error.code)) throw error;
-      return allRows(api, "media?select=id&order=id");
-    }
-  }
 
   function render() {
     observer?.disconnect();
@@ -115,30 +102,9 @@ export function setupImageLibrary(api, loadImage) {
     status.textContent = "Loading images…";
     dialog.showModal();
     try {
-      const [media, posts, weekly, monthly] = await Promise.all([
-        readMedia(),
-        allRows(api, "posts?select=body&order=published_on.desc,id.desc"),
-        readOptional("weekly_photos?select=media_id,title,alt,description&order=week.desc,created_at.desc,id"),
-        readOptional("photos?select=media_id,alt,caption&order=month.desc"),
-      ]);
+      const catalog = await loadCatalog(api);
       if (revision !== loading) return;
-      const saved = new Map();
-      for (const photo of weekly) {
-        if (!saved.has(photo.media_id)) saved.set(photo.media_id, photo);
-      }
-      for (const photo of monthly) {
-        if (!saved.has(photo.media_id)) saved.set(photo.media_id, { title: photo.caption, alt: photo.alt });
-      }
-      const altByImage = new Map();
-      for (const post of posts) {
-        for (const image of imageReferences(post.body)) {
-          if (image.alt && !altByImage.has(image.id)) altByImage.set(image.id, image.alt);
-        }
-      }
-      images = media.map(({ id, alt }) => ({
-        ...saved.get(id), id, alt: alt || saved.get(id)?.alt || altByImage.get(id) || "",
-      }));
-      images.sort((a, b) => (a.title || a.alt || "\uffff").localeCompare(b.title || b.alt || "\uffff"));
+      images = catalog;
       search.disabled = false;
       render();
     } catch {

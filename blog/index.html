@@ -7,21 +7,24 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>The Common Hours — An independent journal</title>
+<link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
 <link rel="stylesheet" href="style.css">
 <link rel="modulepreload" href="journal.js">
 <script type="module" src="start.js"></script>
 </head>
-<body id="top">
+<body id="top" data-loading>
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="site-header">
   <div class="wrap mast">
     <a class="brand" href="./">The Common Hours</a>
     <nav aria-label="Main navigation">
       <a href="./" id="journal-link">Journal</a><a href="?view=archive" id="archive-link">Archive</a><a href="?view=photos" id="photos-link">Photos</a>
+      <a href="?view=start" id="start-link">Start here</a><a href="?view=search" id="search-link">Search</a>
     </nav>
   </div>
 </header>
 <main class="wrap">
+  <div id="hero-skeleton" class="hero-skeleton skeleton" aria-hidden="true" hidden></div>
   <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" hidden>
     <div class="slide">
       <a id="featured-photo-link" href="?view=photo&amp;photo=cover" aria-label="Open the featured photo">
@@ -43,14 +46,24 @@
     </figcaption>
   </figure>
   <div class="layout">
-    <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true"><p class="loading" role="status">Loading journal…</p></section>
+    <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true">
+      <p class="loading sr-only" role="status">Loading journal…</p>
+      <div class="content-skeleton" aria-hidden="true">
+        <div class="skeleton skeleton-heading"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div>
+        <div class="skeleton skeleton-heading"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div>
+      </div>
+    </section>
     <aside id="sidebar" aria-label="Blog archive"></aside>
   </div>
   <noscript><p>Enable JavaScript to browse entries and leave comments.</p></noscript>
 </main>
 <footer class="site-footer">
   <img class="footer-landscape" src="footer-landscape.jpg" width="1440" height="182" alt="" loading="lazy" decoding="async">
-  <div class="wrap"><nav aria-label="Site policies"><a href="?view=privacy">Privacy</a><a href="?view=terms">Terms</a></nav><a href="#top">Back to top <span aria-hidden="true">↑</span></a></div>
+  <div class="wrap"><nav aria-label="Site policies and feed"><a href="?view=privacy">Privacy</a><a href="?view=terms">Terms</a><a href="feed.xml">RSS</a></nav><a href="#top">Back to top <span aria-hidden="true">↑</span></a></div>
 </footer>
 </body>
 </html>

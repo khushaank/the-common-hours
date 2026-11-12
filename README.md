@@ -13,4 +13,9 @@ Run `supabase/add-image-library-and-traffic.sql` next to store alt text for new
 uploads and enable the private traffic dashboard. Traffic counts begin when
 the updated journal goes live.
 
+Run `supabase/upgrade-editor-and-reading.sql` after the traffic upgrade to enable
+cloud working drafts, media editing, body search, series, and private review links.
+Review links expire after 24 hours. The RSS feed is rebuilt by **Publish journal**
+on demand and every six hours while the GitHub Actions schedule is active.
+
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

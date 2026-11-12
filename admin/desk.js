@@ -1,5 +1,5 @@
 import { getProjectOrigin } from "./config.js";
-import { allRows, fetchAttachment, journalToday, markdownMarker, missingFeature, request, showFailure, table, uploadAttachment } from "./common.js";
+import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table, uploadAttachment } from "./common.js";
 import { setupEditorTools } from "./editor-tools.js";
 import { setupPhotoTools } from "./photo-tools.js";
 
@@ -15,12 +15,23 @@ const newPost = document.querySelector("#new-post");
 const entryList = document.querySelector("#entry-list");
 const search = document.querySelector("#find-entry");
 const inbox = document.querySelector("#privacy-requests");
+const draftStatus = document.querySelector("#draft-status");
+const discardDraft = document.querySelector("#discard-draft");
+const focusEntry = document.querySelector("#focus-entry");
+const checklist = document.querySelector("#publish-checklist");
+const reviewResult = document.querySelector("#review-result");
+const reviewUrl = document.querySelector("#review-url");
 const sections = [...document.querySelectorAll("[data-section]")];
 const narrow = matchMedia("(max-width: 760px)");
 const editorTools = setupEditorTools(editor, api, {
-  upload: async (id, file) => uploadAttachment(id, file, await sessionToken()),
+  upload: async (id, file) => {
+    await uploadAttachment(id, file, await sessionToken());
+    const filename = file.name.slice(0, 200);
+    try { await saveAsset({ id, kind: "file" }, { title: filename, original: filename, alt: "", description: "" }); }
+    catch (error) { if (error.code !== "PGRST202") throw error; }
+  },
   download: async id => fetchAttachment(id, await sessionToken()),
-});
+}, () => posts);
 const photoTools = setupPhotoTools(api);
 let originalBody = "";
 let session;
@@ -30,6 +41,13 @@ let posts = [];
 let baseline;
 let busy = false;
 let stats;
+let media;
+let activePost;
+let draftOwner;
+let backupStored = false;
+let cloudDraft = false;
+let editorialFields = true;
+let reviewedSnapshot;
 
 function setSession(data) {
   session = { ...data, expires: Date.now() + (data.expires_in - 30) * 1000 };
@@ -52,8 +70,91 @@ async function api(path, options = {}) {
   return request(table(path), { ...options, token: await sessionToken() });
 }
 
-const snapshot = () => JSON.stringify([...new FormData(editor)]);
+async function adminRpc(name, body) {
+  return request("/rest/v1/rpc/qmargin_b74_" + name, { method: "POST", body, token: await sessionToken() });
+}
+
+function saveAsset(asset, details) {
+  return adminRpc("save_asset", {
+    p_id: asset.id, p_kind: asset.kind, p_title: details.title, p_alt: details.alt, p_description: details.description,
+    p_original: details.original || "",
+  });
+}
+
+function entryFields() {
+  const fields = Object.fromEntries(new FormData(editor));
+  fields.start_here = String(editor.elements.namedItem("start_here").checked);
+  return fields;
+}
+const snapshot = () => JSON.stringify(entryFields());
 const dirty = () => snapshot() !== baseline;
+const slot = () => current || "new";
+const backupKey = () => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + slot();
+const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
+const cloudPath = () => "working_drafts?slot=eq." + slot();
+
+function showDraftStatus(message) {
+  if (draftStatus.textContent !== message) draftStatus.textContent = message;
+  discardDraft.hidden = !dirty() && !cloudDraft;
+}
+
+function readBackup() {
+  try { return JSON.parse(localStorage.getItem(backupKey()) || "null"); }
+  catch { return null; }
+}
+
+function removeBackup() {
+  try { localStorage.removeItem(backupKey()); } catch { /* Storage can be unavailable. */ }
+}
+
+function saveBackup() {
+  if (!draftOwner) return;
+  if (!dirty()) {
+    removeBackup();
+    backupStored = false;
+    showDraftStatus(cloudDraft ? "A saved draft is available." : "");
+  } else {
+    try {
+      localStorage.setItem(backupKey(), JSON.stringify({
+        fields: entryFields(), saved_at: new Date().toISOString(),
+      }));
+      backupStored = true;
+    } catch { backupStored = false; }
+    showDraftStatus(backupStored ? "Draft backed up on this device." : "Unsaved changes. Use Save draft.");
+  }
+  updateExitWarning();
+}
+
+async function recoverDraft() {
+  const local = readBackup();
+  let cloud;
+  try { [cloud] = await api(cloudPath() + "&select=fields,saved_at", { timeout: 3500 }); }
+  catch { /* A device backup can still be restored offline. */ }
+  cloudDraft = Boolean(cloud);
+  const chosen = local && (!cloud || local.saved_at >= cloud.saved_at) ? local : cloud;
+  if (!chosen) return;
+  for (const [name, value] of Object.entries(chosen.fields || {})) {
+    const field = editor.elements.namedItem(name);
+    if (!field || typeof value !== "string") continue;
+    if (field.type === "checkbox") field.checked = value === "true";
+    else field.value = value;
+  }
+  if (!dirty()) {
+    removeBackup();
+    cloudDraft = false;
+    return;
+  }
+  editorTools.refresh();
+  saveBackup();
+  showDraftStatus(chosen === local ? "Draft recovered from this device." : "Saved draft restored.");
+}
+
+async function deleteCloudDraft() {
+  try { await api(cloudPath(), { method: "DELETE" }); }
+  catch (error) { if (!missingFeature(error)) throw error; }
+}
+
+const canLeaveDraft = () => !dirty() || backupStored || confirm("This browser could not back up your changes. Leave this entry?");
 
 function preventExit(event) {
   event.preventDefault();
@@ -61,7 +162,7 @@ function preventExit(event) {
 }
 
 function updateExitWarning() {
-  if (session && dirty()) window.addEventListener("beforeunload", preventExit);
+  if (session && dirty() && !backupStored) window.addEventListener("beforeunload", preventExit);
   else window.removeEventListener("beforeunload", preventExit);
 }
 
@@ -103,11 +204,12 @@ function renderPostList() {
     button.append(state);
     if (post.id === current) button.setAttribute("aria-current", "true");
     button.addEventListener("click", () => {
-      if (post.id === current || (dirty() && !confirm("Discard the unsaved changes to this entry?"))) return;
+      if (post.id === current || !canLeaveDraft()) return;
       run(button, async () => {
         const [record] = await api("posts?id=eq." + post.id);
         if (!record) throw new Error("This entry is unavailable.");
         openEditor(record);
+        await recoverDraft();
         if (narrow.matches) entryList.open = false;
       });
     });
@@ -117,27 +219,133 @@ function renderPostList() {
 }
 
 function openEditor(post) {
+  activePost = post;
   current = post?.id;
+  if (draftOwner) {
+    try { localStorage.setItem(lastEntryKey(), slot()); } catch { /* Entry switching also works without storage. */ }
+  }
   editor.reset();
+  checklist.hidden = reviewResult.hidden = true;
+  reviewUrl.value = "";
+  reviewedSnapshot = undefined;
   originalBody = post?.body || "";
-  for (const key of ["title", "slug", "tag", "excerpt", "published_on"]) {
+  for (const key of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order"]) {
     editor.elements.namedItem(key).value = post?.[key] ?? "";
   }
+  editor.elements.namedItem("start_here").checked = Boolean(post?.start_here);
   editor.elements.namedItem("body").value = originalBody.startsWith(markdownMarker)
     ? originalBody.slice(markdownMarker.length) : originalBody;
   if (!post) editor.elements.namedItem("published_on").value = journalToday();
   document.querySelector("#editor-title").textContent = post ? "Edit entry" : "New entry";
   editor.querySelector('[value="publish"]').textContent = post?.published ? "Update published entry" : "Publish";
   baseline = snapshot();
+  backupStored = cloudDraft = false;
+  showDraftStatus("");
   editorTools.refresh();
   updateExitWarning();
   renderPostList();
 }
 
 async function loadPosts() {
-  posts = await allRows(api, "posts?select=id,title,published,tag,published_on&order=published_on.desc,id.desc");
+  const fields = "id,slug,title,published,tag,published_on";
+  try {
+    posts = await allRows(api, "posts?select=" + fields + ",series,series_order,start_here&order=published_on.desc,id.desc");
+    editorialFields = true;
+  } catch (error) {
+    if (!missingColumn(error)) throw error;
+    posts = await allRows(api, "posts?select=" + fields + "&order=published_on.desc,id.desc");
+    editorialFields = false;
+  }
   renderPostList();
 }
+
+function setFocusMode(enabled) {
+  desk.classList.toggle("focus-mode", enabled);
+  focusEntry.setAttribute("aria-pressed", String(enabled));
+  focusEntry.textContent = enabled ? "Exit focus mode" : "Focus mode";
+}
+
+focusEntry.addEventListener("click", () => setFocusMode(focusEntry.getAttribute("aria-pressed") !== "true"));
+
+async function inspectForPublish(fields) {
+  const { entryLinks, mediaReferences } = await import("./rich.js");
+  const missingAlt = mediaReferences(markdownMarker + fields.body).filter(asset => asset.kind === "image" && !asset.alt.trim()).length;
+  const links = entryLinks(fields.body);
+  return { missingAlt, links, missingExcerpt: !fields.excerpt.trim(), insecureLink: /\bhttp:\/\//i.test(fields.body) };
+}
+
+function showChecklist({ missingAlt, links, missingExcerpt, insecureLink }) {
+  const list = checklist.querySelector("ul");
+  const add = text => {
+    const row = document.createElement("li");
+    row.textContent = text;
+    list.append(row);
+    return row;
+  };
+  list.replaceChildren();
+  add(missingExcerpt ? "Add an excerpt." : "Excerpt is present.");
+  add(missingAlt ? missingAlt + (missingAlt === 1 ? " image is missing alt text." : " images are missing alt text.") : "Images have alt text.");
+  if (insecureLink) add("Check HTTP links. Use HTTPS for clickable links.");
+  if (links.length) {
+    const row = add("Check these links before publishing.");
+    const urls = document.createElement("ul");
+    for (const url of links) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = url;
+      item.append(link);
+      urls.append(item);
+    }
+    row.append(urls);
+  }
+  checklist.hidden = false;
+  checklist.scrollIntoView({ block: "nearest" });
+}
+
+document.querySelector("#check-entry").addEventListener("click", event => {
+  run(event.currentTarget, async () => {
+    showChecklist(await inspectForPublish(entryFields()));
+    reviewedSnapshot = snapshot();
+  });
+});
+
+document.querySelector("#review-entry").addEventListener("click", event => {
+  run(event.currentTarget, async () => {
+    const fields = entryFields();
+    if (!fields.body.trim()) throw new Error("Add something to the body before creating a review link.");
+    const { mediaReferences } = await import("./rich.js");
+    const token = (crypto.randomUUID() + crypto.randomUUID()).replaceAll("-", "");
+    const fileIds = [...new Set(mediaReferences(markdownMarker + fields.body).filter(asset => asset.kind === "file").map(asset => asset.id))];
+    const tokenForStorage = await sessionToken();
+    const files = Object.fromEntries(await Promise.all(fileIds.map(async id => {
+      const result = await request("/storage/v1/object/sign/qmargin-b74-attachments/" + id, {
+        method: "POST", token: tokenForStorage, body: { expiresIn: 86400 },
+      });
+      if (typeof result?.signedURL !== "string" || !result.signedURL.startsWith("/object/sign/qmargin-b74-attachments/" + id + "?")) {
+        throw new Error("Could not prepare a file for review.");
+      }
+      return [id, "/storage/v1" + result.signedURL];
+    })));
+    const expiry = await adminRpc("create_review", {
+      p_token: token, p_fields: { title: fields.title, excerpt: fields.excerpt, tag: fields.tag, body: fields.body, files },
+    });
+    reviewUrl.value = new URL("../?view=review#" + token, location.href).href;
+    document.querySelector("#review-expiry").textContent = "Expires " + new Date(expiry).toLocaleString();
+    reviewResult.hidden = false;
+  }).then(() => {
+    if (!reviewResult.hidden) { reviewUrl.focus(); reviewUrl.select(); }
+  });
+});
+
+document.querySelector("#copy-review").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(reviewUrl.value);
+    status.textContent = "Review link copied.";
+  } catch { reviewUrl.focus(); reviewUrl.select(); }
+});
 
 async function loadComments() {
   const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc");
@@ -207,12 +415,20 @@ login.addEventListener("submit", event => {
     try {
       const allowed = await api("admins?select=user_id&limit=1");
       if (!allowed.length) throw new Error("This account does not have access to the writing desk.");
+      draftOwner = allowed[0].user_id;
       await loadPosts();
-      openEditor();
+      let lastEntry;
+      try {
+        const remembered = localStorage.getItem(lastEntryKey());
+        if (posts.some(post => post.id === remembered)) [lastEntry] = await api("posts?id=eq." + remembered);
+      } catch { /* A remembered entry is optional. */ }
+      openEditor(lastEntry);
+      await recoverDraft();
       showSection("entries");
       entryList.open = !narrow.matches;
     } catch (error) {
       session = undefined;
+      draftOwner = undefined;
       throw error;
     }
     login.reset();
@@ -224,19 +440,23 @@ login.addEventListener("submit", event => {
 });
 
 logout.addEventListener("click", () => {
-  if (busy || (dirty() && !confirm("Discard unsaved changes and sign out?"))) return;
+  if (busy || !canLeaveDraft()) return;
   run(logout, async () => {
     try {
       await request("/auth/v1/logout?scope=local", { method: "POST", token: session.access_token });
     } finally {
       session = undefined;
+      draftOwner = undefined;
       posts = [];
+      setFocusMode(false);
+      editorTools.closePreview();
       openEditor();
       comments.replaceChildren();
       inbox.replaceChildren();
       search.value = "";
       photoTools.clear();
       stats?.clear();
+      media?.clear();
       desk.hidden = true;
       logout.hidden = true;
       login.hidden = false;
@@ -245,10 +465,22 @@ logout.addEventListener("click", () => {
 });
 
 newPost.addEventListener("click", () => {
-  if (busy || (dirty() && !confirm("Discard the unsaved changes to this entry?"))) return;
-  openEditor();
-  if (narrow.matches) entryList.open = false;
-  editor.elements.namedItem("title").focus();
+  if (busy || !canLeaveDraft()) return;
+  run(newPost, async () => {
+    openEditor();
+    await recoverDraft();
+    if (narrow.matches) entryList.open = false;
+  }).then(() => editor.elements.namedItem("title").focus());
+});
+
+discardDraft.addEventListener("click", () => {
+  if (!confirm("Discard the draft changes to this entry?")) return;
+  run(discardDraft, async () => {
+    await deleteCloudDraft();
+    removeBackup();
+    openEditor(activePost);
+    status.textContent = "Draft changes discarded.";
+  });
 });
 
 refreshComments.addEventListener("click", () => run(refreshComments, async () => {
@@ -259,29 +491,74 @@ refreshComments.addEventListener("click", () => run(refreshComments, async () =>
 editor.addEventListener("submit", event => {
   event.preventDefault();
   run(event.submitter, async () => {
-    const record = Object.fromEntries([...new FormData(editor)].map(([key, value]) => [key, value.trim()]));
+    const fields = entryFields();
+    const record = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
+    const publishing = event.submitter.value === "publish";
+    if (publishing && reviewedSnapshot !== snapshot()) {
+      const report = await inspectForPublish(fields);
+      if (report.missingAlt || report.links.length || report.insecureLink || report.missingExcerpt) {
+        showChecklist(report);
+        reviewedSnapshot = snapshot();
+        status.textContent = report.missingExcerpt ? "Add an excerpt before publishing." : "Review the checklist, then select Publish again.";
+        return;
+      }
+    }
     record.slug ||= record.title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
       .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
-    if (!record.slug) throw new Error("Enter a slug using lowercase letters, numbers, and hyphens.");
-    if (!record.title || !record.tag || !record.excerpt || !record.body) {
-      throw new Error("Fill in the title, tag, excerpt, and body.");
+    const validSlug = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(record.slug);
+    const complete = validSlug && record.title && record.tag && record.excerpt && record.body && record.published_on;
+    if (!publishing && (activePost?.published || !complete)) {
+      saveBackup();
+      try {
+        await api("working_drafts?on_conflict=user_id,slot", {
+          method: "POST", body: { user_id: draftOwner, slot: slot(), fields, saved_at: new Date().toISOString() },
+          prefer: "resolution=merge-duplicates,return=minimal",
+        });
+      } catch (error) {
+        if (!missingFeature(error) || !backupStored) throw error;
+        status.textContent = "Draft saved on this device. Apply the editor upgrade for cloud drafts.";
+        return;
+      }
+      cloudDraft = true;
+      backupStored = true;
+      updateExitWarning();
+      showDraftStatus("Draft saved.");
+      status.textContent = activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.";
+      return;
+    }
+    if (!validSlug) throw new Error("Enter a slug using lowercase letters, numbers, and hyphens.");
+    if (!complete) throw new Error("Fill in the title, tag, excerpt, date, and body.");
+    if (editorialFields) {
+      record.start_here = record.start_here === "true";
+      record.series_order = record.series && record.series_order ? Number(record.series_order) : null;
+      if (record.series_order !== null && (!Number.isInteger(record.series_order) || record.series_order < 1 || record.series_order > 9999)) {
+        throw new Error("Choose a part number from 1 to 9999.");
+      }
+    } else {
+      if (record.series || record.start_here === "true") throw new Error("Apply the editor upgrade to publish a series or a starter entry.");
+      delete record.series;
+      delete record.series_order;
+      delete record.start_here;
     }
     if (record.body !== originalBody || originalBody.startsWith(markdownMarker)) record.body = markdownMarker + record.body;
-    record.published = event.submitter.value === "publish";
+    record.published = publishing;
     const path = current ? "posts?id=eq." + current : "posts";
     const [saved] = await api(path, { method: current ? "PATCH" : "POST", body: record, prefer: "return=representation" });
     if (!saved) throw new Error("The entry could not be saved.");
-    const { id, title, tag, published, published_on } = saved;
-    const summary = { id, title, tag, published, published_on };
+    removeBackup();
+    const cleared = await deleteCloudDraft().then(() => true, () => false);
+    const { id, slug, title, tag, published, published_on } = saved;
+    const summary = { id, slug, title, tag, published, published_on };
     posts = [summary, ...posts.filter(post => post.id !== id)].sort((a, b) =>
       b.published_on.localeCompare(a.published_on) || b.id.localeCompare(a.id));
     openEditor(saved);
-    status.textContent = saved.published ? "Entry published." : "Draft saved.";
+    status.textContent = (saved.published ? "Entry published." : "Draft saved.") +
+      (cleared ? "" : " The previous cloud draft could not be cleared.");
   });
 });
 
 search.addEventListener("input", renderPostList);
-editor.addEventListener("input", updateExitWarning);
+editor.addEventListener("input", saveBackup);
 
 function showSection(section) {
   for (const button of sections) {
@@ -347,6 +624,22 @@ async function openStats() {
   }
 }
 
+async function openMedia() {
+  try {
+    const { setupMediaEditor } = await import("./media-editor.js");
+    if (!session || document.querySelector("#media-panel").hidden) return;
+    media ??= setupMediaEditor(api, {
+      list: async () => listAttachments(await sessionToken()),
+      image: id => readMediaImage(api, id),
+      download: async id => fetchAttachment(id, await sessionToken()),
+      save: saveAsset,
+    });
+    await media.load();
+  } catch {
+    document.querySelector("#media-status").textContent = "Media could not open. Try again.";
+  }
+}
+
 document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
 for (const button of sections) {
   button.addEventListener("click", () => {
@@ -356,6 +649,7 @@ for (const button of sections) {
     if (section === "site") void photoTools.loadPhoto();
     if (section === "inbox") void openInbox();
     if (section === "stats") void openStats();
+    if (section === "media") void openMedia();
   });
 }
 

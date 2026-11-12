@@ -1,13 +1,14 @@
 import { url, publishableKey } from "./config.js";
-import { allRows, escape, fetchAttachment, markdownMarker, request, showFailure, table } from "./common.js";
+import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, readMediaImage, request, showFailure, table } from "./common.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = ["archive", "privacy", "terms", "photo", "photos"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "privacy", "terms", "photo", "photos", "search", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
+const series = params.get("series")?.slice(0, 100);
 const demo = !url && !publishableKey;
 const pageSize = 5;
 
@@ -16,19 +17,22 @@ const format = (date, options) => new Date(date).toLocaleDateString("en", { time
 const dateLabel = date => format(date, { month: "short", day: "numeric", year: "numeric" });
 const monthLabel = date => format(date + "-01", { month: "long", year: "numeric" });
 const postLink = post => link({ post: post.slug });
-const isJournal = !view && !slug && !month && !tag && !params.has("page");
+const isJournal = !view && !slug && !month && !tag && !series && !params.has("page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo" || view === "photos";
-if (!isLegal) {
-  const currentNav = isPhoto ? "photos" : view === "archive" || month ? "archive" : "journal";
+if (!isLegal && view !== "review") {
+  const currentNav = isPhoto ? "photos" : view === "archive" || month ? "archive" :
+    ["start", "search"].includes(view) ? view : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
-if (isLegal || isPhoto) document.querySelector(".layout").classList.add(isLegal ? "legal-layout" : "photo-layout");
+if (isLegal || isPhoto || ["search", "review", "start"].includes(view)) {
+  document.querySelector(".layout").classList.add(isLegal ? "legal-layout" : "photo-layout");
+}
 const canonical = document.createElement("link");
 canonical.rel = "canonical";
 const canonicalUrl = new URL("https://commonhours.qd.je/");
-for (const key of ["view", "post", "month", "tag", "page", "photo"]) {
+for (const key of ["view", "post", "month", "tag", "page", "photo", "series", "q", "year"]) {
   const value = key === "view" ? view : params.get(key);
   if (value) canonicalUrl.searchParams.set(key, value);
 }
@@ -37,6 +41,17 @@ document.head.append(canonical);
 
 const get = (path, options) => request(table(path), options);
 const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
+
+async function loadPublicPosts() {
+  if (demo) return (await import("./demo.js")).default;
+  const fields = "id,slug,title,tag,excerpt,published_on";
+  const filter = "&published=eq.true&order=published_on.desc,id.desc";
+  try { return await allRows(get, "posts?select=" + fields + ",series,series_order,start_here" + filter); }
+  catch (error) {
+    if (!missingColumn(error)) throw error;
+    return allRows(get, "posts?select=" + fields + filter);
+  }
+}
 
 function recordView(page, post = null) {
   if (demo || navigator.globalPrivacyControl || navigator.doNotTrack === "1") return;
@@ -124,16 +139,16 @@ async function renderPost(posts, index) {
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form></section>`;
   const bodyElement = document.querySelector("#entry-body");
   if (renderer) {
-    renderer.renderText(bodyElement, post.body, async id => {
-      const [image] = await get("media?select=encoded,width,height&id=eq." + id);
-      return image;
-    }, { loadAttachment: fetchAttachment });
+    renderer.renderText(bodyElement, post.body, id => readMediaImage(get, id), { loadAttachment: fetchAttachment, preparePrint: true });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
   } else {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   const list = document.querySelector("#comment-list");
+  const { addParagraphLinks, relatedEntries } = await import("./reading.js");
+  addParagraphLinks(bodyElement);
+  bodyElement.closest("article").insertAdjacentHTML("afterend", relatedEntries(posts, post));
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
   const button = form.querySelector("button");
@@ -196,6 +211,12 @@ async function renderPost(posts, index) {
 }
 
 async function start() {
+  if (view === "search" || view === "review") {
+    const reading = await import("./reading.js");
+    if (view === "review") await reading.renderReview(content);
+    else await reading.renderSearch(content, (params.get("q") || "").trim().slice(0, 100), demo ? await loadPublicPosts() : undefined);
+    return;
+  }
   if (isLegal) {
     const { renderLegal } = await import("./legal.js");
     document.title = (view === "privacy" ? "Privacy" : "Terms") + " — The Common Hours";
@@ -209,9 +230,13 @@ async function start() {
     recordView(view);
     return;
   }
-  const posts = demo ? (await import("./demo.js")).default : await allRows(get,
-    "posts?select=id,slug,title,tag,excerpt,published_on&published=eq.true&order=published_on.desc,id.desc"
-  );
+  const posts = await loadPublicPosts();
+  if (view === "start" || series) {
+    const { renderReadingList, seriesEntries } = await import("./reading.js");
+    if (series) renderReadingList(content, series, seriesEntries(posts, series));
+    else renderReadingList(content, "Start here", posts.filter(post => post.start_here), "No starter entries have been selected yet.");
+    return;
+  }
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topics = new Map([...grouped(posts, post => post.tag)].sort(([a], [b]) => a.localeCompare(b)));
   const archives = sideLinks(months, "month", monthLabel, month);
@@ -244,7 +269,8 @@ async function load() {
   }
 }
 
-void load();
-if (isJournal) {
-  void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {});
-}
+const heroSkeleton = document.querySelector("#hero-skeleton");
+heroSkeleton.hidden = !isJournal;
+const hero = isJournal ? import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo))
+  .finally(() => { heroSkeleton.hidden = true; }) : null;
+void Promise.allSettled([load(), hero]).then(() => document.body.removeAttribute("data-loading"));

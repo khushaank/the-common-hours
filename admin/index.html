@@ -27,13 +27,16 @@
     <nav class="desk-nav" aria-label="Writing desk sections">
       <button type="button" aria-pressed="true" data-section="entries">Entries</button>
       <button type="button" aria-pressed="false" data-section="site">Photos</button>
+      <button type="button" aria-pressed="false" data-section="media">Media</button>
       <button type="button" aria-pressed="false" data-section="stats">Stats</button>
       <button type="button" aria-pressed="false" data-section="inbox">Inbox</button>
     </nav>
     <div class="workspace">
       <div class="entries-panel" id="entries-panel">
         <div class="compose">
-          <div class="section-heading"><h1 id="editor-title">New entry</h1><button type="button" id="new-post">New entry</button></div>
+          <div class="section-heading"><h1 id="editor-title">New entry</h1><div class="actions">
+            <button type="button" id="focus-entry" aria-pressed="false">Focus mode</button><button type="button" id="new-post">New entry</button>
+          </div></div>
           <form id="editor" method="post">
             <div class="card metadata">
               <div class="fields">
@@ -44,17 +47,39 @@
               </div>
               <datalist id="tags"></datalist>
               <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
+              <div class="fields">
+                <label>Series <input name="series" maxlength="100"></label>
+                <label>Part number <input name="series_order" type="number" min="1" max="9999"></label>
+              </div>
+              <label class="checkbox"><input name="start_here" type="checkbox" value="true"> Show on Start here</label>
             </div>
-            <div class="card editor-body">
-              <div class="body-heading"><label for="entry-text">Body</label><span id="word-count">0 words</span></div>
-              <textarea id="entry-text" name="body" rows="15" maxlength="99960" required aria-controls="command-menu" placeholder="Start writing…"></textarea>
-              <div id="command-menu" class="command-menu" role="group" aria-label="Insert and format" hidden></div>
+            <div class="editor-workspace" id="editor-workspace">
+              <div class="card editor-body">
+                <div class="body-heading"><label for="entry-text">Body</label><span id="word-count">0 words</span></div>
+                <textarea id="entry-text" name="body" rows="15" maxlength="99960" required aria-controls="command-menu" placeholder="Start writing…"></textarea>
+                <div id="command-menu" class="command-menu" role="group" aria-label="Insert and format" hidden></div>
+              </div>
+              <section class="card editor-preview" id="entry-preview" aria-label="Live preview" hidden>
+                <div class="preview-label">Live preview</div>
+                <h2 id="preview-title"></h2>
+                <p id="preview-meta" class="muted"></p>
+                <p id="preview-excerpt" class="muted"></p>
+                <div class="prose" id="preview-body"></div>
+              </section>
             </div>
-            <div class="card prose" id="entry-preview" hidden></div>
+            <section id="publish-checklist" class="card" tabindex="-1" hidden><h2>Publish checklist</h2><ul></ul></section>
+            <div id="review-result" class="card" hidden>
+              <label>Private review link <input type="url" id="review-url" readonly></label>
+              <div class="actions"><button type="button" id="copy-review">Copy link</button><span id="review-expiry"></span></div>
+            </div>
             <div class="actions compose-actions">
-              <button type="submit" value="draft">Save draft</button>
+              <span id="draft-status" role="status"></span>
+              <button type="button" id="discard-draft" hidden>Discard draft changes</button>
+              <button type="submit" value="draft" formnovalidate>Save draft</button>
               <button type="button" id="preview-entry" aria-expanded="false" aria-controls="entry-preview">Preview</button>
-              <button type="submit" class="primary" value="publish">Publish</button>
+              <button type="button" id="review-entry">Review link</button>
+              <button type="button" id="check-entry">Checklist</button>
+              <button type="submit" class="primary" value="publish" formnovalidate>Publish</button>
             </div>
           </form>
         </div>
@@ -89,11 +114,27 @@
               <label>Title <input name="title" maxlength="160"></label>
               <label>Alt text <input name="alt" maxlength="200"></label>
               <label>Description <textarea name="description" maxlength="4000" rows="5"></textarea></label>
+              <label>Photo series <input name="series" maxlength="100"></label>
               <label class="checkbox"><input name="featured" type="checkbox" checked> Include in the slideshow</label>
             </div>
             <p id="photo-status" role="status"></p>
             <button class="primary" type="submit" id="save-photo">Add to this week</button>
           </form>
+        </div>
+      </section>
+      <section id="media-panel" hidden>
+        <div class="section-heading"><h1>Media</h1></div>
+        <div class="card">
+          <div class="fields media-filters">
+            <label>Search media <input type="search" id="media-search" autocomplete="off"></label>
+            <label>Type <select id="media-filter">
+              <option value="all">All media</option><option value="image">Images</option>
+              <option value="pdf">PDFs</option><option value="document">Documents</option><option value="file">Other files</option>
+            </select></label>
+          </div>
+          <p id="media-status" role="status"></p>
+          <div id="media-results" class="library-grid"></div>
+          <button type="button" id="media-more" hidden>Show more</button>
         </div>
       </section>
       <section id="stats-panel" hidden>
@@ -125,6 +166,23 @@
       <label id="insert-file" hidden>File <input name="file" type="file"></label>
       <p id="insert-status" role="status"></p>
       <div class="actions"><button type="button" id="cancel-insert">Cancel</button><button class="primary" type="submit">Insert</button></div>
+    </form>
+  </dialog>
+  <dialog id="entry-link-dialog" aria-labelledby="entry-link-title">
+    <div class="body-heading"><h2 id="entry-link-title">Link to an entry</h2><button type="button" id="entry-link-close">Close</button></div>
+    <label>Search by title <input type="search" id="entry-link-search"></label>
+    <div id="entry-link-results"></div>
+  </dialog>
+  <dialog id="media-dialog" aria-labelledby="media-title">
+    <form id="media-form" method="dialog">
+      <div class="body-heading"><h2 id="media-title">Edit media</h2><button type="button" id="media-close">Close</button></div>
+      <img id="media-preview" alt="" hidden>
+      <p id="media-info" class="muted"></p>
+      <label>Title <input name="title" maxlength="200"></label>
+      <label id="media-alt-label">Alt text <input name="alt" maxlength="200"></label>
+      <label>Description <textarea name="description" maxlength="4000" rows="4"></textarea></label>
+      <p id="media-edit-status" role="status"></p>
+      <div class="actions"><button type="button" id="media-download">Download file</button><button type="submit" class="primary">Save details</button></div>
     </form>
   </dialog>
   <dialog id="library-dialog" aria-labelledby="library-title">

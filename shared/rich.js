@@ -1,16 +1,17 @@
 import "./markdown-it.min.js";
+import footnotes from "./markdown-it-footnote.js";
 import { escape, imageSource, markdownMarker, mediaId, videoFrom } from "./common.js";
 
-const md = globalThis.markdownit({ html: false, linkify: false, breaks: true });
+const md = globalThis.markdownit({ html: false, linkify: false, breaks: true }).use(footnotes);
 const assetId = (url, prefix) => url.startsWith(prefix) && mediaId.test(url.slice(prefix.length)) ? url.slice(prefix.length) : "";
-md.validateLink = url => /^https:\/\//i.test(url) || /^#[a-z0-9_-]+$/i.test(url) ||
+md.validateLink = url => /^https:\/\//i.test(url) || /^#[a-z0-9_-]+$/i.test(url) || /^\?post=[a-z0-9-]{1,120}$/.test(url) ||
   Boolean(assetId(url, "media:") || assetId(url, "attachment:"));
 
 md.renderer.rules.image = (tokens, index, options, env, self) => {
   const token = tokens[index];
   const alt = self.renderInlineAsText(token.children, options, env);
   const id = assetId(token.attrGet("src") || "", "media:");
-  return id ? '<span class="media-slot" data-image="' + id + '" data-alt="' + escape(alt) + '">Loading image…</span>' :
+  return id ? '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '">Loading image…</span>' :
     escape(alt || "Image unavailable");
 };
 
@@ -76,20 +77,40 @@ md.renderer.rules.video = (tokens, index) => {
     '">Watch ' + (label ? "on " + label : "video") + ' ↗</a></div>';
 };
 
-export function imageReferences(body) {
+export function mediaReferences(body) {
   if (!body.startsWith(markdownMarker)) return [];
   const references = [];
   for (const block of md.parse(body.slice(markdownMarker.length), {})) {
-    for (const token of block.children || []) {
-      if (token.type !== "image") continue;
-      const id = assetId(token.attrGet("src") || "", "media:");
-      if (id) references.push({ id, alt: md.renderer.renderInlineAsText(token.children, md.options, {}) });
+    const tokens = block.children || [];
+    for (const [index, token] of tokens.entries()) {
+      if (token.type === "image") {
+        const id = assetId(token.attrGet("src") || "", "media:");
+        if (id) references.push({ id, kind: "image", alt: md.renderer.renderInlineAsText(token.children, md.options, {}) });
+      } else if (token.type === "link_open") {
+        const id = assetId(token.attrGet("href") || "", "attachment:");
+        const end = tokens.findIndex((child, childIndex) => childIndex > index && child.type === "link_close");
+        if (id && end !== -1) references.push({
+          id, kind: "file", title: md.renderer.renderInlineAsText(tokens.slice(index + 1, end), md.options, {}),
+        });
+      }
     }
   }
   return references;
 }
 
-export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment } = {}) {
+export function entryLinks(body) {
+  const links = new Set();
+  for (const block of md.parse(body, {})) {
+    for (const token of block.children || []) {
+      const href = token.type === "link_open" ? token.attrGet("href") : "";
+      if (href?.startsWith("https:")) links.add(href);
+    }
+    if (block.type === "video") links.add(block.meta.href);
+  }
+  return [...links];
+}
+
+export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false } = {}) {
   if (!markdown) {
     target.replaceChildren(...body.split(/\n\s*\n/).filter(Boolean).map(text => {
       const p = document.createElement("p");
@@ -100,21 +121,32 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
   }
 
   target.innerHTML = md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body);
+  if (preview) {
+    for (const link of target.querySelectorAll("a[href^='?post='], a[href^='https://']")) {
+      if (link.getAttribute("href").startsWith("?post=")) link.setAttribute("href", "../" + link.getAttribute("href"));
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
+  }
   const images = new Map();
+  const requested = new WeakSet();
   function reveal(slot) {
+    if (requested.has(slot)) return;
+    requested.add(slot);
     const id = slot.dataset.image;
     if (!images.has(id)) images.set(id, Promise.resolve().then(() => loadImage(id)));
     images.get(id).then(image => {
       const src = imageSource(image);
       if (!src) throw new Error();
       const picture = new Image(image.width, image.height);
-      picture.alt = slot.dataset.alt;
+      picture.alt = image.alt || slot.dataset.alt;
       if (picture.alt) picture.title = picture.alt;
       picture.decoding = "async";
       picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
       picture.src = src;
       slot.replaceChildren(picture);
-    }).catch(() => { slot.textContent = slot.dataset.alt || "Image unavailable"; });
+    }).catch(() => { slot.textContent = slot.dataset.alt || "Image unavailable"; })
+      .finally(() => slot.removeAttribute("aria-busy"));
   }
   const slots = target.querySelectorAll("[data-image]");
   if (slots.length && typeof IntersectionObserver === "function") {
@@ -126,6 +158,16 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
       }
     }, { rootMargin: "350px" });
     for (const slot of slots) observer.observe(slot);
+    if (preparePrint) {
+      setTimeout(() => {
+        for (const slot of slots) {
+          if (slot.isConnected && !requested.has(slot)) {
+            observer.unobserve(slot);
+            reveal(slot);
+          }
+        }
+      }, 1500);
+    }
   } else for (const slot of slots) reveal(slot);
 
   for (const link of target.querySelectorAll("[data-attachment]")) {

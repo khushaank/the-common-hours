@@ -1,4 +1,4 @@
-import { allRows, escape, imageSource, mediaId, missingFeature, monthNow, weekOf } from "./common.js";
+import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, weekOf } from "./common.js";
 
 const weeklyFields = "id,week,media_id,title,alt";
 const legacyFields = "month,media_id,alt,caption";
@@ -20,10 +20,10 @@ async function optional(task) {
 
 async function getImage(get, photo, options) {
   if (photo.id === cover.id) return { src: "cover.jpg", width: 1200, height: 800 };
-  const [record] = await get("media?select=encoded,width,height&id=eq." + photo.media_id, options);
+  const record = await readMediaImage(get, photo.media_id, options);
   const src = imageSource(record);
   if (!src) throw new Error("Photo unavailable.");
-  return { src, width: record.width, height: record.height };
+  return { src, width: record.width, height: record.height, alt: record.alt };
 }
 
 async function featurePhotos(get, demo) {
@@ -55,7 +55,6 @@ export async function startSlideshow(get, demo) {
   let revision = 0;
   let index = 0;
   const images = new Map();
-  figure.hidden = false;
 
   let photos;
   try { photos = await featurePhotos(get, demo); } catch { photos = [cover]; }
@@ -88,8 +87,8 @@ export async function startSlideshow(get, demo) {
       data = await getImage(get, cover);
     }
     if (loading !== revision) return;
-    picture.alt = photo.alt;
-    picture.title = photo.alt;
+    picture.alt = photo.alt || data.alt || "";
+    picture.title = picture.alt;
     picture.width = data.width;
     picture.height = data.height;
     picture.src = data.src;
@@ -109,6 +108,8 @@ export async function startSlideshow(get, demo) {
   });
   document.addEventListener("visibilitychange", schedule);
   await show(0);
+  await Promise.race([picture.decode().catch(() => {}), new Promise(resolve => setTimeout(resolve, 500))]);
+  figure.hidden = false;
 }
 
 function photoDate(photo) {
@@ -120,6 +121,8 @@ async function showImage(get, picture, photo) {
   picture.title = photo.alt;
   try {
     const data = await getImage(get, photo);
+    picture.alt = photo.alt || data.alt || "";
+    picture.title = picture.alt;
     picture.width = data.width;
     picture.height = data.height;
     picture.src = data.src;
@@ -136,33 +139,67 @@ function archiveCard(photo) {
     escape(photo.alt) + '"><strong>' + escape(photo.title) + '</strong><small>' + escape(photoDate(photo)) + '</small></a></li>';
 }
 
+async function archiveWeekly(get) {
+  const order = "&order=week.desc,created_at.asc,id.asc";
+  try { return await optional(allRows(get, "weekly_photos?select=" + weeklyFields + ",series" + order)); }
+  catch (error) {
+    if (!missingColumn(error)) throw error;
+    return optional(allRows(get, "weekly_photos?select=" + weeklyFields + order));
+  }
+}
+
 export async function renderPhotoView(content, get, demo, view, id) {
   const archiveLink = '<a class="back" href="?view=photos">← Photo archive</a>';
   if (view === "photos") {
     document.title = "Photo archive — The Common Hours";
     const [weekly, legacy] = demo ? [[], []] : await Promise.all([
-      optional(allRows(get, "weekly_photos?select=" + weeklyFields + "&order=week.desc,created_at.asc,id.asc")),
+      archiveWeekly(get),
       optional(allRows(get, "photos?select=" + legacyFields + "&order=month.desc")),
     ]);
     const photos = [...weekly, ...legacy.map(legacyPhoto)].sort((a, b) =>
       (b.week || b.month).localeCompare(a.week || a.month));
     content.innerHTML = '<div class="section-head"><h1>Photo archive</h1></div>' +
-      (photos.length ? '<ul class="photo-grid">' + photos.map(archiveCard).join("") + '</ul>' : "<p>No weekly photos yet.</p>");
-    const pictures = [...content.querySelectorAll(".photo-grid img")];
-    if (typeof IntersectionObserver !== "function") {
-      pictures.forEach((picture, index) => void showImage(get, picture, photos[index]));
-      return;
-    }
-    const byPicture = new Map(pictures.map((picture, index) => [picture, photos[index]]));
-    const observer = new IntersectionObserver(entries => {
-      for (const { isIntersecting, target } of entries) {
-        if (!isIntersecting) continue;
-        observer.unobserve(target);
-        void showImage(get, target, byPicture.get(target));
-        byPicture.delete(target);
+      '<div class="photo-filters"><label>Year <select id="photo-year"></select></label>' +
+      '<label>Series <select id="photo-series"></select></label></div><div id="photo-results"></div>';
+    const year = content.querySelector("#photo-year");
+    const series = content.querySelector("#photo-series");
+    const result = content.querySelector("#photo-results");
+    const params = new URLSearchParams(location.search);
+    const photoYear = photo => (photo.week || photo.month).slice(0, 4);
+    year.replaceChildren(new Option("All years", ""), ...[...new Set(photos.map(photoYear))].map(name => new Option(name)));
+    series.replaceChildren(new Option("All series", ""), ...[...new Set(photos.map(photo => photo.series).filter(Boolean))].sort().map(name => new Option(name)));
+    year.value = params.get("year") || "";
+    series.value = params.get("series") || "";
+    let observer;
+    function render() {
+      observer?.disconnect();
+      const matches = photos.filter(photo => (!year.value || photoYear(photo) === year.value) && (!series.value || photo.series === series.value));
+      result.innerHTML = matches.length ? '<ul class="photo-grid">' + matches.map(archiveCard).join("") + '</ul>' : "<p>No photos match these filters.</p>";
+      const pictures = [...result.querySelectorAll("img")];
+      if (typeof IntersectionObserver !== "function") {
+        pictures.forEach((picture, index) => void showImage(get, picture, matches[index]));
+        return;
       }
-    }, { rootMargin: "180px" });
-    pictures.forEach(picture => observer.observe(picture));
+      const byPicture = new Map(pictures.map((picture, index) => [picture, matches[index]]));
+      observer = new IntersectionObserver(entries => {
+        for (const { isIntersecting, target } of entries) {
+          if (!isIntersecting) continue;
+          observer.unobserve(target);
+          void showImage(get, target, byPicture.get(target));
+        }
+      }, { rootMargin: "180px" });
+      pictures.forEach(picture => observer.observe(picture));
+    }
+    const update = () => {
+      const state = new URLSearchParams({ view: "photos" });
+      if (year.value) state.set("year", year.value);
+      if (series.value) state.set("series", series.value);
+      history.replaceState(null, "", "?" + state);
+      render();
+    };
+    year.addEventListener("change", update);
+    series.addEventListener("change", update);
+    render();
     return;
   }
 
