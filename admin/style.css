@@ -69,7 +69,6 @@ button:disabled { opacity: .52; cursor: default; }
 .editor-body .body-heading { color: var(--muted); font-size: 13px; }
 .editor-body .body-heading label { color: var(--ink); }
 .editor-body textarea { display: block; margin-top: 10px; padding: 13px 4px; border: 0; background: transparent; min-height: 275px; font: 18px/1.65 Georgia, serif; }
-.editor-help { margin-top: 8px; color: var(--muted); font-size: 13px; }
 kbd { color: var(--accent); font: 12px/1.4 ui-monospace, monospace; background: var(--soft); border-radius: 4px; padding: 2px 5px; }
 .command-menu { position: absolute; z-index: 2; left: 20px; top: 52px; width: min(290px, calc(100% - 40px)); max-height: min(340px, 50vh); overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); box-shadow: 0 12px 32px #29271d24; }
 .command-menu button { width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: transparent; border: 0; }
