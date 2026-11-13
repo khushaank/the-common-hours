@@ -81,6 +81,10 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   const insertStatus = document.querySelector("#insert-status");
   const cancel = document.querySelector("#cancel-insert");
   const previewBody = document.querySelector("#preview-body");
+  const writePanel = document.querySelector("#write-panel");
+  const previewPanel = document.querySelector("#entry-preview");
+  const writeMode = document.querySelector("#write-mode");
+  const previewMode = document.querySelector("#preview-mode");
   const menu = document.querySelector("#command-menu");
   const count = document.querySelector("#word-count");
   const status = document.querySelector("#status");
@@ -94,7 +98,6 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   let attachmentId;
   let linkRange;
   let library;
-  let previewTimer;
   let previewRevision = 0;
   let previousBody;
   const previewImages = new Map();
@@ -191,11 +194,13 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     document.querySelector("#insert-title").textContent = type === "video" ? "Embed video" :
       type === "pdf" ? "Insert PDF" : "Insert " + name.toLowerCase();
     const label = insert.elements.namedItem("label");
+    const caption = insert.elements.namedItem("caption");
     const url = insert.elements.namedItem("url");
     const file = insert.elements.namedItem("file");
     const isFile = ["image", "file", "pdf"].includes(type);
     label.parentElement.firstChild.textContent = type === "image" ? "Image description " : "Link text ";
     label.parentElement.hidden = label.disabled = !(type === "image" || type === "link");
+    caption.parentElement.hidden = caption.disabled = type !== "image";
     url.parentElement.hidden = url.disabled = isFile;
     file.parentElement.hidden = file.disabled = !isFile;
     file.parentElement.firstChild.textContent = name + " ";
@@ -309,10 +314,12 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
       let text;
       if (type === "image") {
         if (!label) throw new Error("Describe the image for readers who cannot see it.");
-        checkSpace(label.length + 51, start, end);
+        const caption = fields.get("caption").trim().replace(/[\\"]/g, "\\$&");
+        const title = caption ? ' "' + caption + '"' : "";
+        checkSpace(label.length + title.length + 51, start, end);
         insertStatus.textContent = "Preparing image…";
         const image = await uploadImage(api, file, plainLabel);
-        text = "\n\n![" + label + "](media:" + image.id + ")\n\n";
+        text = "\n\n![" + label + "](media:" + image.id + title + ")\n\n";
       } else if (type === "file" || type === "pdf") {
         if (!file?.size || file.size > attachmentLimit) throw new Error("Choose a file up to 25 MB.");
         if (type === "pdf" && !/\.pdf$/i.test(file.name)) throw new Error("Choose a PDF file.");
@@ -348,14 +355,16 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   async function renderPreview() {
     const revision = ++previewRevision;
     const fields = editor.elements;
-    document.querySelector("#preview-title").textContent = fields.namedItem("title").value.trim() || "Untitled entry";
     document.querySelector("#preview-meta").textContent = [fields.namedItem("published_on").value, fields.namedItem("tag").value].filter(Boolean).join(" · ");
     document.querySelector("#preview-excerpt").textContent = fields.namedItem("excerpt").value;
+    const prompt = document.querySelector("#preview-prompt");
+    prompt.textContent = fields.namedItem("reader_prompt").value.trim();
+    prompt.hidden = !prompt.textContent;
     const value = body.value;
     if (value === previousBody) return;
     try {
       const { renderText } = await import("./rich.js");
-      if (revision !== previewRevision) return;
+      if (revision !== previewRevision || previewPanel.hidden) return;
       previousBody = value;
       renderText(previewBody, value || "Start writing to preview your entry.", id => {
         if (!previewImages.has(id)) previewImages.set(id, loadImage(api, id).catch(error => {
@@ -370,19 +379,28 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     }
   }
 
-  editor.addEventListener("input", () => {
-    clearTimeout(previewTimer);
-    previewTimer = setTimeout(renderPreview, 250);
-  });
+  function setPreview(show) {
+    closeMenu();
+    writePanel.hidden = show;
+    previewPanel.hidden = !show;
+    writeMode.setAttribute("aria-pressed", String(!show));
+    previewMode.setAttribute("aria-pressed", String(show));
+    if (show) void renderPreview();
+    else previewRevision++;
+  }
+
+  writeMode.addEventListener("click", () => { setPreview(false); body.focus(); });
+  previewMode.addEventListener("click", () => setPreview(true));
+  editor.addEventListener("input", () => { if (!previewPanel.hidden) void renderPreview(); });
 
   return {
     refresh() {
-      clearTimeout(previewTimer);
       refresh();
       previewImages.clear();
       previousBody = undefined;
       previewBody.replaceChildren();
-      void renderPreview();
+      if (!previewPanel.hidden) void renderPreview();
     },
+    write: () => setPreview(false),
   };
 }

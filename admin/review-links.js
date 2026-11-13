@@ -34,7 +34,7 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
 
   async function snapshot(fields) {
     const { mediaReferences } = await import("./rich.js");
-    const { title, excerpt, tag, body, published_on } = fields;
+    const { title, excerpt, tag, body, published_on, reader_prompt, photo_essay } = fields;
     const ids = [...new Set(mediaReferences(markdownMarker + body).filter(item => item.kind === "file").map(item => item.id))];
     const files = Object.fromEntries(await Promise.all(ids.map(async id => {
       const known = signed.get(id);
@@ -49,7 +49,7 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
       signed.set(id, { path, until: Date.now() + 3600000 });
       return [id, path];
     })));
-    return { title, excerpt, tag, body, published_on, files };
+    return { title, excerpt, tag, body, published_on, reader_prompt, photo_essay: photo_essay === "true", files };
   }
 
   function sync(entry, options = {}) {

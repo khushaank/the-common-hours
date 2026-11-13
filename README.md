@@ -27,4 +27,16 @@ open its entry in the writing desk and use **Reconnect a previously shared link*
 Private access still expires after 24 hours. Once published, a review link
 opens the public entry, including after a slug change.
 
+Run [`supabase/add-journal-features.sql`](supabase/add-journal-features.sql) to enable
+reader prompts, photo pairings, themed collections, and photo essays. Set them under
+**Entries → Reader prompt, photo essay, and collection** in the Writing Desk.
+Use the same collection name on each entry and add the introduction to one entry.
+To publish a photo essay, add at least two different images to the entry body in the
+order you want them to appear. Use `/image` to upload with a caption or `/library`
+to reuse an image.
+
+For public archive photos, go to **Writing Desk → Photos → Archive uploads**.
+Choose one or more image files and select **Add to archive**. Select an uploaded
+photo to edit its title, alt text, description, or photo series.
+
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

@@ -5,11 +5,12 @@ import { publicData } from "./public-cache.js";
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review", "collections", "photo-essays"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
 const series = params.get("series")?.slice(0, 100);
+const collection = view === "collections" ? params.get("collection")?.slice(0, 100) : null;
 const demo = !url && !publishableKey;
 const pageSize = 5;
 
@@ -22,15 +23,16 @@ const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo" || view === "photos";
+if (view === "collections" || view === "photo-essays") document.documentElement.classList.add("wide-page");
 if (!isLegal && view !== "review") {
-  const currentNav = isPhoto ? "photos" : view === "archive" || month ? "archive" :
+  const currentNav = isPhoto || view === "photo-essays" ? "photos" : ["archive", "collections"].includes(view) || month ? "archive" :
     view === "start" ? "start" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
 const canonical = document.createElement("link");
 canonical.rel = "canonical";
 const canonicalUrl = new URL("https://commonhours.qd.je/");
-for (const key of ["view", "post", "month", "tag", "page", "photo", "series", "q", "year"]) {
+for (const key of ["view", "post", "month", "tag", "page", "photo", "series", "q", "year", "collection"]) {
   const value = key === "view" ? view : params.get(key);
   if (value) canonicalUrl.searchParams.set(key, value);
 }
@@ -48,6 +50,8 @@ async function loadPublicPosts() {
 async function fetchPublicPosts() {
   const fields = "id,slug,title,tag,excerpt,published_on";
   const filter = "&published=eq.true&order=published_on.desc,id.desc";
+  try { return await allRows(get, "posts?select=" + fields + ",series,series_order,start_here,paired_photo,collection,collection_intro,photo_essay" + filter); }
+  catch (error) { if (!missingColumn(error)) throw error; }
   try { return await allRows(get, "posts?select=" + fields + ",series,series_order,start_here" + filter); }
   catch (error) {
     if (!missingColumn(error)) throw error;
@@ -57,8 +61,12 @@ async function fetchPublicPosts() {
 
 function loadBody(currentSlug) {
   return publicData("post:" + currentSlug, async () => {
-    const [post] = await get("posts?" + new URLSearchParams({ select: "body", slug: "eq." + currentSlug, published: "eq.true" }));
-    return post || null;
+    const read = select => get("posts?" + new URLSearchParams({ select, slug: "eq." + currentSlug, published: "eq.true" }));
+    try { return (await read("body,reader_prompt"))[0] || null; }
+    catch (error) {
+      if (!missingColumn(error)) throw error;
+      return (await read("body"))[0] || null;
+    }
   });
 }
 
@@ -160,7 +168,7 @@ async function renderPost(posts, index, firstBody) {
     const prefetched = post.slug === slug && firstBody ? await firstBody : undefined;
     const detail = prefetched === undefined ? await loadBody(post.slug) : prefetched;
     if (!detail) return renderPost([], 0);
-    post.body = detail.body;
+    Object.assign(post, detail);
   }
   const hasFormatting = post.body.startsWith(markdownMarker);
   const renderer = hasFormatting ? await import("./rich.js").catch(() => null) : null;
@@ -168,11 +176,13 @@ async function renderPost(posts, index, firstBody) {
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article">
+    ${post.photo_essay ? '<p class="meta"><a href="?view=photo-essays">Photo essay</a></p>' : ''}
     <h1>${escape(post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     <nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>
     <section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div>
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
+    ${post.reader_prompt ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
     <label>Display name <input name="display_name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
     <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="?view=privacy">Privacy</a>'}</p>
@@ -205,6 +215,11 @@ async function renderPost(posts, index, firstBody) {
   const { restoreArticleAnchors, seriesNavigation } = await import("./reading.js");
   restoreArticleAnchors(bodyElement);
   bodyElement.closest("article").insertAdjacentHTML("afterend", seriesNavigation(posts, post));
+  if (post.collection) bodyElement.insertAdjacentHTML("afterend", `<p class="entry-collection"><a href="${link({ view: "collections", collection: post.collection })}">From the collection · ${escape(post.collection)}</a></p>`);
+  if (post.paired_photo) {
+    const { renderPairedPhoto } = await import("./photos.js");
+    void renderPairedPhoto(bodyElement, get, post.paired_photo).catch(() => {});
+  }
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
   const button = form.querySelector("button");
@@ -287,6 +302,12 @@ async function start() {
   }
   const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
+  if (view === "collections" || view === "photo-essays") {
+    const { renderCollections, renderReadingList } = await import("./reading.js");
+    if (view === "collections") renderCollections(content, posts, collection);
+    else renderReadingList(content, "Photo essays", posts.filter(post => post.photo_essay), "No photo essays have been published yet.");
+    return;
+  }
   if (view === "start" || series) {
     const { renderReadingList, seriesEntries } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));
@@ -311,7 +332,7 @@ async function start() {
   } else if (view === "archive") {
     document.title = "Archive — The Common Hours";
     recordView("archive");
-    content.innerHTML = `<div class="section-head"><h1>Archive</h1></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
+    content.innerHTML = `<div class="section-head"><h1>Archive</h1><a class="back" href="?view=collections">Themed collections →</a></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
   } else if (slug) {
     await renderPost(posts, await resolveEntry(posts), body);
   } else {

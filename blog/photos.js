@@ -58,7 +58,6 @@ export async function startSlideshow(get, demo) {
   const picture = figure.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
   const nextButton = figure.querySelector("#slide-next");
-  const prevButton = figure.querySelector("#slide-prev");
   const count = figure.querySelector("#slide-count");
   const slide = figure.querySelector(".slide");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -131,31 +130,30 @@ export async function startSlideshow(get, demo) {
     figure.removeAttribute("aria-busy");
     caption.textContent = photo.title;
     count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
-    prevButton.hidden = nextButton.hidden = photos.length < 2;
+    nextButton.hidden = photos.length < 2;
     if (photos.length > 1) void prepare(photos[(index + 1) % photos.length]).catch(() => {});
     schedule();
   }
 
   nextButton.addEventListener("click", () => void show(requestedIndex + 1));
-  prevButton.addEventListener("click", () => void show(requestedIndex - 1));
   slide.addEventListener("keydown", event => {
     if (photos.length < 2 || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
     event.preventDefault();
     void show(requestedIndex + (event.key === "ArrowRight" ? 1 : -1));
   });
-  let touch;
+  let drag;
   slide.addEventListener("pointerdown", event => {
-    if (event.isPrimary && event.pointerType !== "mouse" && !event.target.closest("button")) {
-      touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
-    }
+    if (photos.length < 2 || !event.isPrimary || event.button !== 0 || event.target.closest("button")) return;
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    slide.setPointerCapture(event.pointerId);
   });
   slide.addEventListener("pointerup", event => {
-    if (!touch || event.pointerId !== touch.id) return;
-    const x = event.clientX - touch.x, y = event.clientY - touch.y;
-    touch = undefined;
-    if (photos.length > 1 && Math.abs(x) > 40 && Math.abs(x) > Math.abs(y) * 1.3) void show(requestedIndex + (x < 0 ? 1 : -1));
+    if (!drag || event.pointerId !== drag.id) return;
+    const x = event.clientX - drag.x, y = event.clientY - drag.y;
+    drag = undefined;
+    if (Math.abs(x) > 40 && Math.abs(x) > Math.abs(y) * 1.3) void show(requestedIndex + (x < 0 ? 1 : -1));
   });
-  slide.addEventListener("pointercancel", () => { touch = undefined; });
+  slide.addEventListener("lostpointercapture", event => { if (event.pointerId === drag?.id) drag = undefined; });
   slide.addEventListener("pointerenter", event => { if (event.pointerType === "mouse") { hovered = true; schedule(); } });
   slide.addEventListener("pointerleave", () => { hovered = false; schedule(); });
   slide.addEventListener("focusin", schedule);
@@ -205,6 +203,33 @@ function archiveCard(photo) {
   return '<li><a href="' + escape(photoLink(photo.id)) + '"><div class="photo-thumb"><img width="320" height="213" decoding="async" alt="' +
     escape(photo.alt) + '"></div><div class="photo-card-caption"><strong>' + escape(photo.title) + '</strong><small>' + escape(photoDate(photo)) +
     (photo.series ? ' · ' + escape(photo.series) : '') + '</small></div></a></li>';
+}
+
+async function loadArchivePhoto(get, id) {
+  if (mediaId.test(id || "")) {
+    const [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id)));
+    return photo;
+  }
+  if (/^month-\d{4}-(0[1-9]|1[0-2])$/.test(id || "")) {
+    const [photo] = await publicData("photo-detail:" + id, () => optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01")));
+    if (photo) return legacyPhoto(photo);
+  }
+}
+
+export async function renderPairedPhoto(body, get, id) {
+  const photo = await loadArchivePhoto(get, id);
+  if (!photo || !body.isConnected) return;
+  body.insertAdjacentHTML("beforeend", '<figure class="captioned-photo paired-photo">' +
+    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async"></div>' +
+    '<figcaption><a href="' + photoLink(photo.id) + '">Paired photo · ' + escape(photo.title) + '</a></figcaption></figure>');
+  await showImage(get, body.querySelector(".paired-photo img"), photo);
+}
+
+async function pairedEntries(get, id) {
+  try {
+    return await publicData("photo-entries:" + id, () => allRows(get,
+      "posts?select=slug,title&published=eq.true&paired_photo=eq." + id + "&order=published_on.desc,id.desc"));
+  } catch { return []; }
 }
 
 async function archiveWeekly(get) {
@@ -311,14 +336,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
     return;
   }
 
-  let photo = id === cover.id ? cover : undefined;
-  if (!demo && mediaId.test(id || "")) {
-    [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id)));
-  }
-  if (!demo && /^month-\d{4}-(0[1-9]|1[0-2])$/.test(id || "")) {
-    const [legacy] = await publicData("photo-detail:" + id, () => optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01")));
-    if (legacy) photo = legacyPhoto(legacy);
-  }
+  const photo = id === cover.id ? cover : demo ? undefined : await loadArchivePhoto(get, id);
   if (!photo) {
     document.title = "Photo unavailable — The Common Hours";
     content.innerHTML = archiveLink + "<h1>Photo unavailable</h1>";
@@ -331,4 +349,9 @@ export async function renderPhotoView(content, get, demo, view, id) {
     '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high"></div>' +
     (photo.description ? '<p class="photo-description">' + escape(photo.description) + '</p>' : '') + '</article>';
   void showImage(get, content.querySelector(".photo-detail img"), photo);
+  if (photo !== cover) {
+    const posts = await pairedEntries(get, id);
+    if (posts.length) content.querySelector(".photo-detail").insertAdjacentHTML("beforeend", '<section class="series-navigation"><h2>Paired entries</h2><ul>' +
+      posts.map(post => '<li><a href="?post=' + encodeURIComponent(post.slug) + '">' + escape(post.title) + '</a></li>').join("") + '</ul></section>');
+  }
 }

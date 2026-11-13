@@ -16,6 +16,23 @@ md.renderer.rules.image = (tokens, index, options, env, self) => {
     escape(alt || "Image unavailable");
 };
 
+md.core.ruler.after("inline", "photo_caption", ({ tokens }) => {
+  for (let index = 0; index < tokens.length - 2; index++) {
+    const [open, inline, close] = [tokens[index], tokens[index + 1], tokens[index + 2]];
+    const image = inline.children?.[0];
+    const caption = image?.attrGet("title");
+    if (open.type !== "paragraph_open" || close.type !== "paragraph_close" || inline.children?.length !== 1 ||
+        image?.type !== "image" || !caption || !assetId(image.attrGet("src") || "", "media:")) continue;
+    open.tag = close.tag = "figure";
+    open.attrSet("class", "captioned-photo");
+    close.type = "photo_caption_close";
+    close.meta = { caption };
+  }
+});
+
+md.renderer.rules.photo_caption_close = (tokens, index) =>
+  '<figcaption>' + escape(tokens[index].meta.caption) + '</figcaption></figure>\n';
+
 md.renderer.rules.link_open = (tokens, index, options, env, self) => {
   const token = tokens[index];
   const href = token.attrGet("href") || "";

@@ -49,11 +49,10 @@ img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 .nav-search { position: absolute; z-index: 4; inset: 8px 0 auto auto; width: min(100%, 620px); background: var(--paper); border: 1px solid #a5ac9d; border-radius: 7px; box-shadow: 0 12px 32px #26322224; padding: 10px 12px; }
 .nav-search form { display: block; margin: 0; }
 .search-field { display: flex; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.search-field input { flex: 1; width: 0; min-width: 0; padding: 9px 8px; border: 0; background: transparent; }
+.search-field input { flex: 1; width: 0; min-width: 0; min-height: 44px; padding: 9px 8px; border: 0; background: transparent; }
 .search-field :is(input, button):focus-visible { outline-offset: -2px; }
 #clear-search { display: grid; place-items: center; width: 44px; padding: 0; border-color: transparent; border-radius: 50%; background: transparent; color: var(--muted); }
 #clear-search:hover { background: var(--soft); color: var(--ink); }
-#submit-search { min-width: 80px; padding: 8px 14px; border-radius: 4px; }
 #search-results { max-height: min(55vh, 420px); overflow: auto; padding: 6px 4px 2px; margin-top: 6px; }
 #search-results > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 #search-results .entry { padding: 10px 0; }
@@ -91,7 +90,6 @@ html[data-journal-page="photo"] [data-skeleton="photo"] { display: block; }
 .slide:hover .slide-label, .slide:focus-within .slide-label { opacity: 1; }
 .slide-arrow { position: absolute; right: 12px; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 44px; padding: 0; border: 1px solid #eee9df; border-radius: 50%; color: var(--ink); background: #fbfaf7f0; box-shadow: 0 2px 8px #2224202b; opacity: 0; pointer-events: none; transition: opacity .16s ease; }
 .slide:hover .slide-arrow, .slide:focus-within .slide-arrow { opacity: 1; pointer-events: auto; }
-#slide-prev { right: auto; left: 12px; }
 .slide-arrow:hover { background: white; }
 @media (hover: none) { .slide-arrow { opacity: 1; pointer-events: auto; } }
 @media (prefers-reduced-motion: reduce) { .slide-arrow { transition: none; } }
@@ -127,6 +125,11 @@ html[data-journal-page="photo"] [data-skeleton="photo"] { display: block; }
 .photo-empty { padding: 24px; border: 1px solid var(--line); border-radius: 7px; }
 .series-navigation { margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--line); }
 .series-navigation p { margin: 9px 0; }
+.reader-prompt, .collection-intro { white-space: pre-line; }
+.reader-prompt { margin: 0; padding: 12px 16px; background: var(--soft); border-radius: 4px; }
+.entry-collection { margin-top: 24px; color: var(--muted); }
+.captioned-photo { margin: 24px 0; }
+.captioned-photo figcaption { margin-top: 6px; color: var(--muted); font-size: 14px; }
 #entry-body > p[id] { scroll-margin-top: 25px; }
 #entry-body > p:target { background: var(--soft); }
 .photo-detail h1 { margin: 10px 0; font-size: clamp(38px, 6vw, 66px); }

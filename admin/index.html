@@ -38,12 +38,26 @@
     </nav>
     <div class="workspace">
       <div class="entries-panel" id="entries-panel">
+        <aside class="entry-aside" aria-label="Entry browser">
+          <details class="entry-list" id="entry-list" open>
+            <summary>Entries</summary>
+            <div class="entry-list-tools">
+              <button type="button" id="new-post">New entry</button>
+              <input id="find-entry" type="search" aria-label="Find an entry" placeholder="Find an entry" autocomplete="off">
+              <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh</button></div>
+            </div>
+            <ul id="posts" aria-label="Entries"></ul>
+          </details>
+        </aside>
         <div class="compose">
-          <div class="section-heading"><h1 id="editor-title">New entry</h1><div class="actions">
-            <button type="button" id="new-post">New entry</button>
-          </div></div>
+          <header class="compose-heading">
+            <p id="editor-state" class="muted">Draft</p>
+            <h1 id="editor-title" tabindex="-1">New entry</h1>
+          </header>
           <form id="editor" method="post">
-            <div class="card metadata">
+            <details class="entry-details" id="entry-details">
+              <summary>Entry Details</summary>
+              <div class="metadata">
               <div class="fields">
                 <label>Title<input name="title" maxlength="180" required></label>
                 <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title"></label>
@@ -56,19 +70,37 @@
                 <label>Part number <input name="series_order" type="number" min="1" max="9999"></label>
               </div>
               <label class="checkbox"><input name="start_here" type="checkbox" value="true"> Show on Start here</label>
-            </div>
-            <div class="editor-workspace" id="editor-workspace">
-              <div class="card editor-body">
-                <div class="body-heading"><label for="entry-text">Body</label><span id="word-count">0 words</span></div>
-                <textarea id="entry-text" name="body" rows="15" maxlength="99960" required aria-controls="command-menu" placeholder="Start writing…"></textarea>
+              <details id="entry-features">
+                <summary>Reader prompt, photo essay, and collection</summary>
+                <label>Reader prompt <textarea name="reader_prompt" rows="2" maxlength="500" placeholder="Ask readers a question above the comment form"></textarea></label>
+                <label>Paired photo <select name="paired_photo"><option value="">No paired photo</option></select></label>
+                <p id="pairing-status" class="muted" role="status"></p>
+                <div class="fields">
+                  <label>Themed collection <input name="collection" maxlength="100" placeholder="Use the same name on related entries"></label>
+                  <label>Collection introduction <textarea name="collection_intro" rows="2" maxlength="500" placeholder="Add an introduction on one entry in the collection"></textarea></label>
+                </div>
+                <label class="checkbox"><input name="photo_essay" type="checkbox" value="true"> List as a photo essay</label>
+                <p class="muted">Use /image in the body to add photos in order, with optional captions. Use /library to reuse an uploaded image.</p>
+              </details>
+              </div>
+            </details>
+            <div class="editor-workspace">
+              <div class="editor-toolbar">
+                <div class="editor-mode" role="group" aria-label="Editor mode">
+                  <button type="button" id="write-mode" aria-pressed="true" aria-controls="write-panel">Write</button>
+                  <button type="button" id="preview-mode" aria-pressed="false" aria-controls="entry-preview">Preview</button>
+                </div>
+                <span id="word-count">0 words</span>
+              </div>
+              <div class="editor-body" id="write-panel">
+                <textarea id="entry-text" name="body" rows="13" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
                 <div id="command-menu" class="command-menu" role="group" aria-label="Insert and format" hidden></div>
               </div>
-              <section class="card editor-preview" id="entry-preview" aria-label="Live preview">
-                <div class="preview-label">Live preview</div>
-                <h2 id="preview-title"></h2>
+              <section class="editor-preview" id="entry-preview" aria-label="Entry preview" hidden>
                 <p id="preview-meta" class="muted"></p>
                 <p id="preview-excerpt" class="muted"></p>
                 <div class="prose" id="preview-body"></div>
+                <p id="preview-prompt" hidden></p>
               </section>
             </div>
             <div id="review-result" class="card" hidden>
@@ -89,16 +121,10 @@
             </div>
           </form>
         </div>
-        <aside class="entry-aside" id="entry-sidebar">
-          <details class="card entry-list" id="entry-list" open><summary>Entries</summary>
-            <label>Find an entry<input id="find-entry" type="search" autocomplete="off"></label>
-            <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh entries</button></div>
-            <ul id="posts"></ul>
-          </details>
-        </aside>
       </div>
       <section id="site-panel" hidden>
         <div class="section-heading"><h1>Photos</h1><a href="../?view=photos" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
+        <p class="muted">To add photos to the public archive, choose Archive uploads, select your files, then choose Add to archive.</p>
         <form id="photo-form" class="card photo-workspace" method="post">
           <div class="actions" role="group" aria-label="Photo collection"><button type="button" id="show-week-photos" aria-pressed="true">Photo of the Week</button><button type="button" id="show-archive-photos" aria-pressed="false">Archive uploads</button></div>
           <div class="photo-week-toolbar" id="photo-week-toolbar">
@@ -168,6 +194,7 @@
     <form id="insert-form" method="dialog">
       <h2 id="insert-title">Insert</h2>
       <label id="insert-label">Link text <input name="label" maxlength="200"></label>
+      <label id="insert-caption" hidden>Caption (optional) <input name="caption" maxlength="500" disabled></label>
       <label id="insert-url">HTTPS URL <input name="url" type="url" maxlength="2000"></label>
       <label id="insert-file" hidden>File <input name="file" type="file"></label>
       <p id="insert-status" role="status"></p>

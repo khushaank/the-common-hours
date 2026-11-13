@@ -19,6 +19,29 @@ export function renderReadingList(content, title, entries, empty = "No entries h
     (entries.length ? cards(entries) : '<p>' + escape(empty) + '</p>');
 }
 
+export function renderCollections(content, posts, name) {
+  const groups = new Map();
+  for (const post of posts) {
+    if (!post.collection) continue;
+    if (!groups.has(post.collection)) groups.set(post.collection, []);
+    groups.get(post.collection).push(post);
+  }
+  const introduction = entries => entries.find(entry => entry.collection_intro)?.collection_intro;
+  if (name) {
+    const entries = groups.get(name) || [];
+    renderReadingList(content, entries.length ? name : "Collection unavailable", entries);
+    content.insertAdjacentHTML("afterbegin", '<a class="back" href="?view=collections">← All collections</a>');
+    const intro = introduction(entries);
+    if (intro) content.querySelector(".section-head").insertAdjacentHTML("afterend", '<p class="collection-intro">' + escape(intro) + '</p>');
+    return;
+  }
+  renderReadingList(content, "Themed collections", [], "No collections have been published yet.");
+  if (!groups.size) return;
+  content.lastElementChild.outerHTML = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([title, entries]) =>
+    '<article class="entry"><a class="entry-title" href="?view=collections&amp;collection=' + encodeURIComponent(title) + '">' +
+    escape(title) + '</a><p>' + escape(introduction(entries) || `${entries.length} ${entries.length === 1 ? "entry" : "entries"}`) + '</p></article>').join("");
+}
+
 export function seriesNavigation(posts, post) {
   if (!post.series) return "";
   const group = seriesEntries(posts, post.series);
@@ -84,9 +107,10 @@ export async function renderReview(content) {
     return;
   }
   const { renderText } = await import("./rich.js");
-  content.innerHTML = '<article class="article"><p class="meta">Private draft review</p><h1>' +
+  content.innerHTML = '<article class="article"><p class="meta">Private draft review' + (draft.photo_essay ? ' · Photo essay' : '') + '</p><h1>' +
     escape(draft.title || "Untitled entry") + '</h1><p class="meta">' + escape([draft.published_on, draft.tag].filter(Boolean).join(" · ")) +
-    '</p><p>' + escape(draft.excerpt || "") + '</p><div id="entry-body" class="prose"></div></article>';
+    '</p><p>' + escape(draft.excerpt || "") + '</p><div id="entry-body" class="prose"></div>' +
+    (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
   renderText(content.querySelector("#entry-body"), draft.body || "", read, {
     markdown: true,
     loadAttachment: async id => {

@@ -1,5 +1,5 @@
 import { getProjectOrigin } from "./config.js";
-import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table, uploadAttachment } from "./common.js";
+import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, mediaId, missingColumn, missingFeature, readMediaImage, request, showFailure, table, uploadAttachment, weekOf } from "./common.js";
 import { setupEditorTools } from "./editor-tools.js";
 import { setupReviewLinks } from "./review-links.js";
 import { setupPhotoTools } from "./photo-tools.js";
@@ -13,6 +13,9 @@ const comments = document.querySelector("#comments");
 const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
 const entryList = document.querySelector("#entry-list");
+const entryDetails = document.querySelector("#entry-details");
+const editorTitle = document.querySelector("#editor-title");
+const titleInput = editor.elements.namedItem("title");
 const search = document.querySelector("#find-entry");
 const inbox = document.querySelector("#privacy-requests");
 const draftStatus = document.querySelector("#draft-status");
@@ -20,6 +23,13 @@ const deskMenu = document.querySelector("#desk-menu");
 const deskNav = document.querySelector("#desk-nav");
 const sections = [...document.querySelectorAll("[data-section]")];
 const narrow = matchMedia("(max-width: 760px)");
+let desktopEntriesOpen = true;
+narrow.addEventListener("change", () => { entryList.open = narrow.matches ? false : desktopEntriesOpen; });
+entryList.addEventListener("toggle", () => { if (!narrow.matches) desktopEntriesOpen = entryList.open; });
+const featureFields = ["reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay"];
+const featurePanel = document.querySelector("#entry-features");
+const photoPicker = editor.elements.namedItem("paired_photo");
+const pairingStatus = document.querySelector("#pairing-status");
 const editorTools = setupEditorTools(editor, api, {
   upload: async (id, file) => {
     await uploadAttachment(id, file, await sessionToken());
@@ -82,8 +92,34 @@ function saveAsset(asset, details) {
 function entryFields() {
   const fields = Object.fromEntries(new FormData(editor));
   fields.start_here = String(editor.elements.namedItem("start_here").checked);
+  fields.photo_essay = String(editor.elements.namedItem("photo_essay").checked);
   return fields;
 }
+
+function selectPairedPhoto(id) {
+  if (id && ![...photoPicker.options].some(option => option.value === id)) {
+    photoPicker.add(new Option("Previously selected photo", id));
+  }
+  photoPicker.value = id || "";
+}
+
+featurePanel.addEventListener("toggle", async () => {
+  if (!featurePanel.open || !session) return;
+  pairingStatus.textContent = "Loading archive photos…";
+  try {
+    const [photos, monthly] = await Promise.all([
+      allRows(api, "weekly_photos?select=id,title&week=lte." + weekOf() + "&order=created_at.desc,id.desc"),
+      allRows(api, "photos?select=month,caption&month=lte." + journalToday().slice(0, 7) + "-01&order=month.desc"),
+    ]);
+    const selected = photoPicker.value;
+    photoPicker.replaceChildren(new Option("No paired photo", ""), ...photos.map(photo => new Option(photo.title, photo.id)),
+      ...monthly.map(photo => new Option(photo.caption || photo.month.slice(0, 7), "month-" + photo.month.slice(0, 7))));
+    selectPairedPhoto(selected);
+    pairingStatus.textContent = photos.length || monthly.length ? "" : "Add a photo under Photos → Archive uploads to pair it with an entry.";
+  } catch {
+    pairingStatus.textContent = "Archive photos could not load. Reopen this section to try again.";
+  }
+});
 const snapshot = () => JSON.stringify(entryFields());
 const dirty = () => snapshot() !== baseline;
 const slot = () => current || "new";
@@ -134,7 +170,8 @@ async function recoverDraft() {
   for (const [name, value] of Object.entries(chosen.fields || {})) {
     const field = editor.elements.namedItem(name);
     if (!field || typeof value !== "string") continue;
-    if (field.type === "checkbox") field.checked = value === "true";
+    if (field === photoPicker) selectPairedPhoto(value);
+    else if (field.type === "checkbox") field.checked = value === "true";
     else field.value = value;
   }
   if (!dirty()) {
@@ -143,6 +180,7 @@ async function recoverDraft() {
     return;
   }
   editorTools.refresh();
+  updateEditorTitle();
   saveBackup();
   showDraftStatus(chosen === local ? "Draft recovered from this device." : "Saved draft restored.");
   reviews.changed();
@@ -209,7 +247,7 @@ function renderPostList() {
         openEditor(record);
         await recoverDraft();
         if (narrow.matches) entryList.open = false;
-      });
+      }).then(() => { if (!busy && current === post.id) editorTitle.focus(); });
     });
     li.append(button);
     postList.append(li);
@@ -286,7 +324,16 @@ tagInput.addEventListener("keydown", event => {
   options[activeTag].scrollIntoView({ block: "nearest" });
 });
 
+function updateEditorTitle() {
+  editorTitle.textContent = titleInput.value.trim() || (activePost ? "Untitled entry" : "New entry");
+}
+
 function openEditor(post) {
+  if (post?.id !== current) {
+    entryDetails.open = false;
+    featurePanel.open = false;
+    editorTools.write();
+  }
   activePost = post;
   current = post?.id;
   if (draftOwner) {
@@ -295,14 +342,17 @@ function openEditor(post) {
   editor.reset();
   closeTags();
   originalBody = post?.body || "";
-  for (const key of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order"]) {
+  for (const key of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order", "reader_prompt", "collection", "collection_intro"]) {
     editor.elements.namedItem(key).value = post?.[key] ?? "";
   }
   editor.elements.namedItem("start_here").checked = Boolean(post?.start_here);
+  editor.elements.namedItem("photo_essay").checked = Boolean(post?.photo_essay);
+  selectPairedPhoto(post?.paired_photo);
   editor.elements.namedItem("body").value = originalBody.startsWith(markdownMarker)
     ? originalBody.slice(markdownMarker.length) : originalBody;
   if (!post) editor.elements.namedItem("published_on").value = journalToday();
-  document.querySelector("#editor-title").textContent = post ? "Edit entry" : "New entry";
+  updateEditorTitle();
+  document.querySelector("#editor-state").textContent = post?.published ? "Published" : "Draft";
   editor.querySelector('[value="publish"]').textContent = post?.published ? "Update published entry" : "Publish";
   baseline = snapshot();
   reviews.open();
@@ -434,7 +484,8 @@ newPost.addEventListener("click", () => {
     openEditor();
     await recoverDraft();
     if (narrow.matches) entryList.open = false;
-  }).then(() => editor.elements.namedItem("title").focus());
+    entryDetails.open = true;
+  }).then(() => { if (!busy && !current) titleInput.focus(); });
 });
 
 refreshComments.addEventListener("click", () => run(refreshComments, async () => {
@@ -472,8 +523,25 @@ editor.addEventListener("submit", event => {
       status.textContent = (activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.") + await reviews.save();
       return;
     }
-    if (!validSlug) throw new Error("Enter a slug using lowercase letters, numbers, and hyphens.");
-    if (!complete) throw new Error("Fill in the title, tag, excerpt, date, and body.");
+    if (!validSlug || !complete) {
+      entryDetails.open = true;
+      if (!validSlug) throw new Error("Enter a slug using lowercase letters, numbers, and hyphens.");
+      throw new Error("Fill in the title, tag, excerpt, date, and body.");
+    }
+    if (record.collection_intro && !record.collection) {
+      entryDetails.open = featurePanel.open = true;
+      throw new Error("Name the collection before adding its introduction.");
+    }
+    if (record.paired_photo && !mediaId.test(record.paired_photo) && !/^month-\d{4}-(0[1-9]|1[0-2])$/.test(record.paired_photo)) {
+      throw new Error("Choose a photo from the archive.");
+    }
+    record.paired_photo ||= null;
+    record.photo_essay = record.photo_essay === "true";
+    if (publishing && record.photo_essay) {
+      const { mediaReferences } = await import("./rich.js");
+      const images = mediaReferences(markdownMarker + record.body).filter(item => item.kind === "image");
+      if (new Set(images.map(image => image.id)).size < 2) throw new Error("Add at least two different images to publish a photo essay.");
+    }
     if (editorialFields) {
       record.start_here = record.start_here === "true";
       record.series_order = record.series && record.series_order ? Number(record.series_order) : null;
@@ -489,7 +557,15 @@ editor.addEventListener("submit", event => {
     if (record.body !== originalBody || originalBody.startsWith(markdownMarker)) record.body = markdownMarker + record.body;
     record.published = publishing;
     const path = current ? "posts?id=eq." + current : "posts";
-    const [saved] = await api(path, { method: current ? "PATCH" : "POST", body: record, prefer: "return=representation" });
+    const options = { method: current ? "PATCH" : "POST", body: record, prefer: "return=representation" };
+    let saved;
+    try { [saved] = await api(path, options); }
+    catch (error) {
+      if (!missingColumn(error)) throw error;
+      if (featureFields.some(field => record[field])) throw new Error("Apply the journal features database upgrade before publishing these settings. Your edits can be saved as a draft.");
+      for (const field of featureFields) delete record[field];
+      [saved] = await api(path, options);
+    }
     if (!saved) throw new Error("The entry could not be saved.");
     entriesRevision++;
     const reviewNote = await reviews.save({ p_post: saved.id, p_publish: publishing });
@@ -506,6 +582,7 @@ editor.addEventListener("submit", event => {
 });
 
 search.addEventListener("input", renderPostList);
+titleInput.addEventListener("input", updateEditorTitle);
 editor.addEventListener("input", () => { saveBackup(); reviews.changed(); });
 
 function showSection(section) {
