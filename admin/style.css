@@ -119,6 +119,7 @@ kbd { color: var(--accent); font: 12px/1.4 ui-monospace, monospace; background: 
 .prose ul.square-list { list-style-type: square; }
 .prose img, .prose video { max-width: 100%; height: auto; }
 .prose iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
+.prose .video-play { display: flex; width: 100%; aspect-ratio: 16 / 9; align-items: center; justify-content: center; gap: 10px; background: var(--soft); }
 .prose pre { overflow: auto; }
 .prose table { display: block; overflow-x: auto; }
 .media-slot { display: block; min-height: 60px; }

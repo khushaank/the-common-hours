@@ -33,6 +33,15 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const output = new URL(destination + "/", import.meta.url);
   const assets = [...files, ...sharedFiles];
   const allowedFiles = new Set([...assets, "config.js"]);
+  const settings = browserConfig(config);
+  const browserAssets = assets.filter(name => /\.(?:css|js)$/.test(name) && name !== "static-cache.js");
+  const sources = new Map(await Promise.all(browserAssets.map(async name => [name, await readFile(assetSource(app, name), "utf8")])));
+  const release = createHash("sha256").update(await readFile(new URL(import.meta.url))).update(settings);
+  for (const [name, source] of sources) release.update(name).update(source);
+  release.update(await readFile(assetSource(app, "index.html")));
+  const revision = release.digest("hex").slice(0, 16);
+  const versioned = new Set([...browserAssets, "config.js"]);
+  const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
   if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); }
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
@@ -46,7 +55,11 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     const target = new URL(file, output);
     if (file === "index.html") {
       const html = withConnectSource(await readFile(source, "utf8"), config);
-      await writeFile(target, html.replace("<!-- featured-snapshot -->", featured?.markup || ""));
+      await writeFile(target, html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`)
+        .replace("<!-- featured-snapshot -->", featured?.markup || ""));
+    } else if (file.endsWith(".js") && sources.has(file)) {
+      await writeFile(target, sources.get(file).replace(/(\bfrom\s+|\bimport\s*(?:\(\s*)?)(["'])(\.\/[^"']+)\2/g,
+        (_, prefix, quote, path) => prefix + quote + version(path) + quote));
     } else if (file === "static-cache.js") {
       const staticFiles = blogFiles.filter(name => /\.(?:jpg|woff2)$/.test(name));
       const hash = createHash("sha256");
@@ -57,7 +70,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     }
   }
   if (featured) await writeFile(new URL("featured.jpg", output), featured.bytes);
-  await writeFile(new URL("config.js", output), browserConfig(config));
+  await writeFile(new URL("config.js", output), settings);
 }
 
 try {

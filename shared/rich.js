@@ -70,7 +70,7 @@ md.core.ruler.after("inline", "linked_video", state => {
 md.renderer.rules.video = (tokens, index) => {
   const { src, href, label, title } = tokens[index].meta;
   const player = label
-    ? '<iframe title="' + escape(title || label + " video") + '" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen src="' + escape(src) + '"></iframe>'
+    ? '<button class="video-play" type="button" data-player="' + escape(src) + '" aria-label="Play ' + escape(title || label + ' video') + '">▶ <span>Play video</span></button>'
     : '<video controls playsinline preload="none" src="' + escape(src) + '"></video>';
   return '<div class="video">' + player + (title ? '<p class="video-caption">' + escape(title) + '</p>' : "") +
     '<a class="video-link" rel="noreferrer" href="' + escape(href) +
@@ -109,6 +109,17 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
   }
 
   target.innerHTML = md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body);
+  for (const play of target.querySelectorAll("[data-player]")) {
+    play.addEventListener("click", () => {
+      const frame = document.createElement("iframe");
+      frame.title = play.getAttribute("aria-label").replace(/^Play /, "");
+      frame.referrerPolicy = "strict-origin-when-cross-origin";
+      frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+      frame.src = play.dataset.player + (play.dataset.player.includes("?") ? "&" : "?") + "autoplay=1";
+      play.replaceWith(frame);
+      frame.focus();
+    });
+  }
   if (preview) {
     for (const link of target.querySelectorAll("a[href]:not([href^='#'])")) {
       if (link.getAttribute("href").startsWith("?post=")) link.setAttribute("href", "../" + link.getAttribute("href"));

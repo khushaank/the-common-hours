@@ -187,6 +187,8 @@ aside:empty { display: none; }
 .prose img { display: block; width: auto; height: auto; max-height: 75vh; object-fit: contain; border-radius: 3px; }
 .video { margin-block: 22px; }
 .video iframe, .video video { width: 100%; display: block; aspect-ratio: 16/9; border: 0; background: var(--soft); }
+.video-play { display: flex; width: 100%; aspect-ratio: 16/9; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--soft); color: var(--ink); }
+.video-play:hover { background: #e5e8dd; }
 .video-link { font: 13px var(--sans); }
 .video .video-caption { margin: 6px 0 0; font: 15px/1.4 var(--sans); }
 .prose .attachment { border: 1px solid var(--line); color: var(--accent); background: var(--soft); border-radius: 4px; padding: 9px 12px; font: 600 14px/1.4 var(--sans); min-height: 42px; overflow-wrap: anywhere; cursor: pointer; }
@@ -251,7 +253,7 @@ html:has(#content[aria-busy="true"]) .site-footer { visibility: hidden; }
   .article-page:has(#content[aria-busy="true"]) .loading { position: static; width: auto; height: auto; clip-path: none; }
   body:has(.article) { display: block; min-height: 0; background: white; color: #171717; }
   body:has(.article) :is(.site-header, .site-footer, #sidebar, .back, .post-nav, .comments,
-    .series-navigation, .skip-link, .attachment-status, iframe, video, .footnote-backref) { display: none !important; }
+    .series-navigation, .skip-link, .attachment-status, iframe, video, .video-play, .footnote-backref) { display: none !important; }
   body:has(.article) :is(main, .layout, #content, .article, .prose) { display: block; width: auto; max-width: none; min-height: 0; margin: 0; padding: 0; }
   body:has(.article) #content .article { max-width: 180mm; margin-inline: auto; padding: 8mm 11mm 9mm; }
   .article > h1 { font: bold 25pt/1.12 Georgia, serif; letter-spacing: -.02em; margin: 0; break-after: avoid; }
