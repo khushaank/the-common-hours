@@ -46,7 +46,7 @@
               <div class="fields">
                 <label>Title<input name="title" maxlength="180" required></label>
                 <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title"></label>
-                <div class="tag-field"><label for="entry-tag">Tag</label><div class="tag-controls"><input id="entry-tag" name="tag" maxlength="40" placeholder="Choose or type a tag" required><button id="choose-tag" type="button" popovertarget="tags" aria-label="Choose an existing tag">▾</button></div><div id="tags" popover aria-label="Existing tags"></div></div>
+                <div class="tag-field"><label for="entry-tag">Tag</label><input id="entry-tag" name="tag" maxlength="40" placeholder="Choose or type a tag" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="tags" autocomplete="off" required><div id="tags" role="listbox" aria-label="Tag suggestions" hidden></div></div>
                 <label>Publication date<input name="published_on" type="date" required></label>
               </div>
               <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
@@ -94,12 +94,6 @@
             <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh entries</button></div>
             <ul id="posts"></ul>
           </details>
-          <section class="card photo-overview">
-            <h2>Photo of the Week</h2>
-            <img id="weekly-preview" alt="" decoding="async" hidden>
-            <p id="weekly-summary">Feature photographs on the journal homepage.</p>
-            <div class="actions"><button type="button" id="manage-photos">Manage photos</button><a href="../?view=photos" target="_blank" rel="noopener noreferrer">Photo archive ↗</a></div>
-          </section>
         </aside>
       </div>
       <section id="site-panel" hidden>
@@ -116,7 +110,7 @@
           <div id="photo-edit" class="photo-edit" hidden>
             <div class="body-heading"><h2>Edit photo</h2><button type="button" id="new-photo">Back to upload</button></div>
             <div id="photo-preview-frame" class="photo-preview-frame" aria-busy="true"><img id="photo-preview" alt="" decoding="async" hidden></div>
-            <div id="photo-details" hidden>
+            <div id="photo-details">
               <label>Title <input name="title" maxlength="160"></label>
               <label>Alt text <input name="alt" maxlength="200"></label>
               <label>Description <textarea name="description" maxlength="4000" rows="5"></textarea></label>
@@ -126,7 +120,8 @@
           </div>
           <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to week</button><p id="photo-status" role="status"></p></div>
           <section class="week-collection" aria-labelledby="week-collection-title">
-            <div class="body-heading"><h2 id="week-collection-title">This week’s photos</h2><small id="weekly-count"></small></div>
+            <div class="body-heading"><h2 id="week-collection-title">This week’s photos</h2><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" disabled>Clear slideshow queue</button></div></div>
+            <p class="muted queue-help">Cleared photos stay in the archive. To feature one again, select it below and check “Include in the slideshow.”</p>
             <ul id="weekly-photos" aria-live="polite"></ul>
           </section>
         </form>

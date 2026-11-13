@@ -5,7 +5,7 @@ import { publicData } from "./public-cache.js";
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = ["archive", "privacy", "terms", "photo", "photos", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
@@ -266,14 +266,21 @@ async function start() {
     return;
   }
   const months = grouped(posts, post => post.published_on.slice(0, 7));
-  const topics = new Map([...grouped(posts, post => post.tag)].sort(([a], [b]) => a.localeCompare(b)));
+  const topics = [...grouped(posts, post => post.tag)].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
+  const topTopics = topics.slice(0, 10);
   const archives = sideLinks(months, "month", monthLabel, month);
   const sidebarMarkup = `<section class="side-section"><h2 class="side-title">Blog archive</h2>
     <ul class="side-list">${sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month)}</ul>
     ${months.size > 8 ? '<p><a class="back" href="?view=archive">All months →</a></p>' : ""}
     ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
-    ${topics.size ? `<section class="side-section"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topics, "tag", name => name, tag)}</ul></section>` : ""}`;
-  if (view === "archive") {
+    ${topics.length ? `<section class="side-section"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topTopics, "tag", name => name, tag)}</ul>
+    ${topics.length > topTopics.length ? '<a class="back" href="?view=topics">All topics →</a>' : ""}</section>` : ""}`;
+  if (view === "topics") {
+    document.title = "All topics — The Common Hours";
+    content.innerHTML = `<div class="section-head"><h1>All topics</h1><span class="section-note">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</span></div>` +
+      (topics.length ? `<ul class="side-list all-topics">${sideLinks(topics, "tag", name => name, tag)}</ul>` : "<p>No topics yet.</p>");
+    return;
+  } else if (view === "archive") {
     document.title = "Archive — The Common Hours";
     recordView("archive");
     content.innerHTML = `<div class="section-head"><h1>Archive</h1></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;

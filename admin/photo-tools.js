@@ -15,13 +15,11 @@ export function setupPhotoTools(api) {
   const save = document.querySelector("#save-photo");
   const newPhoto = document.querySelector("#new-photo");
   const preview = document.querySelector("#photo-preview");
-  const overview = document.querySelector("#weekly-preview");
-  const summary = document.querySelector("#weekly-summary");
+  const clear = document.querySelector("#clear-slideshow");
   let selected;
   let pending = [];
   let ready = false;
   let revision = 0;
-  let overviewRevision = 0;
   let supportsSeries = true;
 
   week.value = weekOf();
@@ -78,20 +76,10 @@ export function setupPhotoTools(api) {
     }
   }
 
-  async function loadOverview() {
-    const loading = ++overviewRevision;
-    try {
-      const [photo] = await api("weekly_photos?select=media_id,alt&featured=eq.true&week=lte." + weekOf() +
-        "&order=week.desc,created_at.asc,id.asc&limit=1");
-      if (loading !== overviewRevision) return;
-      summary.textContent = photo ? "Manage the homepage slideshow and its captions." : "Feature photographs on the journal homepage.";
-      await displayImage(overview, photo, () => loading === overviewRevision);
-    } catch { /* The Photos tab reports setup errors when opened. */ }
-  }
-
   async function loadPhoto({ preserve = false } = {}) {
     const start = weekOf(week.value);
     const loading = ++revision;
+    clear.disabled = true;
     if (!start) {
       ready = false;
       save.disabled = true;
@@ -144,6 +132,7 @@ export function setupPhotoTools(api) {
         list.append(item);
       }
       ready = true;
+      clear.disabled = !photos.some(photo => photo.featured);
       save.disabled = !selected && !pending.length;
     } catch (error) {
       if (loading !== revision) return;
@@ -157,6 +146,25 @@ export function setupPhotoTools(api) {
       }
     }
   }
+
+  clear.addEventListener("click", async () => {
+    const start = weekOf(week.value);
+    if (!ready || clear.disabled || !start) return;
+    if (!confirm("Clear this week’s slideshow queue? The photos will stay in the archive.")) return;
+    clear.disabled = form.inert = week.disabled = true;
+    status.textContent = "Clearing the slideshow queue…";
+    try {
+      await api("weekly_photos?week=eq." + start + "&featured=eq.true", {
+        method: "PATCH", body: { featured: false }, prefer: "return=minimal",
+      });
+      if (selected) form.elements.namedItem("featured").checked = false;
+      await loadPhoto({ preserve: true });
+      if (ready) status.textContent = "Slideshow queue cleared. The photos are still in the archive.";
+    } catch (error) {
+      status.textContent = error.message;
+      clear.disabled = false;
+    } finally { form.inert = week.disabled = false; }
+  });
 
   newPhoto.addEventListener("click", () => { edit(); files.focus(); });
   week.addEventListener("change", () => void loadPhoto());
@@ -206,7 +214,6 @@ export function setupPhotoTools(api) {
       }
       await loadPhoto({ preserve: true });
       if (ready) status.textContent = current ? "Photo saved." : "Photos added to the week.";
-      void loadOverview();
     } catch (error) {
       status.textContent = missingFeature(error) ? "Apply the Supabase writing desk upgrade to manage weekly photos." : error.message;
       save.disabled = false;
@@ -215,5 +222,5 @@ export function setupPhotoTools(api) {
     }
   });
 
-  return { loadPhoto, loadOverview };
+  return { loadPhoto };
 }

@@ -20,7 +20,9 @@ function updateSearch(delay) {
   const term = query.value.trim();
   const current = ++revision;
   results.setAttribute("aria-busy", String(Boolean(term)));
-  results.textContent = term ? "Searching…" : "Search titles, article text, or topics.";
+  const message = document.createElement("p");
+  message.textContent = term ? "Searching…" : "Search titles, article text, or topics.";
+  results.replaceChildren(message);
   if (!term) return;
   searchTimer = setTimeout(async () => {
     try {

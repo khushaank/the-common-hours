@@ -218,22 +218,72 @@ function renderPostList() {
 
 const tags = document.querySelector("#tags");
 const tagInput = editor.elements.namedItem("tag");
-tags.addEventListener("beforetoggle", event => {
-  if (event.newState !== "open") return;
-  const topics = [...new Set(posts.map(post => post.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  tags.replaceChildren(...topics.map(topic => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = topic;
-    button.addEventListener("click", () => {
-      tagInput.value = topic;
-      tagInput.dispatchEvent(new Event("input", { bubbles: true }));
-      tags.hidePopover();
-      tagInput.focus();
-    });
-    return button;
+let activeTag = -1;
+
+function closeTags() {
+  tags.hidden = true;
+  activeTag = -1;
+  tagInput.setAttribute("aria-expanded", "false");
+  tagInput.removeAttribute("aria-activedescendant");
+}
+
+function acceptTag(value) {
+  tagInput.value = value;
+  // Bubble directly to the editor's draft listener without reopening the list.
+  editor.dispatchEvent(new Event("input", { bubbles: true }));
+  closeTags();
+}
+
+function showTags() {
+  const value = tagInput.value.trim();
+  const query = value.toLowerCase();
+  const all = [...new Set(posts.map(post => post.tag).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+  const matches = (query ? all.filter(topic => topic.toLowerCase().includes(query)) : all)
+    .sort((a,b) => Number(b.toLowerCase().startsWith(query)) - Number(a.toLowerCase().startsWith(query)));
+  const exact = matches.findIndex(topic => topic.toLowerCase() === query);
+  if (exact > 0) matches.unshift(...matches.splice(exact, 1));
+  if (value && exact < 0) matches.push(value);
+  tags.replaceChildren(...matches.map((topic, index) => {
+    const option = document.createElement("div");
+    option.id = "tag-suggestion-" + index;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", "false");
+    option.textContent = value && exact < 0 && index === matches.length - 1 ? 'Use new tag: ' + topic : topic;
+    option.addEventListener("pointerdown", event => event.preventDefault());
+    option.addEventListener("click", () => acceptTag(topic));
+    return option;
   }));
-  if (!topics.length) tags.textContent = "No existing tags. Type one in the Tag field.";
+  activeTag = -1;
+  tagInput.removeAttribute("aria-activedescendant");
+  if (!matches.length) { closeTags(); return; }
+  tags.hidden = false;
+  tags.scrollTop = 0;
+  tagInput.setAttribute("aria-expanded", "true");
+}
+
+tagInput.addEventListener("focus", showTags);
+tagInput.addEventListener("click", () => { if (tags.hidden) showTags(); });
+tagInput.addEventListener("input", showTags);
+tagInput.addEventListener("blur", closeTags);
+tagInput.addEventListener("keydown", event => {
+  if (event.isComposing) return;
+  if (event.key === "Escape" && !tags.hidden) { event.preventDefault(); closeTags(); return; }
+  if (event.key === "Enter" && !tags.hidden) {
+    event.preventDefault();
+    if (activeTag >= 0) tags.children[activeTag]?.click();
+    else acceptTag(posts.find(post => post.tag.toLowerCase() === tagInput.value.trim().toLowerCase())?.tag || tagInput.value.trim());
+    return;
+  }
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  if (tags.hidden) showTags();
+  if (tags.hidden) return;
+  event.preventDefault();
+  const options = tags.children;
+  activeTag = event.key === "ArrowDown" ? (activeTag + 1) % options.length :
+    (activeTag <= 0 ? options.length - 1 : activeTag - 1);
+  [...options].forEach((option, index) => option.setAttribute("aria-selected", String(index === activeTag)));
+  tagInput.setAttribute("aria-activedescendant", options[activeTag].id);
+  options[activeTag].scrollIntoView({ block: "nearest" });
 });
 
 function openEditor(post) {
@@ -243,6 +293,7 @@ function openEditor(post) {
     try { localStorage.setItem(lastEntryKey(), slot()); } catch { /* Entry switching also works without storage. */ }
   }
   editor.reset();
+  closeTags();
   originalBody = post?.body || "";
   for (const key of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order"]) {
     editor.elements.namedItem(key).value = post?.[key] ?? "";
@@ -374,7 +425,6 @@ login.addEventListener("submit", event => {
     login.hidden = true;
     desk.hidden = false;
     deskMenu.hidden = false;
-    void photoTools.loadOverview();
   });
 });
 
@@ -398,6 +448,7 @@ editor.addEventListener("submit", event => {
     const fields = entryFields();
     const record = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
     const publishing = event.submitter.value === "publish";
+    record.tag = posts.find(post => post.tag.toLowerCase() === record.tag.toLowerCase())?.tag || record.tag;
     record.slug ||= record.title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
       .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
     const validSlug = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(record.slug);
@@ -551,9 +602,3 @@ for (const button of sections) {
     if (section === "media") void openMedia();
   });
 }
-
-document.querySelector("#manage-photos").addEventListener("click", () => {
-  if (busy) return;
-  showSection("site");
-  void photoTools.loadPhoto();
-});

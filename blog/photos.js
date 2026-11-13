@@ -1,4 +1,4 @@
-import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, request, weekOf } from "./common.js";
+import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, weekOf } from "./common.js";
 import { publicData } from "./public-cache.js";
 
 const weeklyFields = "id,week,media_id,title,alt";
@@ -35,18 +35,18 @@ function featuredSnapshot() {
   return JSON.parse(document.querySelector("#featured-snapshot")?.dataset.value || "null");
 }
 
-async function featurePhotos(get, demo) {
-  if (!demo) {
-    const filter = "&featured=eq.true&week=lte." + weekOf();
-    const [latest] = await optional(get("weekly_photos?select=week" + filter + "&order=week.desc&limit=1", { timeout: 3000 }));
-    if (latest) {
-      return allRows(path => get(path, { timeout: 3000 }),
-        "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=eq." + latest.week + "&order=created_at.asc,id.asc");
-    }
-    const [legacy] = await optional(get("photos?select=" + legacyFields + "&month=lte." + monthNow() + "-01&order=month.desc&limit=1", { timeout: 3000 }));
-    if (legacy) return [legacyPhoto(legacy)];
+async function featurePhotos(get) {
+  const options = { timeout: 5000 };
+  const rows = await optional(get("weekly_photos?select=" + weeklyFields + ",featured&week=lte." + weekOf() +
+    "&order=week.desc,created_at.asc,id.asc&limit=100", options));
+  if (rows.length) {
+    const week = rows[0].week;
+    if (rows.length === 100 && rows.at(-1).week === week) return allRows(path => get(path, options),
+      "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=eq." + week + "&order=created_at.asc,id.asc");
+    return rows.filter(photo => photo.week === week && photo.featured);
   }
-  return [cover];
+  const [legacy] = await optional(get("photos?select=" + legacyFields + "&month=lte." + monthNow() + "-01&order=month.desc&limit=1", options));
+  return [legacy ? legacyPhoto(legacy) : cover];
 }
 
 export async function startSlideshow(get, demo) {
@@ -57,53 +57,23 @@ export async function startSlideshow(get, demo) {
   const caption = figure.querySelector("#photo-caption");
   const nextButton = figure.querySelector("#slide-next");
   const count = figure.querySelector("#slide-count");
-  const toggle = figure.querySelector("#slide-toggle");
+  const slide = figure.querySelector(".slide");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
-  let paused = motion.matches;
+  let hovered = false;
   let timer;
   let revision = 0;
   let index = 0;
   let requestedIndex = 0;
   const images = new Map();
 
-  let photos;
-  function useLive(featured) {
-    const src = featured.version ? "featured.jpg?v=" + featured.version : imageSource(featured.image);
-    if (featured.photos[0] && src) images.set(featured.photos[0].id, Promise.resolve({ ...featured.image, src }));
-    return featured.photos;
-  }
-  if (!demo) {
-    try {
-      const snapshot = featuredSnapshot();
-      const key = "featured-v2:" + weekOf() + ":" + (snapshot?.version || "live");
-      photos = useLive(await publicData(key, async () => {
-        const first = snapshot?.first;
-        if (first) {
-          const week = "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=lte." + weekOf() + "&order=week.desc,created_at.asc,id.asc&limit=100";
-          const options = { timeout: 4000 };
-          const [latest, monthly] = await Promise.all([get(week, options), first.id.startsWith("month-") ?
-            get("photos?select=" + legacyFields + "&month=lte." + monthNow() + "-01&order=month.desc&limit=1", options) : []]);
-          const hero = latest[0] || (monthly[0] && legacyPhoto(monthly[0]));
-          if (hero?.id === first.id && hero.media_id === first.media_id && latest.length < 100) return {
-            photos: latest.length ? latest.filter(photo => photo.week === hero.week) : [hero], version: snapshot.version,
-            image: { width: snapshot.width, height: snapshot.height },
-          };
-        }
-        const featured = await request("/rest/v1/rpc/qmargin_b74_home_photos", { timeout: 5000 });
-        return featured.photos.length ? featured : { photos: await featurePhotos(get, false) };
-      }));
-    } catch (error) {
-      photos = await featurePhotos(get, demo).catch(() => null);
-      if (!photos) { figure.hidden = true; return; }
-    }
-  }
-  photos ||= [];
-  if (!photos.length) photos = [cover];
-  toggle.textContent = paused ? "Play slideshow" : "Pause slideshow";
+  const photos = demo ? [cover] : await publicData("featured-v3:" + weekOf(), () => featurePhotos(get)).catch(() => []);
+  if (!photos.length) { figure.hidden = true; return; }
 
   function schedule() {
     clearTimeout(timer);
-    if (!paused && !document.hidden && photos.length > 1) timer = setTimeout(() => void show(requestedIndex + 1), 10000);
+    if (!motion.matches && !hovered && !slide.contains(document.activeElement) && !document.hidden && photos.length > 1) {
+      timer = setTimeout(() => void show(requestedIndex + 1), 10000);
+    }
   }
 
   function prepare(photo) {
@@ -156,17 +126,17 @@ export async function startSlideshow(get, demo) {
     link.setAttribute("aria-label", "Open photo details: " + photo.title);
     caption.textContent = photo.title;
     count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
-    nextButton.hidden = toggle.hidden = photos.length < 2;
+    nextButton.hidden = photos.length < 2;
     if (photos.length > 1) void prepare(photos[(index + 1) % photos.length]).catch(() => {});
     schedule();
   }
 
   nextButton.addEventListener("click", () => void show(requestedIndex + 1));
-  toggle.addEventListener("click", () => {
-    paused = !paused;
-    toggle.textContent = paused ? "Play slideshow" : "Pause slideshow";
-    schedule();
-  });
+  slide.addEventListener("pointerenter", event => { if (event.pointerType === "mouse") { hovered = true; schedule(); } });
+  slide.addEventListener("pointerleave", () => { hovered = false; schedule(); });
+  slide.addEventListener("focusin", schedule);
+  slide.addEventListener("focusout", () => setTimeout(schedule, 0));
+  motion.addEventListener("change", schedule);
   document.addEventListener("visibilitychange", schedule);
   await show(0);
 }
