@@ -29,25 +29,32 @@
     <button class="primary" disabled>Sign in</button>
   </form>
   <div id="desk" hidden>
-    <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections" popover>
+    <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections" popover="auto">
       <button type="button" aria-pressed="true" data-section="entries">Entries</button>
       <button type="button" aria-pressed="false" data-section="site">Photos</button>
       <button type="button" aria-pressed="false" data-section="media">Media</button>
       <button type="button" aria-pressed="false" data-section="stats">Stats</button>
       <button type="button" aria-pressed="false" data-section="inbox">Inbox</button>
+      <button type="button" id="desk-logout">Log out</button>
     </nav>
     <div class="workspace">
       <div class="entries-panel" id="entries-panel">
         <aside class="entry-aside" aria-label="Entry browser">
-          <details class="entry-list" id="entry-list" open>
-            <summary>Entries</summary>
+          <div class="entry-list-heading">
+            <h2>Entries</h2>
+            <button type="button" id="toggle-entries" aria-label="Hide entries" aria-controls="entry-list" aria-expanded="true">
+              <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><path d="M8 4v12"/></svg>
+              <span>Entries</span>
+            </button>
+          </div>
+          <div class="entry-list" id="entry-list">
             <div class="entry-list-tools">
               <button type="button" id="new-post">New entry</button>
               <input id="find-entry" type="search" aria-label="Find an entry" placeholder="Find an entry" autocomplete="off">
               <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh</button></div>
             </div>
             <ul id="posts" aria-label="Entries"></ul>
-          </details>
+          </div>
         </aside>
         <div class="compose">
           <header class="compose-heading">
@@ -93,10 +100,10 @@
                 <span id="word-count">0 words</span>
               </div>
               <div class="editor-body" id="write-panel">
-                <textarea id="entry-text" name="body" rows="13" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
+                <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
                 <div id="command-menu" class="command-menu" role="group" aria-label="Insert and format" hidden></div>
               </div>
-              <section class="editor-preview" id="entry-preview" aria-label="Entry preview" hidden>
+              <section class="editor-preview" id="entry-preview" aria-label="Entry preview" tabindex="0" hidden>
                 <p id="preview-meta" class="muted"></p>
                 <p id="preview-excerpt" class="muted"></p>
                 <div class="prose" id="preview-body"></div>

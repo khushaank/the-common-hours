@@ -13,6 +13,7 @@ const comments = document.querySelector("#comments");
 const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
 const entryList = document.querySelector("#entry-list");
+const toggleEntries = document.querySelector("#toggle-entries");
 const entryDetails = document.querySelector("#entry-details");
 const editorTitle = document.querySelector("#editor-title");
 const titleInput = editor.elements.namedItem("title");
@@ -24,8 +25,18 @@ const deskNav = document.querySelector("#desk-nav");
 const sections = [...document.querySelectorAll("[data-section]")];
 const narrow = matchMedia("(max-width: 760px)");
 let desktopEntriesOpen = true;
-narrow.addEventListener("change", () => { entryList.open = narrow.matches ? false : desktopEntriesOpen; });
-entryList.addEventListener("toggle", () => { if (!narrow.matches) desktopEntriesOpen = entryList.open; });
+function showEntries(open) {
+  if (!open && entryList.contains(document.activeElement)) toggleEntries.focus();
+  entryList.hidden = !open;
+  toggleEntries.setAttribute("aria-expanded", String(open));
+  toggleEntries.setAttribute("aria-label", open ? "Hide entries" : "Show entries");
+}
+narrow.addEventListener("change", () => showEntries(!narrow.matches && desktopEntriesOpen));
+toggleEntries.addEventListener("click", () => {
+  const open = entryList.hidden;
+  if (!narrow.matches) desktopEntriesOpen = open;
+  showEntries(open);
+});
 const featureFields = ["reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay"];
 const featurePanel = document.querySelector("#entry-features");
 const photoPicker = editor.elements.namedItem("paired_photo");
@@ -56,9 +67,21 @@ let cloudDraft = false;
 let editorialFields = true;
 let entriesRevision = 0;
 
+const sessionKey = () => "common-hours:desk-session:" + getProjectOrigin();
+
+function storeSession() {
+  try {
+    if (session) sessionStorage.setItem(sessionKey(), JSON.stringify(session));
+    else sessionStorage.removeItem(sessionKey());
+  } catch { /* The desk can still sign in if tab storage is unavailable. */ }
+}
 
 function setSession(data) {
-  session = { ...data, expires: Date.now() + (data.expires_in - 30) * 1000 };
+  session = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires: Date.now() + (data.expires_in - 30) * 1000,
+  };
 }
 
 async function sessionToken() {
@@ -66,8 +89,16 @@ async function sessionToken() {
   if (session.expires < Date.now()) {
     refresh ??= request("/auth/v1/token?grant_type=refresh_token", {
       method: "POST", body: { refresh_token: session.refresh_token }
-    }).then(setSession).catch(() => {
-      throw new Error("Your session expired. Sign out and sign in again.");
+    }).then(data => {
+      setSession(data);
+      storeSession();
+    }).catch(error => {
+      if ([400, 401, 403].includes(error.status)) {
+        session = undefined;
+        storeSession();
+        throw new Error("Your session expired. Log out and sign in again.");
+      }
+      throw error;
     }).finally(() => { refresh = undefined; });
     await refresh;
   }
@@ -246,7 +277,7 @@ function renderPostList() {
         if (!record) throw new Error("This entry is unavailable.");
         openEditor(record);
         await recoverDraft();
-        if (narrow.matches) entryList.open = false;
+        if (narrow.matches) showEntries(false);
       }).then(() => { if (!busy && current === post.id) editorTitle.focus(); });
     });
     li.append(button);
@@ -429,10 +460,58 @@ async function loadComments() {
   }
 }
 
+async function openDesk() {
+  const allowed = await api("admins?select=user_id&limit=1");
+  if (!allowed.length) {
+    session = undefined;
+    storeSession();
+    throw new Error("This account does not have access to the writing desk.");
+  }
+  draftOwner = allowed[0].user_id;
+  await loadPosts();
+  let lastEntry;
+  try {
+    const remembered = localStorage.getItem(lastEntryKey());
+    if (posts.some(post => post.id === remembered)) [lastEntry] = await api("posts?id=eq." + remembered);
+  } catch { /* A remembered entry is optional. */ }
+  openEditor(lastEntry);
+  await recoverDraft();
+  showSection("entries");
+  showEntries(!narrow.matches && desktopEntriesOpen);
+  storeSession();
+  login.reset();
+  login.hidden = true;
+  desk.hidden = false;
+  deskMenu.hidden = false;
+}
+
 try {
   if (!window.isSecureContext) throw new Error("Use the HTTPS address to sign in.");
   getProjectOrigin();
-  login.querySelector("button").disabled = false;
+  const signIn = login.querySelector("button");
+  signIn.disabled = false;
+  let saved;
+  try { saved = JSON.parse(sessionStorage.getItem(sessionKey())); }
+  catch { /* Sign-in is still available if tab storage cannot be read. */ }
+  if (saved?.access_token && saved?.refresh_token && Number.isFinite(saved.expires)) {
+    session = saved;
+    login.hidden = true;
+    void run(signIn, async () => {
+      status.textContent = "Restoring your session…";
+      try {
+        await openDesk();
+        status.textContent = "";
+      } catch (error) {
+        if ([401, 403].includes(error.status)) {
+          session = undefined;
+          storeSession();
+        }
+        session = draftOwner = undefined;
+        login.hidden = false;
+        throw error;
+      }
+    });
+  }
 } catch (error) {
   status.textContent = window.isSecureContext
     ? "The writing desk is not connected. Check its configuration and reload."
@@ -452,29 +531,11 @@ login.addEventListener("submit", event => {
       if (error.status === 429) throw new Error("Too many attempts. Wait a moment and try again.");
       throw error;
     }
-    try {
-      const allowed = await api("admins?select=user_id&limit=1");
-      if (!allowed.length) throw new Error("This account does not have access to the writing desk.");
-      draftOwner = allowed[0].user_id;
-      await loadPosts();
-      let lastEntry;
-      try {
-        const remembered = localStorage.getItem(lastEntryKey());
-        if (posts.some(post => post.id === remembered)) [lastEntry] = await api("posts?id=eq." + remembered);
-      } catch { /* A remembered entry is optional. */ }
-      openEditor(lastEntry);
-      await recoverDraft();
-      showSection("entries");
-      entryList.open = !narrow.matches;
-    } catch (error) {
-      session = undefined;
-      draftOwner = undefined;
+    try { await openDesk(); }
+    catch (error) {
+      session = draftOwner = undefined;
       throw error;
     }
-    login.reset();
-    login.hidden = true;
-    desk.hidden = false;
-    deskMenu.hidden = false;
   });
 });
 
@@ -483,7 +544,7 @@ newPost.addEventListener("click", () => {
   run(newPost, async () => {
     openEditor();
     await recoverDraft();
-    if (narrow.matches) entryList.open = false;
+    if (narrow.matches) showEntries(false);
     entryDetails.open = true;
   }).then(() => { if (!busy && !current) titleInput.focus(); });
 });
@@ -586,6 +647,7 @@ titleInput.addEventListener("input", updateEditorTitle);
 editor.addEventListener("input", () => { saveBackup(); reviews.changed(); });
 
 function showSection(section) {
+  document.body.classList.toggle("writing", section === "entries");
   for (const button of sections) {
     const selected = button.dataset.section === section;
     button.setAttribute("aria-pressed", String(selected));
@@ -668,8 +730,9 @@ async function openMedia() {
 document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
 for (const button of sections) {
   button.addEventListener("click", () => {
-    if (busy) return;
     deskNav.hidePopover();
+    deskMenu.focus();
+    if (busy) return;
     if (button.getAttribute("aria-pressed") === "true") return;
     const section = button.dataset.section;
     showSection(section);
@@ -679,3 +742,24 @@ for (const button of sections) {
     if (section === "media") void openMedia();
   });
 }
+
+document.querySelector("#desk-logout").addEventListener("click", event => {
+  if (busy) return;
+  saveBackup();
+  if (!canLeaveDraft()) return;
+  deskNav.hidePopover();
+  void run(event.currentTarget, async () => {
+    try {
+      const token = await sessionToken();
+      session = undefined;
+      storeSession();
+      await request("/auth/v1/logout?scope=local", { method: "POST", token, timeout: 4000 });
+    } catch { /* Sign out of this tab even if the server cannot be reached. */ }
+    finally {
+      session = undefined;
+      storeSession();
+      window.removeEventListener("beforeunload", preventExit);
+      location.reload();
+    }
+  });
+});
