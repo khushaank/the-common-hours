@@ -17,12 +17,11 @@
 [hidden] { display: none !important; }
 body { margin: 0; color: var(--ink); background: radial-gradient(ellipse at 0 15%, #efe6d9, transparent 44%), var(--paper); font: 15px/1.5 "DM Sans", system-ui, sans-serif; }
 .shell { width: min(1500px, calc(100% - 60px)); margin: 20px auto 54px; }
-.mast, .mast-start, .mast-actions, .section-heading, .body-heading, .actions { display: flex; align-items: center; gap: 12px; }
+.mast, .mast-start, .section-heading, .body-heading, .actions { display: flex; align-items: center; gap: 12px; }
 .mast { justify-content: space-between; border-bottom: 1px solid var(--line); padding: 2px 0 17px; }
 #desk-menu { display: grid; place-items: center; padding: 0; width: 42px; flex: 0 0 42px; }
 .desk-brand { color: var(--ink); font: 36px/1 var(--serif); text-decoration: none; }
-.mast-actions { flex-wrap: wrap; }
-.mast-actions a, .actions a, .section-heading a { font-size: 14px; font-weight: 600; text-underline-offset: .23em; }
+.actions a, .section-heading a { font-size: 14px; font-weight: 600; text-underline-offset: .23em; }
 a { color: var(--accent); }
 h1, h2 { margin: 0; font: 400 28px/1.08 var(--serif); }
 h1 { font-size: clamp(38px, 4vw, 54px); }
@@ -33,12 +32,15 @@ small { display: block; }
 #status:not(:empty) { padding: 9px 12px; border-bottom: 1px solid var(--line); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 13px; padding: 20px; min-width: 0; }
 .login { max-width: 430px; margin: min(12vh, 110px) auto 0; }
-#desk { display: grid; grid-template-columns: 154px minmax(0, 1fr); gap: clamp(18px, 2.5vw, 38px); align-items: start; margin-top: 24px; }
-.desk-nav { display: grid; align-content: start; gap: 5px; position: sticky; top: 55px; }
+#desk { margin-top: 24px; }
+.desk-nav:popover-open { display: grid; gap: 4px; }
+.desk-nav { position: fixed; inset: 72px auto auto max(30px, calc((100vw - 1500px) / 2)); margin: 0; padding: 8px; width: 206px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px #26292329; }
+@supports (position-area: block-end span-inline-end) {
+  .desk-nav { inset: auto; position-area: block-end span-inline-end; margin-top: 7px; }
+}
 .desk-nav button { justify-self: stretch; text-align: left; padding-left: 15px; background: transparent; border-color: transparent; }
 .desk-nav button[aria-pressed="true"] { background: var(--soft); border-color: #dce4d6; }
-#desk.menu-closed, .menu-closed .entries-panel { grid-template-columns: minmax(0, 1fr); }
-.menu-closed :is(.desk-nav, .entry-aside) { display: none; }
 .entries-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(235px, 310px); gap: 20px; align-items: start; }
 .section-heading, .body-heading { justify-content: space-between; flex-wrap: wrap; }
 .section-heading { margin-bottom: 16px; }
@@ -152,9 +154,8 @@ dialog .actions { justify-content: flex-end; }
   .editor-preview { max-height: none; }
   .shell { width: calc(100% - 28px); margin-top: 14px; }
   .desk-brand { font-size: 31px; }
-  #desk, .entry-aside, .photo-workspace { grid-template-columns: minmax(0, 1fr); }
-  #desk { margin-top: 12px; gap: 12px; }
-  .desk-nav { display: flex; position: static; flex-wrap: wrap; }
+  .entry-aside, .photo-workspace { grid-template-columns: minmax(0, 1fr); }
+  #desk { margin-top: 12px; }
   .desk-nav button { padding-inline: 13px; }
   .card { padding: 14px; }
   .section-heading { margin-bottom: 10px; }
@@ -163,8 +164,6 @@ dialog .actions { justify-content: flex-end; }
 @media (max-width: 470px) {
   .mast { flex-wrap: wrap; }
   .fields { grid-template-columns: minmax(0, 1fr); }
-  .mast-actions { gap: 7px; }
-  .mast-actions a { font-size: 13px; }
   .compose-actions { justify-content: space-between; gap: 5px; }
   .compose-actions button { padding-inline: 10px; }
   .stats-metric { padding: 9px; font-size: 12px; }

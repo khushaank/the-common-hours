@@ -148,12 +148,5 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
       try { await sync(getEntry(), options); return ""; }
       catch { return " The review link could not be updated."; }
     },
-    async clear() {
-      flush();
-      await queue;
-      links.clear();
-      expiryByEntry.clear();
-      signed.clear();
-    },
   };
 }

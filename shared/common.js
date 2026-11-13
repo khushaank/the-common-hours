@@ -52,8 +52,8 @@ export async function allRows(get, path) {
   while (true) {
     const batch = await get(path + "&limit=100&offset=" + rows.length);
     if (!Array.isArray(batch)) throw new Error("The service returned an unexpected response.");
-    if (!batch.length) return rows;
     rows.push(...batch);
+    if (batch.length < 100) return rows;
   }
 }
 

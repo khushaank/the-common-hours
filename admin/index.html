@@ -14,12 +14,11 @@
 <main class="shell">
   <header class="mast">
     <div class="mast-start">
-      <button type="button" id="desk-menu" aria-label="Writing desk menu" aria-expanded="false" aria-controls="desk-nav entry-sidebar" hidden>
+      <button type="button" id="desk-menu" aria-label="Writing desk menu" popovertarget="desk-nav" hidden>
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
-      <a class="desk-brand" href="./">Writing desk</a>
+      <span class="desk-brand">Writing desk</span>
     </div>
-    <div class="mast-actions"><a href="../">View journal ↗</a><button id="logout" type="button" hidden>Sign out</button></div>
   </header>
   <p id="status" role="status"></p>
   <form id="login" class="card login" method="post">
@@ -29,7 +28,7 @@
     <button class="primary" disabled>Sign in</button>
   </form>
   <div id="desk" hidden>
-    <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections">
+    <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections" popover>
       <button type="button" aria-pressed="true" data-section="entries">Entries</button>
       <button type="button" aria-pressed="false" data-section="site">Photos</button>
       <button type="button" aria-pressed="false" data-section="media">Media</button>

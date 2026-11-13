@@ -18,18 +18,13 @@ export function renderReadingList(content, title, entries, empty = "No entries h
     (entries.length ? cards(entries) : '<p>' + escape(empty) + '</p>');
 }
 
-export function relatedEntries(posts, post) {
-  const topic = post.tag.trim().toLowerCase();
-  const related = posts.filter(item => item.id !== post.id && item.tag.trim().toLowerCase() === topic).slice(0, 3);
-  let series = "";
-  if (post.series) {
-    const group = seriesEntries(posts, post.series);
-    const next = group[group.findIndex(item => item.id === post.id) + 1];
-    series = '<section class="series-navigation"><h2>' + escape(post.series) + '</h2>' +
-      (next ? '<p><a href="' + entryHref(next.slug) + '">Next in the series · ' + escape(next.title) + '</a></p>' : "") +
-      '<a href="?series=' + encodeURIComponent(post.series) + '">See the full series</a></section>';
-  }
-  return series + (related.length ? '<section class="related-entries"><h2>Keep reading</h2>' + cards(related) + '</section>' : "");
+export function seriesNavigation(posts, post) {
+  if (!post.series) return "";
+  const group = seriesEntries(posts, post.series);
+  const next = group[group.findIndex(item => item.id === post.id) + 1];
+  return '<section class="series-navigation"><h2>' + escape(post.series) + '</h2>' +
+    (next ? '<p><a href="' + entryHref(next.slug) + '">Next in the series · ' + escape(next.title) + '</a></p>' : "") +
+    '<a href="?series=' + encodeURIComponent(post.series) + '">See the full series</a></section>';
 }
 
 export function restoreArticleAnchors(body) {

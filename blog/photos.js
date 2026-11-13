@@ -1,4 +1,5 @@
 import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, request, weekOf } from "./common.js";
+import { publicData } from "./public-cache.js";
 
 const weeklyFields = "id,week,media_id,title,alt";
 const legacyFields = "month,media_id,alt,caption";
@@ -20,7 +21,7 @@ async function optional(task) {
 
 async function getImage(get, photo, options) {
   if (photo.id === cover.id) return { src: "cover.jpg", width: 1200, height: 800 };
-  const record = await readMediaImage(get, photo.media_id, options);
+  const record = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id, options));
   const src = imageSource(record);
   if (!src) throw new Error("Photo unavailable.");
   return { src, width: record.width, height: record.height, alt: record.alt };
@@ -57,14 +58,33 @@ export async function startSlideshow(get, demo) {
   const images = new Map();
 
   let photos;
+  function useLive(featured) {
+    const src = featured.version ? "featured.jpg?v=" + featured.version : imageSource(featured.image);
+    if (featured.photos[0] && src) images.set(featured.photos[0].id, Promise.resolve({ ...featured.image, src }));
+    return featured.photos;
+  }
   if (!demo) {
     try {
-      const featured = await request("/rest/v1/rpc/qmargin_b74_home_photos", { timeout: 3500 });
-      photos = featured.photos;
-      const src = imageSource(featured.image);
-      if (photos[0] && src) images.set(photos[0].id, Promise.resolve({ ...featured.image, src }));
+      const snapshot = JSON.parse(document.querySelector("#featured-snapshot")?.dataset.value || "null");
+      const key = "featured:" + weekOf() + ":" + (snapshot?.version || "live");
+      photos = useLive(await publicData(key, async () => {
+        const first = snapshot?.first;
+        if (first) {
+          const week = "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=lte." + weekOf() + "&order=week.desc,created_at.asc,id.asc&limit=100";
+          const options = { timeout: 4000 };
+          const [latest, monthly] = await Promise.all([get(week, options), first.id.startsWith("month-") ?
+            get("photos?select=" + legacyFields + "&month=eq." + monthNow() + "-01", options) : []]);
+          const hero = latest[0] || (monthly[0] && legacyPhoto(monthly[0]));
+          if (hero?.id === first.id && hero.media_id === first.media_id && latest.length < 100) return {
+            photos: latest.length ? latest.filter(photo => photo.week === hero.week) : [hero], version: snapshot.version,
+            image: { width: snapshot.width, height: snapshot.height },
+          };
+        }
+        return request("/rest/v1/rpc/qmargin_b74_home_photos", { timeout: 5000 });
+      }));
     } catch (error) {
       if (error.code === "PGRST202") photos = await featurePhotos(get, demo).catch(() => []);
+      else { figure.hidden = true; return; }
     }
   }
   photos ||= [];
@@ -80,7 +100,7 @@ export async function startSlideshow(get, demo) {
     clearTimeout(timer);
     const loading = ++revision;
     index = (next + photos.length) % photos.length;
-    let photo = photos[index];
+    const photo = photos[index];
     let data;
     try {
       if (!images.has(photo.id)) {
@@ -91,21 +111,26 @@ export async function startSlideshow(get, demo) {
       }
       data = await images.get(photo.id);
       if (data.src !== picture.getAttribute("src")) {
-        const ready = new Image();
-        ready.src = data.src;
-        await ready.decode();
+        if (!picture.hasAttribute("src")) picture.src = data.src;
+        else {
+          const ready = new Image();
+          ready.src = data.src;
+          await ready.decode();
+        }
       }
     } catch {
       if (loading !== revision) return;
-      photo = cover;
-      data = await getImage(get, cover);
+      if (picture.hasAttribute("src")) { schedule(); return; }
+      figure.hidden = true;
+      return;
     }
     if (loading !== revision) return;
     picture.alt = photo.alt || data.alt || "";
     picture.title = picture.alt;
     picture.width = data.width;
     picture.height = data.height;
-    picture.src = data.src;
+    if (data.src !== picture.getAttribute("src")) picture.src = data.src;
+    figure.removeAttribute("aria-busy");
     link.href = photoLink(photo.id);
     link.setAttribute("aria-label", "Open photo details: " + photo.title);
     caption.textContent = photo.title;
@@ -165,10 +190,10 @@ export async function renderPhotoView(content, get, demo, view, id) {
   const archiveLink = '<a class="back" href="?view=photos">← Photo archive</a>';
   if (view === "photos") {
     document.title = "Photo archive — The Common Hours";
-    const [weekly, legacy] = demo ? [[], []] : await Promise.all([
+    const [weekly, legacy] = demo ? [[], []] : await publicData("photo-archive", () => Promise.all([
       archiveWeekly(get),
       optional(allRows(get, "photos?select=" + legacyFields + "&order=month.desc")),
-    ]);
+    ]));
     const photos = [...weekly, ...legacy.map(legacyPhoto)].sort((a, b) =>
       (b.week || b.month).localeCompare(a.week || a.month));
     content.innerHTML = '<div class="section-head"><h1>Photo archive</h1></div>' +

@@ -7,10 +7,15 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>The Common Hours — An independent journal</title>
+<!-- public-api-connection -->
 <link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
+<link rel="preload" as="font" type="font/woff2" href="serif.woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <link rel="modulepreload" href="journal.js">
-<script type="module" src="start.js"></script>
+<link rel="modulepreload" href="photos.js">
+<link rel="modulepreload" href="common.js">
+<link rel="modulepreload" href="public-cache.js">
+<link rel="modulepreload" href="config.js">
 </head>
 <body id="top">
 <a class="skip-link" href="#content">Skip to content</a>
@@ -24,10 +29,10 @@
   </div>
 </header>
 <main class="wrap">
-  <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" hidden>
+  <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" aria-busy="true" hidden>
     <div class="slide">
-      <a id="featured-photo-link" href="?view=photo&amp;photo=cover" aria-label="Open the featured photo">
-        <img width="1200" height="800" alt="A wooden jetty reaches into a mist-covered lake" title="A wooden jetty reaches into a mist-covered lake" draggable="false" decoding="async" fetchpriority="high">
+      <a id="featured-photo-link" aria-label="Open the featured photo">
+        <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
         <span class="slide-label">Photo of the Week</span>
       </a>
       <div id="slide-controls" hidden>
@@ -36,7 +41,7 @@
       </div>
     </div>
     <figcaption>
-      <span id="photo-caption">From the journal</span>
+      <span id="photo-caption"></span>
       <span class="slide-actions">
         <span id="slide-count"></span>
         <button id="slide-toggle" type="button" hidden>Pause slideshow</button>
@@ -44,16 +49,15 @@
       </span>
     </figcaption>
   </figure>
+  <!-- featured-snapshot -->
   <div class="layout">
     <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true">
       <p class="loading sr-only" role="status">Loading journal…</p>
       <div class="content-skeleton" aria-hidden="true">
         <div class="skeleton skeleton-heading"></div>
-        <div class="skeleton skeleton-line"></div>
-        <div class="skeleton skeleton-line short"></div>
-        <div class="skeleton skeleton-heading"></div>
-        <div class="skeleton skeleton-line"></div>
-        <div class="skeleton skeleton-line short"></div>
+        <div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>
+        <div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>
+        <div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>
       </div>
     </section>
     <aside id="sidebar" aria-label="Blog archive"></aside>
@@ -64,5 +68,7 @@
   <img class="footer-landscape" src="footer-landscape.jpg" width="1440" height="182" alt="" decoding="async">
   <div class="wrap"><nav aria-label="Site policies and feed"><a href="?view=privacy">Privacy</a><a href="?view=terms">Terms</a><a href="feed.xml">RSS</a></nav><a href="#top">Back to top <span aria-hidden="true">↑</span></a></div>
 </footer>
+<script src="route.js"></script>
+<script type="module" src="start.js"></script>
 </body>
 </html>

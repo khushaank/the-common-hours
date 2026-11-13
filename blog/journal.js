@@ -1,5 +1,6 @@
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
+import { publicData } from "./public-cache.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
@@ -44,6 +45,10 @@ const insert = (path, body) => get(path, { method: "POST", body, prefer: "return
 
 async function loadPublicPosts() {
   if (demo) return (await import("./demo.js")).default;
+  return publicData("posts", fetchPublicPosts);
+}
+
+async function fetchPublicPosts() {
   const fields = "id,slug,title,tag,excerpt,published_on";
   const filter = "&published=eq.true&order=published_on.desc,id.desc";
   try { return await allRows(get, "posts?select=" + fields + ",series,series_order,start_here" + filter); }
@@ -51,6 +56,13 @@ async function loadPublicPosts() {
     if (!missingColumn(error)) throw error;
     return allRows(get, "posts?select=" + fields + filter);
   }
+}
+
+function loadBody(currentSlug) {
+  return publicData("post:" + currentSlug, async () => {
+    const [post] = await get("posts?" + new URLSearchParams({ select: "body", slug: "eq." + currentSlug, published: "eq.true" }));
+    return post || null;
+  });
 }
 
 async function resolveEntry(posts) {
@@ -79,9 +91,11 @@ function recordView(page, post = null) {
     visit = !last || now < last || now - last >= 30 * 60 * 1000;
     sessionStorage.setItem(key, String(now));
   } catch { /* Count the view if storage is unavailable. */ }
-  void request("/rest/v1/rpc/qmargin_b74_record_view", {
+  const send = () => void request("/rest/v1/rpc/qmargin_b74_record_view", {
     method: "POST", body: { p_page: page, p_post: post, p_visit: visit }, keepalive: true,
   }).catch(() => {});
+  if ("requestIdleCallback" in window) requestIdleCallback(send, { timeout: 1500 });
+  else setTimeout(send, 0);
 }
 
 function grouped(posts, value) {
@@ -127,14 +141,15 @@ function renderList(posts) {
   if (!isJournal) document.title = title + " — The Common Hours";
 }
 
-async function renderPost(posts, index) {
+async function renderPost(posts, index, firstBody) {
   const post = posts[index];
   if (!post) {
     content.innerHTML = '<h1>Entry not found</h1><p><a class="back" href="./">← Return to the journal</a></p>';
     return;
   }
   if (!demo) {
-    const [detail] = await get("posts?" + new URLSearchParams({ select: "body", id: "eq." + post.id, published: "eq.true" }));
+    const prefetched = post.slug === slug && firstBody ? await firstBody : undefined;
+    const detail = prefetched === undefined ? await loadBody(post.slug) : prefetched;
     if (!detail) return renderPost([], 0);
     post.body = detail.body;
   }
@@ -155,19 +170,19 @@ async function renderPost(posts, index) {
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form></section>`;
   const bodyElement = document.querySelector("#entry-body");
   if (renderer) {
-    renderer.renderText(bodyElement, post.body, id => readMediaImage(get, id), { loadAttachment: fetchAttachment, preparePrint: true });
+    renderer.renderText(bodyElement, post.body, id => publicData("image:" + id, () => readMediaImage(get, id)), { loadAttachment: fetchAttachment, preparePrint: true });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
   } else {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   const list = document.querySelector("#comment-list");
-  const [{ restoreArticleAnchors, relatedEntries }, { addBookmarkButton }] = await Promise.all([
+  const [{ restoreArticleAnchors, seriesNavigation }, { addBookmarkButton }] = await Promise.all([
     import("./reading.js"), import("./bookmarks.js"),
   ]);
   restoreArticleAnchors(bodyElement);
   addBookmarkButton(bodyElement.closest("article"), post.id);
-  bodyElement.closest("article").insertAdjacentHTML("afterend", relatedEntries(posts, post));
+  bodyElement.closest("article").insertAdjacentHTML("afterend", seriesNavigation(posts, post));
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
   const button = form.querySelector("button");
@@ -215,9 +230,9 @@ async function renderPost(posts, index) {
   async function loadComments() {
     list.setAttribute("aria-busy", "true");
     try {
-      const comments = demo ? JSON.parse(localStorage.getItem(storageKey) || "[]") : await allRows(get,
+      const comments = demo ? JSON.parse(localStorage.getItem(storageKey) || "[]") : await publicData("comments:" + post.id, () => allRows(get,
         "comments?select=display_name,body&approved=eq.true&order=created_at.asc,id.asc&post_id=eq." + encodeURIComponent(post.id)
-      );
+      ));
       showComments(comments);
     } catch {
       showFailure(list, "Comments could not load.", loadComments);
@@ -249,6 +264,7 @@ async function start() {
     recordView(view);
     return;
   }
+  const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
   if (view === "saved") {
     const { renderBookmarks } = await import("./bookmarks.js");
@@ -274,7 +290,7 @@ async function start() {
     recordView("archive");
     content.innerHTML = `<div class="section-head"><h1>Archive</h1></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
   } else if (slug) {
-    await renderPost(posts, await resolveEntry(posts));
+    await renderPost(posts, await resolveEntry(posts), body);
   } else {
     renderList(posts);
     recordView("journal");

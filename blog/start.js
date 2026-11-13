@@ -1,11 +1,10 @@
-const params = new URLSearchParams(location.search);
-if (!["view", "post", "month", "tag", "series", "page"].some(key => params.has(key))) {
-  const cover = document.querySelector("#week-photo");
-  cover.querySelector("img").src = "cover.jpg";
-  cover.hidden = false;
-}
-if (params.get("view") !== "review" && "serviceWorker" in navigator) {
-  void navigator.serviceWorker.register("./static-cache.js").catch(() => {});
+document.addEventListener("contextmenu", event => {
+  if (event.target.closest("img")) event.preventDefault();
+});
+if (new URLSearchParams(location.search).get("view") !== "review" && "serviceWorker" in navigator) {
+  const register = () => void navigator.serviceWorker.register("./static-cache.js").catch(() => {});
+  if ("requestIdleCallback" in window) requestIdleCallback(register);
+  else window.addEventListener("load", register, { once: true });
 }
 import("./journal.js").catch(() => {
   const content = document.querySelector("#content");

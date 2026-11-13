@@ -8,7 +8,6 @@ const login = document.querySelector("#login");
 const editor = document.querySelector("#editor");
 const desk = document.querySelector("#desk");
 const status = document.querySelector("#status");
-const logout = document.querySelector("#logout");
 const postList = document.querySelector("#posts");
 const comments = document.querySelector("#comments");
 const refreshComments = document.querySelector("#refresh-comments");
@@ -18,6 +17,7 @@ const search = document.querySelector("#find-entry");
 const inbox = document.querySelector("#privacy-requests");
 const draftStatus = document.querySelector("#draft-status");
 const deskMenu = document.querySelector("#desk-menu");
+const deskNav = document.querySelector("#desk-nav");
 const sections = [...document.querySelectorAll("[data-section]")];
 const narrow = matchMedia("(max-width: 760px)");
 const editorTools = setupEditorTools(editor, api, {
@@ -255,12 +255,6 @@ async function loadPosts() {
   renderPostList();
 }
 
-function setDeskMenu(open) {
-  desk.classList.toggle("menu-closed", !open);
-  deskMenu.setAttribute("aria-expanded", String(open));
-}
-deskMenu.addEventListener("click", () => setDeskMenu(deskMenu.getAttribute("aria-expanded") !== "true"));
-
 async function loadComments() {
   const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc");
   comments.replaceChildren();
@@ -340,7 +334,6 @@ login.addEventListener("submit", event => {
       await recoverDraft();
       showSection("entries");
       entryList.open = !narrow.matches;
-      setDeskMenu(!narrow.matches);
     } catch (error) {
       session = undefined;
       draftOwner = undefined;
@@ -349,33 +342,8 @@ login.addEventListener("submit", event => {
     login.reset();
     login.hidden = true;
     desk.hidden = false;
-    logout.hidden = deskMenu.hidden = false;
+    deskMenu.hidden = false;
     void photoTools.loadOverview();
-  });
-});
-
-logout.addEventListener("click", () => {
-  if (busy || !canLeaveDraft()) return;
-  run(logout, async () => {
-    try {
-      await reviews.clear();
-      await request("/auth/v1/logout?scope=local", { method: "POST", token: session.access_token });
-    } finally {
-      session = undefined;
-      draftOwner = undefined;
-      posts = [];
-      setDeskMenu(false);
-      openEditor();
-      comments.replaceChildren();
-      inbox.replaceChildren();
-      search.value = "";
-      photoTools.clear();
-      stats?.clear();
-      media?.clear();
-      desk.hidden = true;
-      logout.hidden = deskMenu.hidden = true;
-      login.hidden = false;
-    }
   });
 });
 
@@ -540,10 +508,11 @@ async function openMedia() {
 document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
 for (const button of sections) {
   button.addEventListener("click", () => {
-    if (busy || button.getAttribute("aria-pressed") === "true") return;
+    if (busy) return;
+    deskNav.hidePopover();
+    if (button.getAttribute("aria-pressed") === "true") return;
     const section = button.dataset.section;
     showSection(section);
-    if (narrow.matches) setDeskMenu(false);
     if (section === "site") void photoTools.loadPhoto();
     if (section === "inbox") void openInbox();
     if (section === "stats") void openStats();
