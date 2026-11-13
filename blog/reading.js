@@ -38,30 +38,17 @@ export function restoreArticleAnchors(body) {
   }
 }
 
-export async function renderSearch(content, query, demoPosts) {
-  document.title = "Search — The Common Hours";
-  content.innerHTML = '<div class="section-head"><h1>Search</h1></div>' +
-    '<form id="entry-search" class="entry-search"><label>Search entries<input name="q" type="search" maxlength="100" value="' +
-    escape(query) + '" placeholder="Title, text or topic"></label><button type="submit">Search</button></form><div id="search-results"></div>';
-  const form = content.querySelector("#entry-search");
-  form.addEventListener("submit", event => {
-    event.preventDefault();
-    const term = form.elements.namedItem("q").value.trim();
-    location.href = "?view=search&q=" + encodeURIComponent(term);
-  });
-  if (!query) return;
-  const result = content.querySelector("#search-results");
-  result.setAttribute("aria-busy", "true");
-  result.innerHTML = '<p class="sr-only" role="status">Searching…</p>' +
-    '<div class="entry" aria-hidden="true"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line"></div></div>'.repeat(2);
-  let entries;
-  try {
-    entries = demoPosts ? demoPosts.filter(post => [post.title, post.tag, post.body, post.excerpt].some(value => value.toLowerCase().includes(query.toLowerCase()))) :
-      await request("/rest/v1/rpc/qmargin_b74_search_posts", { method: "POST", body: { p_query: query } });
-    result.innerHTML = entries.length ? cards(entries) : "<p>No matching entries.</p>";
-  } catch {
-    result.textContent = "Search is unavailable. Try again later.";
-  } finally { result.setAttribute("aria-busy", "false"); }
+export async function findEntries(query) {
+  const { url } = await import("./config.js");
+  if (!url) {
+    const { default: posts } = await import("./demo.js");
+    return posts.filter(post => [post.title, post.tag, post.body, post.excerpt].some(value => value.toLowerCase().includes(query.toLowerCase())));
+  }
+  return request("/rest/v1/rpc/qmargin_b74_search_posts", { method: "POST", body: { p_query: query } });
+}
+
+export function searchCards(entries) {
+  return entries.length ? cards(entries) : "<p>No matching entries.</p>";
 }
 
 export async function renderReview(content) {

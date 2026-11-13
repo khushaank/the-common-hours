@@ -44,6 +44,7 @@ let draftOwner;
 let backupStored = false;
 let cloudDraft = false;
 let editorialFields = true;
+let entriesRevision = 0;
 
 
 function setSession(data) {
@@ -184,10 +185,9 @@ async function run(button, action) {
 
 function renderPostList() {
   postList.replaceChildren();
-  const tags = document.querySelector("#tags");
-  tags.replaceChildren(...[...new Set(posts.map(post => post.tag))].sort().map(tag => new Option(tag)));
   const term = search.value.trim().toLowerCase();
   const filtered = posts.filter(post => !term || post.title.toLowerCase().includes(term) || post.tag.toLowerCase().includes(term));
+  document.querySelector("#entry-count").textContent = (term ? filtered.length + " of " : "") + posts.length + (posts.length === 1 ? " entry" : " entries");
   if (!filtered.length) {
     const item = document.createElement("li");
     item.textContent = term ? "No matching entries." : "No entries yet.";
@@ -216,6 +216,26 @@ function renderPostList() {
   }
 }
 
+const tags = document.querySelector("#tags");
+const tagInput = editor.elements.namedItem("tag");
+tags.addEventListener("beforetoggle", event => {
+  if (event.newState !== "open") return;
+  const topics = [...new Set(posts.map(post => post.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  tags.replaceChildren(...topics.map(topic => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = topic;
+    button.addEventListener("click", () => {
+      tagInput.value = topic;
+      tagInput.dispatchEvent(new Event("input", { bubbles: true }));
+      tags.hidePopover();
+      tagInput.focus();
+    });
+    return button;
+  }));
+  if (!topics.length) tags.textContent = "No existing tags. Type one in the Tag field.";
+});
+
 function openEditor(post) {
   activePost = post;
   current = post?.id;
@@ -243,17 +263,28 @@ function openEditor(post) {
 }
 
 async function loadPosts() {
+  const revision = ++entriesRevision;
   const fields = "id,slug,title,published,tag,published_on";
+  let loaded;
+  let supportsEditorial = true;
   try {
-    posts = await allRows(api, "posts?select=" + fields + ",series,series_order,start_here&order=published_on.desc,id.desc");
-    editorialFields = true;
+    loaded = await allRows(api, "posts?select=" + fields + ",series,series_order,start_here&order=published_on.desc,id.desc");
   } catch (error) {
     if (!missingColumn(error)) throw error;
-    posts = await allRows(api, "posts?select=" + fields + "&order=published_on.desc,id.desc");
-    editorialFields = false;
+    loaded = await allRows(api, "posts?select=" + fields + "&order=published_on.desc,id.desc");
+    supportsEditorial = false;
   }
+  if (revision !== entriesRevision) return;
+  posts = loaded;
+  editorialFields = supportsEditorial;
   renderPostList();
 }
+
+document.querySelector("#refresh-entries").addEventListener("click", event => run(event.currentTarget, loadPosts));
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && session && !busy) void loadPosts().catch(() => {});
+});
 
 async function loadComments() {
   const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc");
@@ -409,6 +440,7 @@ editor.addEventListener("submit", event => {
     const path = current ? "posts?id=eq." + current : "posts";
     const [saved] = await api(path, { method: current ? "PATCH" : "POST", body: record, prefer: "return=representation" });
     if (!saved) throw new Error("The entry could not be saved.");
+    entriesRevision++;
     const reviewNote = await reviews.save({ p_post: saved.id, p_publish: publishing });
     removeBackup();
     const cleared = await deleteCloudDraft().then(() => true, () => false);

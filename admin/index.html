@@ -46,10 +46,9 @@
               <div class="fields">
                 <label>Title<input name="title" maxlength="180" required></label>
                 <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title"></label>
-                <label>Tag<input name="tag" maxlength="40" list="tags" required></label>
+                <div class="tag-field"><label for="entry-tag">Tag</label><div class="tag-controls"><input id="entry-tag" name="tag" maxlength="40" placeholder="Choose or type a tag" required><button id="choose-tag" type="button" popovertarget="tags" aria-label="Choose an existing tag">▾</button></div><div id="tags" popover aria-label="Existing tags"></div></div>
                 <label>Publication date<input name="published_on" type="date" required></label>
               </div>
-              <datalist id="tags"></datalist>
               <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
               <div class="fields">
                 <label>Series <input name="series" maxlength="100"></label>
@@ -92,6 +91,7 @@
         <aside class="entry-aside" id="entry-sidebar">
           <details class="card entry-list" id="entry-list" open><summary>Entries</summary>
             <label>Find an entry<input id="find-entry" type="search" autocomplete="off"></label>
+            <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh entries</button></div>
             <ul id="posts"></ul>
           </details>
           <section class="card photo-overview">

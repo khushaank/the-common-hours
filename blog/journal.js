@@ -5,7 +5,7 @@ import { publicData } from "./public-cache.js";
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = ["archive", "privacy", "terms", "photo", "photos", "search", "start", "review", "saved"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "privacy", "terms", "photo", "photos", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
@@ -18,13 +18,13 @@ const format = (date, options) => new Date(date).toLocaleDateString("en", { time
 const dateLabel = date => format(date, { month: "short", day: "numeric", year: "numeric" });
 const monthLabel = date => format(date + "-01", { month: "long", year: "numeric" });
 const postLink = post => link({ post: post.slug });
-const isJournal = !view && !slug && !month && !tag && !series && !params.has("page");
+const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo" || view === "photos";
 if (!isLegal && view !== "review") {
   const currentNav = isPhoto ? "photos" : view === "archive" || month ? "archive" :
-    ["start", "search", "saved"].includes(view) ? view : "journal";
+    view === "start" ? "start" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
 const canonical = document.createElement("link");
@@ -174,11 +174,8 @@ async function renderPost(posts, index, firstBody) {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   const list = document.querySelector("#comment-list");
-  const [{ restoreArticleAnchors, seriesNavigation }, { addBookmarkButton }] = await Promise.all([
-    import("./reading.js"), import("./bookmarks.js"),
-  ]);
+  const { restoreArticleAnchors, seriesNavigation } = await import("./reading.js");
   restoreArticleAnchors(bodyElement);
-  addBookmarkButton(bodyElement.closest("article"), post.id);
   bodyElement.closest("article").insertAdjacentHTML("afterend", seriesNavigation(posts, post));
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
@@ -242,10 +239,9 @@ async function renderPost(posts, index, firstBody) {
 }
 
 async function start() {
-  if (view === "search" || view === "review") {
+  if (view === "review") {
     const reading = await import("./reading.js");
-    if (view === "review") await reading.renderReview(content);
-    else await reading.renderSearch(content, (params.get("q") || "").trim().slice(0, 100), demo ? await loadPublicPosts() : undefined);
+    await reading.renderReview(content);
     return;
   }
   if (isLegal) {
@@ -263,11 +259,6 @@ async function start() {
   }
   const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
-  if (view === "saved") {
-    const { renderBookmarks } = await import("./bookmarks.js");
-    renderBookmarks(content, posts);
-    return;
-  }
   if (view === "start" || series) {
     const { renderReadingList, seriesEntries } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-ybe5ML5JfF8LHGSLmMpk8MvD9outKlvPugEeSKFv1Jg='; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
-<script>const q=new URLSearchParams(location.search),v=q.get("view"),p=q.get("post"),h=document.documentElement;if(p)h.classList.add("article-page");if(!["view","post","month","tag","series","page"].some(k=>q.has(k)))h.classList.add("home-page");h.dataset.journalPage=({photos:"photos",photo:"photo",search:"search",archive:"archive",review:"article",privacy:"article",terms:"article"})[v]|| (p?"article":"journal");if(["photos","photo","search","review","saved","start"].includes(v)||q.get("series"))h.classList.add("wide-page");if(v==="privacy"||v==="terms")h.classList.add("policy-page");</script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-4NGpP9//5B1NXrV0XhPYpsFG3z0gF/rjHPIbH5TAsjw='; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<script>const q=new URLSearchParams(location.search),v=q.get("view"),p=q.get("post"),h=document.documentElement;if(p)h.classList.add("article-page");if(v==="search"||v==="saved"||!["view","post","month","tag","series","page"].some(k=>q.has(k)))h.classList.add("home-page");h.dataset.journalPage=({photos:"photos",photo:"photo",archive:"archive",review:"article",privacy:"article",terms:"article"})[v]|| (p?"article":"journal");if(["photos","photo","review","start"].includes(v)||q.get("series"))h.classList.add("wide-page");if(v==="privacy"||v==="terms")h.classList.add("policy-page");</script>
 <title>The Common Hours — An independent journal</title>
 <!-- public-api-connection -->
 <link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
@@ -26,8 +26,16 @@
     <a class="brand" href="./">The Common Hours</a>
     <nav aria-label="Main navigation">
       <a href="./" id="journal-link">Journal</a><a href="?view=archive" id="archive-link">Archive</a><a href="?view=photos" id="photos-link">Photos</a>
-      <a href="?view=start" id="start-link">Start here</a><a href="?view=search" id="search-link">Search</a><a href="?view=saved" id="saved-link">Read later</a>
+      <a href="?view=start" id="start-link">Start here</a>
+      <button id="search-link" class="search-icon" type="button" aria-label="Search the journal" aria-expanded="false" aria-controls="nav-search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></button>
     </nav>
+    <div id="nav-search" class="nav-search" hidden>
+      <form id="entry-search" role="search">
+        <label class="sr-only" for="entry-query">Search entries</label><input id="entry-query" name="q" type="search" maxlength="100" placeholder="Search by title, topic, or phrase" autocomplete="off">
+        <button type="submit">Search</button><button id="close-search" class="quiet-button" type="button" aria-label="Close search">×</button>
+      </form>
+      <div id="search-results" aria-live="polite"><p>Search titles, article text, or topics.</p></div>
+    </div>
   </div>
 </header>
 <main class="wrap">
@@ -37,10 +45,7 @@
         <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
         <span class="slide-label">Photo of the Week</span>
       </a>
-      <div id="slide-controls" hidden>
-        <button id="slide-prev" type="button" aria-label="Previous photo">‹</button>
-        <button id="slide-next" type="button" aria-label="Next photo">›</button>
-      </div>
+      <button id="slide-next" type="button" aria-label="Next photo" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
     </div>
     <figcaption>
       <span id="photo-caption"></span>
@@ -70,12 +75,6 @@
       <div class="route-skeleton list-skeleton" data-skeleton="archive" aria-hidden="true">
         <div class="section-head"><div class="skeleton skeleton-heading"></div></div>
         <div class="archive-skeleton-rows"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
-      </div>
-      <div class="route-skeleton list-skeleton" data-skeleton="search" aria-hidden="true">
-        <div class="section-head"><h1>Search</h1></div>
-        <div class="search-skeleton-field skeleton"></div>
-        <div class="entry"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line"></div></div>
-        <div class="entry"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line short"></div></div>
       </div>
       <section class="route-skeleton photo-archive" data-skeleton="photos">
         <header class="photo-archive-head"><p class="photo-kicker">The Common Hours · Photography</p><h1>Photo archive</h1><p>Browse the photographs featured in the journal by date or series.</p></header>

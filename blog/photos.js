@@ -43,7 +43,7 @@ async function featurePhotos(get, demo) {
       return allRows(path => get(path, { timeout: 3000 }),
         "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=eq." + latest.week + "&order=created_at.asc,id.asc");
     }
-    const [legacy] = await optional(get("photos?select=" + legacyFields + "&month=eq." + monthNow() + "-01", { timeout: 1600 }));
+    const [legacy] = await optional(get("photos?select=" + legacyFields + "&month=lte." + monthNow() + "-01&order=month.desc&limit=1", { timeout: 3000 }));
     if (legacy) return [legacyPhoto(legacy)];
   }
   return [cover];
@@ -55,7 +55,7 @@ export async function startSlideshow(get, demo) {
   const link = figure.querySelector("#featured-photo-link");
   const picture = link.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
-  const controls = figure.querySelector("#slide-controls");
+  const nextButton = figure.querySelector("#slide-next");
   const count = figure.querySelector("#slide-count");
   const toggle = figure.querySelector("#slide-toggle");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -63,6 +63,7 @@ export async function startSlideshow(get, demo) {
   let timer;
   let revision = 0;
   let index = 0;
+  let requestedIndex = 0;
   const images = new Map();
 
   let photos;
@@ -74,25 +75,26 @@ export async function startSlideshow(get, demo) {
   if (!demo) {
     try {
       const snapshot = featuredSnapshot();
-      const key = "featured:" + weekOf() + ":" + (snapshot?.version || "live");
+      const key = "featured-v2:" + weekOf() + ":" + (snapshot?.version || "live");
       photos = useLive(await publicData(key, async () => {
         const first = snapshot?.first;
         if (first) {
           const week = "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=lte." + weekOf() + "&order=week.desc,created_at.asc,id.asc&limit=100";
           const options = { timeout: 4000 };
           const [latest, monthly] = await Promise.all([get(week, options), first.id.startsWith("month-") ?
-            get("photos?select=" + legacyFields + "&month=eq." + monthNow() + "-01", options) : []]);
+            get("photos?select=" + legacyFields + "&month=lte." + monthNow() + "-01&order=month.desc&limit=1", options) : []]);
           const hero = latest[0] || (monthly[0] && legacyPhoto(monthly[0]));
           if (hero?.id === first.id && hero.media_id === first.media_id && latest.length < 100) return {
             photos: latest.length ? latest.filter(photo => photo.week === hero.week) : [hero], version: snapshot.version,
             image: { width: snapshot.width, height: snapshot.height },
           };
         }
-        return request("/rest/v1/rpc/qmargin_b74_home_photos", { timeout: 5000 });
+        const featured = await request("/rest/v1/rpc/qmargin_b74_home_photos", { timeout: 5000 });
+        return featured.photos.length ? featured : { photos: await featurePhotos(get, false) };
       }));
     } catch (error) {
-      if (error.code === "PGRST202") photos = await featurePhotos(get, demo).catch(() => []);
-      else { figure.hidden = true; return; }
+      photos = await featurePhotos(get, demo).catch(() => null);
+      if (!photos) { figure.hidden = true; return; }
     }
   }
   photos ||= [];
@@ -101,40 +103,51 @@ export async function startSlideshow(get, demo) {
 
   function schedule() {
     clearTimeout(timer);
-    if (!paused && !document.hidden && photos.length > 1) timer = setTimeout(() => void show(index + 1), 10000);
+    if (!paused && !document.hidden && photos.length > 1) timer = setTimeout(() => void show(requestedIndex + 1), 10000);
+  }
+
+  function prepare(photo) {
+    if (!images.has(photo.id)) images.set(photo.id, getImage(get, photo, { timeout: 6500 }).catch(error => {
+      images.delete(photo.id);
+      throw error;
+    }));
+    return images.get(photo.id);
   }
 
   async function show(next) {
     clearTimeout(timer);
     const loading = ++revision;
-    index = (next + photos.length) % photos.length;
-    const photo = photos[index];
+    requestedIndex = (next + photos.length) % photos.length;
+    const target = requestedIndex;
+    const photo = photos[target];
     let data;
     try {
-      if (!images.has(photo.id)) {
-        images.set(photo.id, getImage(get, photo, { timeout: 3000 }).catch(error => {
-          images.delete(photo.id);
-          throw error;
-        }));
-      }
-      data = await images.get(photo.id);
+      data = await prepare(photo);
       if (data.src !== picture.getAttribute("src")) {
-        if (!picture.hasAttribute("src")) picture.src = data.src;
-        else {
-          const ready = new Image();
-          ready.src = data.src;
+        const ready = new Image();
+        ready.src = data.src;
+        try { await ready.decode(); }
+        catch (error) {
+          if (!data.src.startsWith("featured.jpg?") || !photo.media_id) throw error;
+          const live = await readMediaImage(get, photo.media_id, { timeout: 6500 });
+          const src = imageSource(live);
+          if (!src) throw error;
+          ready.src = src;
           await ready.decode();
+          data = { ...live, src };
+          images.set(photo.id, Promise.resolve(data));
         }
       }
     } catch {
       if (loading !== revision) return;
       if (picture.hasAttribute("src")) { schedule(); return; }
+      if (next < photos.length - 1) { await show(next + 1); return; }
       figure.hidden = true;
       return;
     }
     if (loading !== revision) return;
+    index = target;
     picture.alt = photo.alt || data.alt || "";
-    picture.title = picture.alt;
     picture.width = data.width;
     picture.height = data.height;
     if (data.src !== picture.getAttribute("src")) picture.src = data.src;
@@ -143,11 +156,12 @@ export async function startSlideshow(get, demo) {
     link.setAttribute("aria-label", "Open photo details: " + photo.title);
     caption.textContent = photo.title;
     count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
+    nextButton.hidden = toggle.hidden = photos.length < 2;
+    if (photos.length > 1) void prepare(photos[(index + 1) % photos.length]).catch(() => {});
     schedule();
   }
 
-  figure.querySelector("#slide-prev").addEventListener("click", () => void show(index - 1));
-  figure.querySelector("#slide-next").addEventListener("click", () => void show(index + 1));
+  nextButton.addEventListener("click", () => void show(requestedIndex + 1));
   toggle.addEventListener("click", () => {
     paused = !paused;
     toggle.textContent = paused ? "Play slideshow" : "Pause slideshow";
@@ -155,7 +169,6 @@ export async function startSlideshow(get, demo) {
   });
   document.addEventListener("visibilitychange", schedule);
   await show(0);
-  controls.hidden = toggle.hidden = photos.length < 2;
 }
 
 function photoDate(photo) {

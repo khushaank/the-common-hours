@@ -51,6 +51,14 @@ small { display: block; }
 .entry-list li button, #weekly-photos li button { width: 100%; text-align: left; border: 0; background: transparent; overflow-wrap: anywhere; }
 .entry-list li + li, #weekly-photos li + li { border-top: 1px solid var(--line); }
 .entry-list button[aria-current], #weekly-photos button[aria-pressed="true"] { background: var(--soft); }
+.entry-list-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.entry-list-meta button { min-height: 34px; padding: 4px 8px; font-size: 12px; }
+.tag-field { display: grid; gap: 5px; align-content: start; }
+.tag-controls { display: flex; gap: 5px; }
+#choose-tag { padding: 5px 12px; }
+#tags { width: min(16rem, calc(100vw - 32px)); max-height: 260px; overflow: auto; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px; box-shadow: 0 12px 28px #26292329; }
+#tags button { display: block; width: 100%; text-align: left; min-height: 36px; border: 0; overflow-wrap: anywhere; }
+@supports (position-area: block-end span-inline-start) { #tags { inset: auto; position-area: block-end span-inline-start; margin: 5px 0 0; } }
 .photo-overview { display: grid; gap: 13px; }
 .photo-overview p { color: var(--muted); }
 #weekly-preview, #photo-preview { width: 100%; aspect-ratio: 16 / 10; max-height: 320px; object-fit: cover; border-radius: 9px; }
