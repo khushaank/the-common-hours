@@ -7,6 +7,7 @@ const searchPanel = document.querySelector("#nav-search");
 const searchForm = document.querySelector("#entry-search");
 const query = document.querySelector("#entry-query");
 const results = document.querySelector("#search-results");
+const clearSearch = document.querySelector("#clear-search");
 let searchTimer;
 let revision = 0;
 function showSearch(open, restoreFocus = true) {
@@ -19,6 +20,7 @@ function updateSearch(delay) {
   clearTimeout(searchTimer);
   const term = query.value.trim();
   const current = ++revision;
+  clearSearch.hidden = !query.value;
   results.setAttribute("aria-busy", String(Boolean(term)));
   const message = document.createElement("p");
   message.textContent = term ? "Searching…" : "Search titles, article text, or topics.";
@@ -37,14 +39,29 @@ function updateSearch(delay) {
   }, delay);
 }
 searchButton.addEventListener("click", () => showSearch(searchPanel.hidden));
-document.querySelector("#close-search").addEventListener("click", () => showSearch(false));
+clearSearch.addEventListener("click", () => {
+  query.value = "";
+  updateSearch(0);
+  query.focus();
+});
 query.addEventListener("input", () => updateSearch(280));
 searchForm.addEventListener("submit", event => { event.preventDefault(); updateSearch(0); });
+searchPanel.addEventListener("keydown", event => {
+  if (event.isComposing || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;
+  const links = [...results.querySelectorAll("a[href]")];
+  const index = links.indexOf(event.target);
+  if (!links.length || (event.target !== query && index < 0)) return;
+  event.preventDefault();
+  const next = index < 0 ? (event.key === "ArrowDown" ? 0 : links.length - 1) : index + (event.key === "ArrowDown" ? 1 : -1);
+  (links[next] || query).focus();
+});
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && !searchPanel.hidden && !event.defaultPrevented) showSearch(false);
 });
 document.addEventListener("pointerdown", event => {
-  if (!searchPanel.hidden && !searchPanel.contains(event.target) && !searchButton.contains(event.target)) showSearch(false, false);
+  if (!searchPanel.hidden && !searchPanel.contains(event.target) && !searchButton.contains(event.target)) {
+    showSearch(false, !event.target.closest("a, button, input, select, textarea, [tabindex]"));
+  }
 });
 const route = new URLSearchParams(location.search);
 if (route.get("view") === "search") {

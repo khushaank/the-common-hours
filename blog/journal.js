@@ -173,6 +173,19 @@ async function renderPost(posts, index, firstBody) {
   } else {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
+  if (renderer || !hasFormatting) {
+    const prose = bodyElement.cloneNode(true);
+    prose.querySelectorAll(".media-slot, .attachment, .attachment-status, .video, .footnote-backref").forEach(node => node.remove());
+    const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+    const text = [];
+    while (walker.nextNode()) text.push(walker.currentNode.data);
+    const words = text.join(" ").match(/[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*/gu)?.length || 0;
+    if (words) {
+      const estimate = document.createElement("span");
+      estimate.textContent = "· " + Math.ceil(words / 220) + " min read";
+      bodyElement.previousElementSibling.append(estimate);
+    }
+  }
   const list = document.querySelector("#comment-list");
   const { restoreArticleAnchors, seriesNavigation } = await import("./reading.js");
   restoreArticleAnchors(bodyElement);
