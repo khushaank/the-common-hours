@@ -21,8 +21,13 @@ const route = new URLSearchParams(location.search);
 setupSearch();
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
   const register = () => void navigator.serviceWorker.register("./static-cache.js").catch(() => {});
-  if ("requestIdleCallback" in window) requestIdleCallback(register);
-  else window.addEventListener("load", register, { once: true });
+  // Preparing the offline copy should not compete with the first visible page.
+  const afterLoad = () => {
+    if ("requestIdleCallback" in window) requestIdleCallback(register);
+    else setTimeout(register, 0);
+  };
+  if (document.readyState === "complete") afterLoad();
+  else window.addEventListener("load", afterLoad, { once: true });
 }
 
 function setupSearch() {

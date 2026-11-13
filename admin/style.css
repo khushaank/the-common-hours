@@ -62,6 +62,7 @@ small { display: block; }
 #site-panel { max-width: 780px; margin-inline: auto; }
 .photo-week-toolbar { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr); align-items: end; gap: 16px; }
 .photo-week-toolbar p { font-size: 14px; padding-bottom: 8px; }
+.photo-workspace [aria-pressed="true"] { background: var(--soft); }
 .photo-upload { padding: 16px; border: 1px dashed #a9b19f; border-radius: 9px; background: #f3f5ee; }
 .photo-upload input { border: 0; padding: 4px 0; background: transparent; font-size: 14px; }
 input[type="file"]::file-selector-button { font: 600 14px/1.25 "DM Sans", system-ui, sans-serif; padding: 9px 12px; margin-inline-end: 10px; border: 1px solid #a9b19f; border-radius: 6px; background: var(--card); color: var(--accent); cursor: pointer; }

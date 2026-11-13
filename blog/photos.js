@@ -1,7 +1,7 @@
-import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, weekOf } from "./common.js";
+import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingColumn, missingFeature, readMediaImage, weekOf } from "./common.js";
 import { publicData } from "./public-cache.js";
 
-const weeklyFields = "id,week,media_id,title,alt";
+const weeklyFields = "id,week,media_id,title,alt,created_at";
 const legacyFields = "month,media_id,alt,caption";
 const cover = {
   id: "cover", title: "From the journal",
@@ -12,6 +12,10 @@ const dateLabel = (date, options) => new Date(date + "T00:00:00Z").toLocaleDateS
 
 function legacyPhoto(photo) {
   return { ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" };
+}
+
+function archiveDate(photo) {
+  return photo.week === archivePhotoWeek ? photo.created_at?.slice(0, 10) || archivePhotoWeek : photo.week || photo.month;
 }
 
 async function optional(task) {
@@ -37,25 +41,24 @@ function featuredSnapshot() {
 
 async function featurePhotos(get) {
   const options = { timeout: 5000 };
-  const rows = await optional(get("weekly_photos?select=" + weeklyFields + ",featured&week=lte." + weekOf() +
-    "&order=week.desc,created_at.asc,id.asc&limit=100", options));
+  const rows = await optional(get("weekly_photos?select=" + weeklyFields + ",featured&and=(week.lte." + weekOf() +
+    ",week.neq." + archivePhotoWeek + ")&order=week.desc,created_at.asc,id.asc&limit=100", options));
   if (rows.length) {
     const week = rows[0].week;
     if (rows.length === 100 && rows.at(-1).week === week) return allRows(path => get(path, options),
       "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=eq." + week + "&order=created_at.asc,id.asc");
     return rows.filter(photo => photo.week === week && photo.featured);
   }
-  const [legacy] = await optional(get("photos?select=" + legacyFields + "&month=lte." + monthNow() + "-01&order=month.desc&limit=1", options));
-  return [legacy ? legacyPhoto(legacy) : cover];
+  return [cover];
 }
 
 export async function startSlideshow(get, demo) {
   const figure = document.querySelector("#week-photo");
   figure.hidden = false;
-  const link = figure.querySelector("#featured-photo-link");
-  const picture = link.querySelector("img");
+  const picture = figure.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
   const nextButton = figure.querySelector("#slide-next");
+  const prevButton = figure.querySelector("#slide-prev");
   const count = figure.querySelector("#slide-count");
   const slide = figure.querySelector(".slide");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -66,8 +69,12 @@ export async function startSlideshow(get, demo) {
   let requestedIndex = 0;
   const images = new Map();
 
-  const photos = demo ? [cover] : await publicData("featured-v4", () => featurePhotos(get)).catch(() => []);
+  const photos = demo ? [cover] : await publicData("featured-v5", () => featurePhotos(get)).catch(() => []);
   if (!photos.length) { figure.hidden = true; return; }
+  if (photos.length > 1) {
+    slide.tabIndex = 0;
+    slide.setAttribute("aria-label", "Photo carousel. Use Left and Right arrow keys to change photos.");
+  }
 
   function schedule() {
     clearTimeout(timer);
@@ -122,16 +129,33 @@ export async function startSlideshow(get, demo) {
     picture.height = data.height;
     if (data.src !== picture.getAttribute("src")) picture.src = data.src;
     figure.removeAttribute("aria-busy");
-    link.href = photoLink(photo.id);
-    link.setAttribute("aria-label", "Open photo details: " + photo.title);
     caption.textContent = photo.title;
     count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
-    nextButton.hidden = photos.length < 2;
+    prevButton.hidden = nextButton.hidden = photos.length < 2;
     if (photos.length > 1) void prepare(photos[(index + 1) % photos.length]).catch(() => {});
     schedule();
   }
 
   nextButton.addEventListener("click", () => void show(requestedIndex + 1));
+  prevButton.addEventListener("click", () => void show(requestedIndex - 1));
+  slide.addEventListener("keydown", event => {
+    if (photos.length < 2 || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+    event.preventDefault();
+    void show(requestedIndex + (event.key === "ArrowRight" ? 1 : -1));
+  });
+  let touch;
+  slide.addEventListener("pointerdown", event => {
+    if (event.isPrimary && event.pointerType !== "mouse" && !event.target.closest("button")) {
+      touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    }
+  });
+  slide.addEventListener("pointerup", event => {
+    if (!touch || event.pointerId !== touch.id) return;
+    const x = event.clientX - touch.x, y = event.clientY - touch.y;
+    touch = undefined;
+    if (photos.length > 1 && Math.abs(x) > 40 && Math.abs(x) > Math.abs(y) * 1.3) void show(requestedIndex + (x < 0 ? 1 : -1));
+  });
+  slide.addEventListener("pointercancel", () => { touch = undefined; });
   slide.addEventListener("pointerenter", event => { if (event.pointerType === "mouse") { hovered = true; schedule(); } });
   slide.addEventListener("pointerleave", () => { hovered = false; schedule(); });
   slide.addEventListener("focusin", schedule);
@@ -142,6 +166,7 @@ export async function startSlideshow(get, demo) {
 }
 
 function photoDate(photo) {
+  if (photo.week === archivePhotoWeek) return dateLabel(archiveDate(photo), { month: "long", day: "numeric", year: "numeric" });
   return photo.week ? "Week of " + dateLabel(photo.week, { month: "long", day: "numeric", year: "numeric" }) :
     photo.month ? dateLabel(photo.month, { month: "long", year: "numeric" }) : "";
 }
@@ -200,7 +225,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
       optional(allRows(get, "photos?select=" + legacyFields + "&order=month.desc")),
     ]));
     const photos = [...weekly, ...legacy.map(legacyPhoto)].sort((a, b) =>
-      (b.week || b.month).localeCompare(a.week || a.month));
+      archiveDate(b).localeCompare(archiveDate(a)));
     const archive = content.querySelector(".photo-archive");
     archive.classList.remove("route-skeleton");
     content.querySelectorAll(".route-skeleton, .loading").forEach(item => item.remove());
@@ -211,7 +236,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
     const count = content.querySelector("#photo-count");
     const clear = content.querySelector("#photo-clear");
     const params = new URLSearchParams(location.search);
-    const photoMonth = photo => (photo.week || photo.month).slice(0, 7);
+    const photoMonth = photo => archiveDate(photo).slice(0, 7);
     const photoYear = photo => photoMonth(photo).slice(0, 4);
     const unique = values => [...new Set(values)];
     year.replaceChildren(new Option("All years", ""), ...unique(photos.map(photoYear)).map(name => new Option(name)));

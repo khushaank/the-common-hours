@@ -64,14 +64,14 @@ function loadBody(currentSlug) {
 
 function saveLatestForOffline(posts) {
   if (demo || !navigator.onLine || !("caches" in window) || navigator.connection?.saveData) return;
-  const save = async () => {
+  if (!("serviceWorker" in navigator)) return;
+  void navigator.serviceWorker.ready.then(async () => {
     for (const post of posts.slice(0, pageSize)) {
       if (!navigator.onLine) break;
+      if ("requestIdleCallback" in window) await new Promise(resolve => requestIdleCallback(resolve));
       try { await loadBody(post.slug); } catch { break; }
     }
-  };
-  if ("requestIdleCallback" in window) requestIdleCallback(() => void save());
-  else setTimeout(() => void save(), 0);
+  });
 }
 
 async function resolveEntry(posts) {

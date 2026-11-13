@@ -91,6 +91,9 @@ export async function listAttachments(token) {
 
 export const mediaId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 export const markdownMarker = "<!-- common-hours-markdown -->\n";
+// The existing photo table requires a Monday. Archive uploads use a reserved
+// Monday and display their actual upload date instead.
+export const archivePhotoWeek = "1900-01-01";
 
 export function weekOf(date = journalToday()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";

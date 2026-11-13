@@ -48,19 +48,15 @@
 </header>
 <main class="wrap">
   <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" aria-busy="true">
-    <div class="slide">
-      <a id="featured-photo-link" aria-label="Open the featured photo">
-        <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
-        <span class="slide-label">Photo of the Week</span>
-      </a>
-      <button id="slide-next" type="button" aria-label="Next photo" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+    <div class="slide" role="group" aria-label="Photo carousel">
+      <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
+      <span class="slide-label" aria-hidden="true">Photo of the Week</span>
+      <button id="slide-prev" class="slide-arrow" type="button" aria-label="Previous photo" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+      <button id="slide-next" class="slide-arrow" type="button" aria-label="Next photo" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
     </div>
     <figcaption>
       <span id="photo-caption"></span>
-      <span class="slide-actions">
-        <span id="slide-count"></span>
-        <a href="?view=photos">Photo archive ↗</a>
-      </span>
+      <span id="slide-count"></span>
     </figcaption>
   </figure>
   <!-- featured-snapshot -->
@@ -84,7 +80,7 @@
         <div class="archive-skeleton-rows"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
       </div>
       <section class="route-skeleton photo-archive" data-skeleton="photos">
-        <header class="photo-archive-head"><p class="photo-kicker">The Common Hours · Photography</p><h1>Photo archive</h1><p>Browse the photographs featured in the journal by date or series.</p></header>
+        <header class="photo-archive-head"><p class="photo-kicker">The Common Hours · Photography</p><h1>Photo archive</h1><p>Browse the journal’s photo collection by date or series.</p></header>
         <div class="photo-filter-bar">
           <div class="photo-filters" role="group" aria-label="Filter photos">
             <label>Year <select id="photo-year" disabled><option>All years</option></select></label>

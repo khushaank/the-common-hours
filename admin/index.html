@@ -98,9 +98,10 @@
         </aside>
       </div>
       <section id="site-panel" hidden>
-        <div class="section-heading"><h1>Photo of the Week</h1><a href="../?view=photos" target="_blank" rel="noopener noreferrer">Photo archive ↗</a></div>
+        <div class="section-heading"><h1>Photos</h1><a href="../?view=photos" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
         <form id="photo-form" class="card photo-workspace" method="post">
-          <div class="photo-week-toolbar">
+          <div class="actions" role="group" aria-label="Photo collection"><button type="button" id="show-week-photos" aria-pressed="true">Photo of the Week</button><button type="button" id="show-archive-photos" aria-pressed="false">Archive uploads</button></div>
+          <div class="photo-week-toolbar" id="photo-week-toolbar">
             <label>Week starting <input id="photo-week" type="date" required></label>
             <p class="muted">Choose any date to select its week. The homepage shows the latest featured week.</p>
           </div>
@@ -116,13 +117,13 @@
               <label>Alt text <input name="alt" maxlength="200"></label>
               <label>Description <textarea name="description" maxlength="4000" rows="5"></textarea></label>
               <label>Photo series <input name="series" maxlength="100"></label>
-              <label class="checkbox"><input name="featured" type="checkbox" checked> Include in the slideshow</label>
+              <label class="checkbox" id="photo-featured"><input name="featured" type="checkbox" checked> Include in the slideshow</label>
             </div>
           </div>
           <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to week</button><p id="photo-status" role="status"></p></div>
           <section class="week-collection" aria-labelledby="week-collection-title">
             <div class="body-heading"><h2 id="week-collection-title">This week’s photos</h2><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" disabled>Clear slideshow queue</button></div></div>
-            <p class="muted queue-help">Cleared photos stay in the archive. To feature one again, select it below and check “Include in the slideshow.”</p>
+            <p id="photo-queue-help" class="muted queue-help">Cleared photos stay in the archive. To feature one again, select it below and check “Include in the slideshow.”</p>
             <ul id="weekly-photos" aria-live="polite"></ul>
           </section>
         </form>
