@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>The Common Hours — An independent journal</title>
 <link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
 <link rel="stylesheet" href="style.css">
 <link rel="modulepreload" href="journal.js">
 <script type="module" src="start.js"></script>
 </head>
-<body id="top" data-loading>
+<body id="top">
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="site-header">
   <div class="wrap mast">
@@ -24,11 +24,10 @@
   </div>
 </header>
 <main class="wrap">
-  <div id="hero-skeleton" class="hero-skeleton skeleton" aria-hidden="true" hidden></div>
   <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" hidden>
     <div class="slide">
       <a id="featured-photo-link" href="?view=photo&amp;photo=cover" aria-label="Open the featured photo">
-        <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
+        <img width="1200" height="800" alt="A wooden jetty reaches into a mist-covered lake" title="A wooden jetty reaches into a mist-covered lake" draggable="false" decoding="async" fetchpriority="high">
         <span class="slide-label">Photo of the Week</span>
       </a>
       <div id="slide-controls" hidden>
@@ -37,7 +36,7 @@
       </div>
     </div>
     <figcaption>
-      <span id="photo-caption">Photo of the Week</span>
+      <span id="photo-caption">From the journal</span>
       <span class="slide-actions">
         <span id="slide-count"></span>
         <button id="slide-toggle" type="button" hidden>Pause slideshow</button>
@@ -62,7 +61,7 @@
   <noscript><p>Enable JavaScript to browse entries and leave comments.</p></noscript>
 </main>
 <footer class="site-footer">
-  <img class="footer-landscape" src="footer-landscape.jpg" width="1440" height="182" alt="" loading="lazy" decoding="async">
+  <img class="footer-landscape" src="footer-landscape.jpg" width="1440" height="182" alt="" decoding="async">
   <div class="wrap"><nav aria-label="Site policies and feed"><a href="?view=privacy">Privacy</a><a href="?view=terms">Terms</a><a href="feed.xml">RSS</a></nav><a href="#top">Back to top <span aria-hidden="true">↑</span></a></div>
 </footer>
 </body>

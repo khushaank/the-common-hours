@@ -1,4 +1,4 @@
-import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, weekOf } from "./common.js";
+import { allRows, escape, imageSource, mediaId, missingColumn, missingFeature, monthNow, readMediaImage, request, weekOf } from "./common.js";
 
 const weeklyFields = "id,week,media_id,title,alt";
 const legacyFields = "month,media_id,alt,caption";
@@ -42,7 +42,7 @@ async function featurePhotos(get, demo) {
 
 export async function startSlideshow(get, demo) {
   const figure = document.querySelector("#week-photo");
-  if (!figure.hidden) return;
+  figure.hidden = false;
   const link = figure.querySelector("#featured-photo-link");
   const picture = link.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
@@ -57,9 +57,18 @@ export async function startSlideshow(get, demo) {
   const images = new Map();
 
   let photos;
-  try { photos = await featurePhotos(get, demo); } catch { photos = [cover]; }
+  if (!demo) {
+    try {
+      const featured = await request("/rest/v1/rpc/qmargin_b74_home_photos", { timeout: 3500 });
+      photos = featured.photos;
+      const src = imageSource(featured.image);
+      if (photos[0] && src) images.set(photos[0].id, Promise.resolve({ ...featured.image, src }));
+    } catch (error) {
+      if (error.code === "PGRST202") photos = await featurePhotos(get, demo).catch(() => []);
+    }
+  }
+  photos ||= [];
   if (!photos.length) photos = [cover];
-  controls.hidden = toggle.hidden = photos.length < 2;
   toggle.textContent = paused ? "Play slideshow" : "Pause slideshow";
 
   function schedule() {
@@ -81,6 +90,11 @@ export async function startSlideshow(get, demo) {
         }));
       }
       data = await images.get(photo.id);
+      if (data.src !== picture.getAttribute("src")) {
+        const ready = new Image();
+        ready.src = data.src;
+        await ready.decode();
+      }
     } catch {
       if (loading !== revision) return;
       photo = cover;
@@ -108,8 +122,7 @@ export async function startSlideshow(get, demo) {
   });
   document.addEventListener("visibilitychange", schedule);
   await show(0);
-  await Promise.race([picture.decode().catch(() => {}), new Promise(resolve => setTimeout(resolve, 500))]);
-  figure.hidden = false;
+  controls.hidden = toggle.hidden = photos.length < 2;
 }
 
 function photoDate(photo) {

@@ -1,12 +1,12 @@
 import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
-  "index.html", "404.html", "style.css", "start.js", "journal.js", "legal.js", "photos.js", "reading.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg",
+  "index.html", "404.html", "style.css", "start.js", "journal.js", "legal.js", "photos.js", "reading.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const adminFiles = [
-  "index.html", "style.css", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
+  "index.html", "style.css", "desk.js", "editor-tools.js", "review-links.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const sharedFiles = ["common.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
@@ -68,5 +68,5 @@ export function browserConfig({ origin, key }) {
 }
 
 export function withConnectSource(html, { origin }) {
-  return html.replace("connect-src 'self' https://*.supabase.co", "connect-src " + (origin || "'none'"));
+  return html.replace("connect-src 'self' https://*.supabase.co", "connect-src 'self'" + (origin ? " " + origin : ""));
 }

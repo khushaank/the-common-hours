@@ -1,6 +1,7 @@
 import { getProjectOrigin } from "./config.js";
 import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table, uploadAttachment } from "./common.js";
 import { setupEditorTools } from "./editor-tools.js";
+import { setupReviewLinks } from "./review-links.js";
 import { setupPhotoTools } from "./photo-tools.js";
 
 const login = document.querySelector("#login");
@@ -16,11 +17,7 @@ const entryList = document.querySelector("#entry-list");
 const search = document.querySelector("#find-entry");
 const inbox = document.querySelector("#privacy-requests");
 const draftStatus = document.querySelector("#draft-status");
-const discardDraft = document.querySelector("#discard-draft");
-const focusEntry = document.querySelector("#focus-entry");
-const checklist = document.querySelector("#publish-checklist");
-const reviewResult = document.querySelector("#review-result");
-const reviewUrl = document.querySelector("#review-url");
+const deskMenu = document.querySelector("#desk-menu");
 const sections = [...document.querySelectorAll("[data-section]")];
 const narrow = matchMedia("(max-width: 760px)");
 const editorTools = setupEditorTools(editor, api, {
@@ -47,7 +44,7 @@ let draftOwner;
 let backupStored = false;
 let cloudDraft = false;
 let editorialFields = true;
-let reviewedSnapshot;
+
 
 function setSession(data) {
   session = { ...data, expires: Date.now() + (data.expires_in - 30) * 1000 };
@@ -92,10 +89,10 @@ const slot = () => current || "new";
 const backupKey = () => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + slot();
 const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
 const cloudPath = () => "working_drafts?slot=eq." + slot();
+const reviews = setupReviewLinks(adminRpc, sessionToken, () => ({ owner: draftOwner, slot: slot(), fields: entryFields(), dirty: dirty() }), run, status, showDraftStatus);
 
 function showDraftStatus(message) {
   if (draftStatus.textContent !== message) draftStatus.textContent = message;
-  discardDraft.hidden = !dirty() && !cloudDraft;
 }
 
 function readBackup() {
@@ -147,6 +144,7 @@ async function recoverDraft() {
   editorTools.refresh();
   saveBackup();
   showDraftStatus(chosen === local ? "Draft recovered from this device." : "Saved draft restored.");
+  reviews.changed();
 }
 
 async function deleteCloudDraft() {
@@ -225,9 +223,6 @@ function openEditor(post) {
     try { localStorage.setItem(lastEntryKey(), slot()); } catch { /* Entry switching also works without storage. */ }
   }
   editor.reset();
-  checklist.hidden = reviewResult.hidden = true;
-  reviewUrl.value = "";
-  reviewedSnapshot = undefined;
   originalBody = post?.body || "";
   for (const key of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order"]) {
     editor.elements.namedItem(key).value = post?.[key] ?? "";
@@ -239,6 +234,7 @@ function openEditor(post) {
   document.querySelector("#editor-title").textContent = post ? "Edit entry" : "New entry";
   editor.querySelector('[value="publish"]').textContent = post?.published ? "Update published entry" : "Publish";
   baseline = snapshot();
+  reviews.open();
   backupStored = cloudDraft = false;
   showDraftStatus("");
   editorTools.refresh();
@@ -259,93 +255,11 @@ async function loadPosts() {
   renderPostList();
 }
 
-function setFocusMode(enabled) {
-  desk.classList.toggle("focus-mode", enabled);
-  focusEntry.setAttribute("aria-pressed", String(enabled));
-  focusEntry.textContent = enabled ? "Exit focus mode" : "Focus mode";
+function setDeskMenu(open) {
+  desk.classList.toggle("menu-closed", !open);
+  deskMenu.setAttribute("aria-expanded", String(open));
 }
-
-focusEntry.addEventListener("click", () => setFocusMode(focusEntry.getAttribute("aria-pressed") !== "true"));
-
-async function inspectForPublish(fields) {
-  const { entryLinks, mediaReferences } = await import("./rich.js");
-  const missingAlt = mediaReferences(markdownMarker + fields.body).filter(asset => asset.kind === "image" && !asset.alt.trim()).length;
-  const links = entryLinks(fields.body);
-  return { missingAlt, links, missingExcerpt: !fields.excerpt.trim(), insecureLink: /\bhttp:\/\//i.test(fields.body) };
-}
-
-function showChecklist({ missingAlt, links, missingExcerpt, insecureLink }) {
-  const list = checklist.querySelector("ul");
-  const add = text => {
-    const row = document.createElement("li");
-    row.textContent = text;
-    list.append(row);
-    return row;
-  };
-  list.replaceChildren();
-  add(missingExcerpt ? "Add an excerpt." : "Excerpt is present.");
-  add(missingAlt ? missingAlt + (missingAlt === 1 ? " image is missing alt text." : " images are missing alt text.") : "Images have alt text.");
-  if (insecureLink) add("Check HTTP links. Use HTTPS for clickable links.");
-  if (links.length) {
-    const row = add("Check these links before publishing.");
-    const urls = document.createElement("ul");
-    for (const url of links) {
-      const item = document.createElement("li");
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = url;
-      item.append(link);
-      urls.append(item);
-    }
-    row.append(urls);
-  }
-  checklist.hidden = false;
-  checklist.scrollIntoView({ block: "nearest" });
-}
-
-document.querySelector("#check-entry").addEventListener("click", event => {
-  run(event.currentTarget, async () => {
-    showChecklist(await inspectForPublish(entryFields()));
-    reviewedSnapshot = snapshot();
-  });
-});
-
-document.querySelector("#review-entry").addEventListener("click", event => {
-  run(event.currentTarget, async () => {
-    const fields = entryFields();
-    if (!fields.body.trim()) throw new Error("Add something to the body before creating a review link.");
-    const { mediaReferences } = await import("./rich.js");
-    const token = (crypto.randomUUID() + crypto.randomUUID()).replaceAll("-", "");
-    const fileIds = [...new Set(mediaReferences(markdownMarker + fields.body).filter(asset => asset.kind === "file").map(asset => asset.id))];
-    const tokenForStorage = await sessionToken();
-    const files = Object.fromEntries(await Promise.all(fileIds.map(async id => {
-      const result = await request("/storage/v1/object/sign/qmargin-b74-attachments/" + id, {
-        method: "POST", token: tokenForStorage, body: { expiresIn: 86400 },
-      });
-      if (typeof result?.signedURL !== "string" || !result.signedURL.startsWith("/object/sign/qmargin-b74-attachments/" + id + "?")) {
-        throw new Error("Could not prepare a file for review.");
-      }
-      return [id, "/storage/v1" + result.signedURL];
-    })));
-    const expiry = await adminRpc("create_review", {
-      p_token: token, p_fields: { title: fields.title, excerpt: fields.excerpt, tag: fields.tag, body: fields.body, files },
-    });
-    reviewUrl.value = new URL("../?view=review#" + token, location.href).href;
-    document.querySelector("#review-expiry").textContent = "Expires " + new Date(expiry).toLocaleString();
-    reviewResult.hidden = false;
-  }).then(() => {
-    if (!reviewResult.hidden) { reviewUrl.focus(); reviewUrl.select(); }
-  });
-});
-
-document.querySelector("#copy-review").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(reviewUrl.value);
-    status.textContent = "Review link copied.";
-  } catch { reviewUrl.focus(); reviewUrl.select(); }
-});
+deskMenu.addEventListener("click", () => setDeskMenu(deskMenu.getAttribute("aria-expanded") !== "true"));
 
 async function loadComments() {
   const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc");
@@ -426,6 +340,7 @@ login.addEventListener("submit", event => {
       await recoverDraft();
       showSection("entries");
       entryList.open = !narrow.matches;
+      setDeskMenu(!narrow.matches);
     } catch (error) {
       session = undefined;
       draftOwner = undefined;
@@ -434,7 +349,7 @@ login.addEventListener("submit", event => {
     login.reset();
     login.hidden = true;
     desk.hidden = false;
-    logout.hidden = false;
+    logout.hidden = deskMenu.hidden = false;
     void photoTools.loadOverview();
   });
 });
@@ -443,13 +358,13 @@ logout.addEventListener("click", () => {
   if (busy || !canLeaveDraft()) return;
   run(logout, async () => {
     try {
+      await reviews.clear();
       await request("/auth/v1/logout?scope=local", { method: "POST", token: session.access_token });
     } finally {
       session = undefined;
       draftOwner = undefined;
       posts = [];
-      setFocusMode(false);
-      editorTools.closePreview();
+      setDeskMenu(false);
       openEditor();
       comments.replaceChildren();
       inbox.replaceChildren();
@@ -458,7 +373,7 @@ logout.addEventListener("click", () => {
       stats?.clear();
       media?.clear();
       desk.hidden = true;
-      logout.hidden = true;
+      logout.hidden = deskMenu.hidden = true;
       login.hidden = false;
     }
   });
@@ -473,16 +388,6 @@ newPost.addEventListener("click", () => {
   }).then(() => editor.elements.namedItem("title").focus());
 });
 
-discardDraft.addEventListener("click", () => {
-  if (!confirm("Discard the draft changes to this entry?")) return;
-  run(discardDraft, async () => {
-    await deleteCloudDraft();
-    removeBackup();
-    openEditor(activePost);
-    status.textContent = "Draft changes discarded.";
-  });
-});
-
 refreshComments.addEventListener("click", () => run(refreshComments, async () => {
   await loadComments();
   status.textContent = "Comments refreshed.";
@@ -494,15 +399,6 @@ editor.addEventListener("submit", event => {
     const fields = entryFields();
     const record = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
     const publishing = event.submitter.value === "publish";
-    if (publishing && reviewedSnapshot !== snapshot()) {
-      const report = await inspectForPublish(fields);
-      if (report.missingAlt || report.links.length || report.insecureLink || report.missingExcerpt) {
-        showChecklist(report);
-        reviewedSnapshot = snapshot();
-        status.textContent = report.missingExcerpt ? "Add an excerpt before publishing." : "Review the checklist, then select Publish again.";
-        return;
-      }
-    }
     record.slug ||= record.title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
       .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
     const validSlug = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(record.slug);
@@ -523,7 +419,7 @@ editor.addEventListener("submit", event => {
       backupStored = true;
       updateExitWarning();
       showDraftStatus("Draft saved.");
-      status.textContent = activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.";
+      status.textContent = (activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.") + await reviews.save();
       return;
     }
     if (!validSlug) throw new Error("Enter a slug using lowercase letters, numbers, and hyphens.");
@@ -545,6 +441,7 @@ editor.addEventListener("submit", event => {
     const path = current ? "posts?id=eq." + current : "posts";
     const [saved] = await api(path, { method: current ? "PATCH" : "POST", body: record, prefer: "return=representation" });
     if (!saved) throw new Error("The entry could not be saved.");
+    const reviewNote = await reviews.save({ p_post: saved.id, p_publish: publishing });
     removeBackup();
     const cleared = await deleteCloudDraft().then(() => true, () => false);
     const { id, slug, title, tag, published, published_on } = saved;
@@ -553,12 +450,12 @@ editor.addEventListener("submit", event => {
       b.published_on.localeCompare(a.published_on) || b.id.localeCompare(a.id));
     openEditor(saved);
     status.textContent = (saved.published ? "Entry published." : "Draft saved.") +
-      (cleared ? "" : " The previous cloud draft could not be cleared.");
+      (cleared ? "" : " The previous cloud draft could not be cleared.") + reviewNote;
   });
 });
 
 search.addEventListener("input", renderPostList);
-editor.addEventListener("input", saveBackup);
+editor.addEventListener("input", () => { saveBackup(); reviews.changed(); });
 
 function showSection(section) {
   for (const button of sections) {
@@ -646,6 +543,7 @@ for (const button of sections) {
     if (busy || button.getAttribute("aria-pressed") === "true") return;
     const section = button.dataset.section;
     showSection(section);
+    if (narrow.matches) setDeskMenu(false);
     if (section === "site") void photoTools.loadPhoto();
     if (section === "inbox") void openInbox();
     if (section === "stats") void openStats();

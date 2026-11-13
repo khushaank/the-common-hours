@@ -162,10 +162,10 @@ async function renderPost(posts, index) {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   const list = document.querySelector("#comment-list");
-  const [{ addParagraphLinks, relatedEntries }, { addBookmarkButton }] = await Promise.all([
+  const [{ restoreArticleAnchors, relatedEntries }, { addBookmarkButton }] = await Promise.all([
     import("./reading.js"), import("./bookmarks.js"),
   ]);
-  addParagraphLinks(bodyElement);
+  restoreArticleAnchors(bodyElement);
   addBookmarkButton(bodyElement.closest("article"), post.id);
   bodyElement.closest("article").insertAdjacentHTML("afterend", relatedEntries(posts, post));
   const form = document.querySelector("#comment-form");
@@ -293,8 +293,5 @@ async function load() {
   }
 }
 
-const heroSkeleton = document.querySelector("#hero-skeleton");
-heroSkeleton.hidden = !isJournal;
-const hero = isJournal ? import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo))
-  .finally(() => { heroSkeleton.hidden = true; }) : null;
-void Promise.allSettled([load(), hero]).then(() => document.body.removeAttribute("data-loading"));
+if (isJournal) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {});
+void load();

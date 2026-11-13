@@ -1,7 +1,13 @@
-if (!location.search) document.querySelector("#hero-skeleton").hidden = false;
+const params = new URLSearchParams(location.search);
+if (!["view", "post", "month", "tag", "series", "page"].some(key => params.has(key))) {
+  const cover = document.querySelector("#week-photo");
+  cover.querySelector("img").src = "cover.jpg";
+  cover.hidden = false;
+}
+if (params.get("view") !== "review" && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.register("./static-cache.js").catch(() => {});
+}
 import("./journal.js").catch(() => {
-  document.body.removeAttribute("data-loading");
-  document.querySelector("#hero-skeleton").hidden = true;
   const content = document.querySelector("#content");
   content.setAttribute("aria-busy", "false");
   const message = document.createElement("p");

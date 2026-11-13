@@ -80,10 +80,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   const insert = document.querySelector("#insert-form");
   const insertStatus = document.querySelector("#insert-status");
   const cancel = document.querySelector("#cancel-insert");
-  const preview = document.querySelector("#entry-preview");
   const previewBody = document.querySelector("#preview-body");
-  const workspace = document.querySelector("#editor-workspace");
-  const toggle = document.querySelector("#preview-entry");
   const menu = document.querySelector("#command-menu");
   const count = document.querySelector("#word-count");
   const status = document.querySelector("#status");
@@ -114,17 +111,6 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     body.focus();
     if (selection) body.setSelectionRange(start + selection[0], start + selection[1]);
     body.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-
-  function closePreview() {
-    clearTimeout(previewTimer);
-    previewRevision++;
-    preview.hidden = true;
-    workspace.classList.remove("with-preview");
-    previewBody.replaceChildren();
-    previousBody = undefined;
-    toggle.textContent = "Preview";
-    toggle.setAttribute("aria-expanded", "false");
   }
 
   function closeMenu() {
@@ -360,7 +346,6 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     }
   });
   async function renderPreview() {
-    if (preview.hidden) return;
     const revision = ++previewRevision;
     const fields = editor.elements;
     document.querySelector("#preview-title").textContent = fields.namedItem("title").value.trim() || "Untitled entry";
@@ -370,7 +355,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     if (value === previousBody) return;
     try {
       const { renderText } = await import("./rich.js");
-      if (revision !== previewRevision || preview.hidden) return;
+      if (revision !== previewRevision) return;
       previousBody = value;
       renderText(previewBody, value || "Start writing to preview your entry.", id => {
         if (!previewImages.has(id)) previewImages.set(id, loadImage(api, id).catch(error => {
@@ -386,26 +371,18 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   }
 
   editor.addEventListener("input", () => {
-    if (preview.hidden) return;
     clearTimeout(previewTimer);
     previewTimer = setTimeout(renderPreview, 250);
-  });
-  toggle.addEventListener("click", () => {
-    if (!preview.hidden) { closePreview(); return; }
-    preview.hidden = false;
-    workspace.classList.add("with-preview");
-    toggle.textContent = "Hide preview";
-    toggle.setAttribute("aria-expanded", "true");
-    void renderPreview();
   });
 
   return {
     refresh() {
+      clearTimeout(previewTimer);
       refresh();
       previewImages.clear();
       previousBody = undefined;
+      previewBody.replaceChildren();
       void renderPreview();
     },
-    closePreview,
   };
 }

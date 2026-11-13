@@ -98,18 +98,6 @@ export function mediaReferences(body) {
   return references;
 }
 
-export function entryLinks(body) {
-  const links = new Set();
-  for (const block of md.parse(body, {})) {
-    for (const token of block.children || []) {
-      const href = token.type === "link_open" ? token.attrGet("href") : "";
-      if (href?.startsWith("https:")) links.add(href);
-    }
-    if (block.type === "video") links.add(block.meta.href);
-  }
-  return [...links];
-}
-
 export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false } = {}) {
   if (!markdown) {
     target.replaceChildren(...body.split(/\n\s*\n/).filter(Boolean).map(text => {

@@ -21,4 +21,10 @@ on demand and every six hours while the GitHub Actions schedule is active.
 Run `supabase/keep-entry-links.sql` to preserve links to published entries when
 their slugs change. It starts with the slugs currently stored in the database.
 
+Run `supabase/live-review-links.sql` before publishing the editor update that
+keeps review links in sync. To keep using a link created before this update,
+open its entry in the writing desk and use **Reconnect a previously shared link**.
+Private access still expires after 24 hours. Once published, a review link
+opens the public entry, including after a slug change.
+
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

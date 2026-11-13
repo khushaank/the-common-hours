@@ -13,7 +13,12 @@
 <body>
 <main class="shell">
   <header class="mast">
-    <a class="desk-brand" href="./">Writing desk</a>
+    <div class="mast-start">
+      <button type="button" id="desk-menu" aria-label="Writing desk menu" aria-expanded="false" aria-controls="desk-nav entry-sidebar" hidden>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <a class="desk-brand" href="./">Writing desk</a>
+    </div>
     <div class="mast-actions"><a href="../">View journal ↗</a><button id="logout" type="button" hidden>Sign out</button></div>
   </header>
   <p id="status" role="status"></p>
@@ -24,7 +29,7 @@
     <button class="primary" disabled>Sign in</button>
   </form>
   <div id="desk" hidden>
-    <nav class="desk-nav" aria-label="Writing desk sections">
+    <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections">
       <button type="button" aria-pressed="true" data-section="entries">Entries</button>
       <button type="button" aria-pressed="false" data-section="site">Photos</button>
       <button type="button" aria-pressed="false" data-section="media">Media</button>
@@ -35,7 +40,7 @@
       <div class="entries-panel" id="entries-panel">
         <div class="compose">
           <div class="section-heading"><h1 id="editor-title">New entry</h1><div class="actions">
-            <button type="button" id="focus-entry" aria-pressed="false">Focus mode</button><button type="button" id="new-post">New entry</button>
+            <button type="button" id="new-post">New entry</button>
           </div></div>
           <form id="editor" method="post">
             <div class="card metadata">
@@ -59,7 +64,7 @@
                 <textarea id="entry-text" name="body" rows="15" maxlength="99960" required aria-controls="command-menu" placeholder="Start writing…"></textarea>
                 <div id="command-menu" class="command-menu" role="group" aria-label="Insert and format" hidden></div>
               </div>
-              <section class="card editor-preview" id="entry-preview" aria-label="Live preview" hidden>
+              <section class="card editor-preview" id="entry-preview" aria-label="Live preview">
                 <div class="preview-label">Live preview</div>
                 <h2 id="preview-title"></h2>
                 <p id="preview-meta" class="muted"></p>
@@ -67,23 +72,25 @@
                 <div class="prose" id="preview-body"></div>
               </section>
             </div>
-            <section id="publish-checklist" class="card" tabindex="-1" hidden><h2>Publish checklist</h2><ul></ul></section>
             <div id="review-result" class="card" hidden>
-              <label>Private review link <input type="url" id="review-url" readonly></label>
+              <label>Review link <input type="url" id="review-url" readonly></label>
               <div class="actions"><button type="button" id="copy-review">Copy link</button><span id="review-expiry"></span></div>
+              <p class="muted">People with this link can see your edits until it expires. After you publish, the link opens the public entry.</p>
+              <details id="reconnect-review">
+                <summary>Reconnect a previously shared link</summary>
+                <label>Previous link <input type="text" inputmode="url" id="previous-review-url" autocomplete="off"></label>
+                <button type="button" id="attach-review">Reconnect link</button>
+              </details>
             </div>
             <div class="actions compose-actions">
               <span id="draft-status" role="status"></span>
-              <button type="button" id="discard-draft" hidden>Discard draft changes</button>
               <button type="submit" value="draft" formnovalidate>Save draft</button>
-              <button type="button" id="preview-entry" aria-expanded="false" aria-controls="entry-preview">Preview</button>
               <button type="button" id="review-entry">Review link</button>
-              <button type="button" id="check-entry">Checklist</button>
               <button type="submit" class="primary" value="publish" formnovalidate>Publish</button>
             </div>
           </form>
         </div>
-        <aside class="entry-aside">
+        <aside class="entry-aside" id="entry-sidebar">
           <details class="card entry-list" id="entry-list" open><summary>Entries</summary>
             <label>Find an entry<input id="find-entry" type="search" autocomplete="off"></label>
             <ul id="posts"></ul>

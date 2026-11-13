@@ -1,6 +1,7 @@
 import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
+import { createHash } from "node:crypto";
 
 const deskPath = "folio-80f54af81f7d";
 
@@ -26,6 +27,11 @@ async function buildApp(app, destination, files, config, childDirectory) {
     const target = new URL(file, output);
     if (file === "index.html") {
       await writeFile(target, withConnectSource(await readFile(source, "utf8"), config));
+    } else if (file === "static-cache.js") {
+      const staticFiles = blogFiles.filter(name => /\.(?:jpg|woff2)$/.test(name));
+      const hash = createHash("sha256");
+      for (const name of staticFiles) hash.update(name).update(await readFile(assetSource(app, name)));
+      await writeFile(target, (await readFile(source, "utf8")).replace("__STATIC_REVISION__", hash.digest("hex").slice(0, 16)));
     } else {
       await copyFile(source, target);
     }

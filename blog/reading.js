@@ -32,28 +32,11 @@ export function relatedEntries(posts, post) {
   return series + (related.length ? '<section class="related-entries"><h2>Keep reading</h2>' + cards(related) + '</section>' : "");
 }
 
-export function addParagraphLinks(body) {
+export function restoreArticleAnchors(body) {
   const paragraphs = [...body.children].filter(element =>
     element.matches("p") && element.textContent.trim() && !element.querySelector(".media-slot, .attachment"));
   paragraphs.forEach((paragraph, index) => {
-    const anchor = "p-" + (index + 1);
-    paragraph.id = anchor;
-    const share = document.createElement("button");
-    share.className = "paragraph-share";
-    share.type = "button";
-    share.textContent = "↗";
-    share.setAttribute("aria-label", "Copy link to paragraph " + (index + 1));
-    share.title = "Copy link to this paragraph";
-    share.addEventListener("click", async () => {
-      const href = new URL(location.href);
-      href.hash = anchor;
-      try {
-        await navigator.clipboard.writeText(href.href);
-        share.textContent = "✓";
-        setTimeout(() => { share.textContent = "↗"; }, 1400);
-      } catch { prompt("Copy this paragraph link", href.href); }
-    });
-    paragraph.append(share);
+    paragraph.id = "p-" + (index + 1);
   });
   if (/^#(?:p-\d+|fn(?:ref)?[a-z0-9-]+)$/.test(location.hash)) {
     requestAnimationFrame(() => document.getElementById(location.hash.slice(1))?.scrollIntoView());
@@ -103,9 +86,13 @@ export async function renderReview(content) {
     content.innerHTML = "<h1>Review link unavailable</h1><p>This link is invalid or has expired.</p>";
     return;
   }
+  if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.published_slug || "")) {
+    location.replace("?post=" + encodeURIComponent(draft.published_slug));
+    return;
+  }
   const { renderText } = await import("./rich.js");
   content.innerHTML = '<article class="article"><p class="meta">Private draft review</p><h1>' +
-    escape(draft.title || "Untitled entry") + '</h1><p class="meta">' + escape(draft.tag || "") +
+    escape(draft.title || "Untitled entry") + '</h1><p class="meta">' + escape([draft.published_on, draft.tag].filter(Boolean).join(" · ")) +
     '</p><p>' + escape(draft.excerpt || "") + '</p><div id="entry-body" class="prose"></div></article>';
   renderText(content.querySelector("#entry-body"), draft.body || "", read, {
     markdown: true,
