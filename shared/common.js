@@ -138,7 +138,8 @@ export function videoFrom(value) {
     id = route === "watch" ? url.searchParams.get("v") : ["shorts", "embed", "live"].includes(route) ? tail : "";
   }
   if (youtubePattern.test(id || "")) {
-    return { src: "https://www.youtube-nocookie.com/embed/" + id, href: url.href, label: "YouTube" };
+    return { src: "https://www.youtube-nocookie.com/embed/" + id, href: url.href, label: "YouTube",
+      poster: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg" };
   }
   if (["vimeo.com", "www.vimeo.com", "player.vimeo.com"].includes(host)) {
     const id = host === "player.vimeo.com" && route === "video" ? tail : route;

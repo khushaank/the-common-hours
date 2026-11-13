@@ -16,7 +16,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
 const files = new Set(app === "blog" ? [...blogFiles, "demo.js", "feed.xml"] : adminFiles);
 for (const file of sharedFiles) files.add(file);
 files.add("config.js");
-const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml" };
+const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", svg: "image/svg+xml", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml" };
 let config;
 try {
   config = readSiteConfig();

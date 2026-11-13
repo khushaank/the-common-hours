@@ -68,9 +68,11 @@ md.core.ruler.after("inline", "linked_video", state => {
 });
 
 md.renderer.rules.video = (tokens, index) => {
-  const { src, href, label, title } = tokens[index].meta;
+  const { src, href, label, title, poster } = tokens[index].meta;
   const player = label
-    ? '<button class="video-play" type="button" data-player="' + escape(src) + '" aria-label="Play ' + escape(title || label + ' video') + '">▶ <span>Play video</span></button>'
+    ? '<button class="video-play" type="button" data-player="' + escape(src) + '" aria-label="Play ' + escape(title || label + ' video') + '">' +
+      (poster ? '<img class="video-poster" src="' + escape(poster) + '" width="480" height="360" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') +
+      '<span class="video-play-label"><span aria-hidden="true">▶</span> Play video</span></button>'
     : '<video controls playsinline preload="none" src="' + escape(src) + '"></video>';
   return '<div class="video">' + player + (title ? '<p class="video-caption">' + escape(title) + '</p>' : "") +
     '<a class="video-link" rel="noreferrer" href="' + escape(href) +
@@ -109,6 +111,9 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
   }
 
   target.innerHTML = md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body);
+  for (const poster of target.querySelectorAll(".video-poster")) {
+    poster.addEventListener("error", () => poster.remove(), { once: true });
+  }
   for (const play of target.querySelectorAll("[data-player]")) {
     play.addEventListener("click", () => {
       const frame = document.createElement("iframe");

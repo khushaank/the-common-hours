@@ -111,8 +111,8 @@ function sideLinks(groups, key, label, selected) {
 }
 
 function metadata(post, byline = false) {
-  return `<p class="meta"><time datetime="${escape(post.published_on)}">${dateLabel(post.published_on)}</time><span aria-hidden="true">·</span>
-    <a class="tag" href="${link({ tag: post.tag })}">${escape(post.tag)}</a>${byline ? "<span>· By Ellis Vale</span>" : ""}</p>`;
+  return `<p class="meta"><time datetime="${escape(post.published_on)}">${dateLabel(post.published_on)}</time>
+    <a class="tag" href="${link({ tag: post.tag })}">${escape(post.tag)}</a>${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
 }
 
 function renderList(posts) {
@@ -182,7 +182,8 @@ async function renderPost(posts, index, firstBody) {
     const words = text.join(" ").match(/[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*/gu)?.length || 0;
     if (words) {
       const estimate = document.createElement("span");
-      estimate.textContent = "· " + Math.ceil(words / 220) + " min read";
+      estimate.className = "read-time";
+      estimate.textContent = Math.ceil(words / 220) + " min read";
       bodyElement.previousElementSibling.append(estimate);
     }
   }
