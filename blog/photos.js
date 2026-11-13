@@ -66,7 +66,7 @@ export async function startSlideshow(get, demo) {
   let requestedIndex = 0;
   const images = new Map();
 
-  const photos = demo ? [cover] : await publicData("featured-v3:" + weekOf(), () => featurePhotos(get)).catch(() => []);
+  const photos = demo ? [cover] : await publicData("featured-v4", () => featurePhotos(get)).catch(() => []);
   if (!photos.length) { figure.hidden = true; return; }
 
   function schedule() {

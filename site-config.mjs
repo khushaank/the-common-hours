@@ -1,6 +1,7 @@
 import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
+  "manifest.webmanifest", "app-192.png", "app-512.png", "app-maskable.png",
   "index.html", "favicon.svg", "404.html", "style.css", "route.js", "start.js", "journal.js", "legal.js", "photos.js", "reading.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js", "public-cache.js",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",

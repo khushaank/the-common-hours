@@ -2,7 +2,8 @@ import "./markdown-it.min.js";
 import footnotes from "./markdown-it-footnote.js";
 import { escape, imageSource, markdownMarker, mediaId, videoFrom } from "./common.js";
 
-const md = globalThis.markdownit({ html: false, linkify: false, breaks: true }).use(footnotes);
+const md = globalThis.markdownit({ html: false, linkify: true, breaks: true }).use(footnotes);
+md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
 const assetId = (url, prefix) => url.startsWith(prefix) && mediaId.test(url.slice(prefix.length)) ? url.slice(prefix.length) : "";
 md.validateLink = url => /^https:\/\//i.test(url) || /^#[a-z0-9_-]+$/i.test(url) || /^\?post=[a-z0-9-]{1,120}$/.test(url) ||
   Boolean(assetId(url, "media:") || assetId(url, "attachment:"));
@@ -38,6 +39,26 @@ md.renderer.rules.ordered_list_open = (tokens, index, options, env, self) => {
   return self.renderToken(tokens, index, options);
 };
 
+md.core.ruler.after("inline", "task_list", ({ tokens, Token }) => {
+  for (let i = 2; i < tokens.length; i++) {
+    const item = tokens[i - 2];
+    const inline = tokens[i];
+    if (item.type !== "list_item_open" || inline.type !== "inline") continue;
+    if (!/^\[([ xX])\]\s+/.test(inline.content)) continue;
+    const first = inline.children?.[0];
+    const task = first?.type === "text" && /^\[([ xX])\]\s+/.exec(first.content);
+    if (!task) continue;
+    item.attrJoin("class", "task-item");
+    first.content = first.content.slice(task[0].length);
+    const checkbox = new Token("task_checkbox", "input", 0);
+    checkbox.meta = { checked: task[1] !== " " };
+    inline.children.unshift(checkbox);
+  }
+});
+
+md.renderer.rules.task_checkbox = (tokens, index) => '<input class="task-check" type="checkbox" disabled' +
+  (tokens[index].meta.checked ? ' checked aria-label="Completed task"' : ' aria-label="Incomplete task"') + '> ';
+
 md.block.ruler.before("paragraph", "video", (state, line, endLine, silent) => {
   if (state.sCount[line] - state.blkIndent >= 4) return false;
   const start = state.bMarks[line] + state.tShift[line];
@@ -71,7 +92,7 @@ md.renderer.rules.video = (tokens, index) => {
   const { src, href, label, title, poster } = tokens[index].meta;
   const player = label
     ? '<button class="video-play" type="button" data-player="' + escape(src) + '" aria-label="Play ' + escape(title || label + ' video') + '">' +
-      (poster ? '<img class="video-poster" src="' + escape(poster) + '" width="480" height="360" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') +
+      (poster && navigator.onLine ? '<img class="video-poster" src="' + escape(poster) + '" width="480" height="360" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') +
       '<span class="video-play-label"><span aria-hidden="true">▶</span> Play video</span></button>'
     : '<video controls playsinline preload="none" src="' + escape(src) + '"></video>';
   return '<div class="video">' + player + (title ? '<p class="video-caption">' + escape(title) + '</p>' : "") +

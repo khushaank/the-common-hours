@@ -8,7 +8,7 @@ const notice = `<h1>Privacy</h1><div class="prose">
   <h2>Services and embeds</h2>
   <p>GitHub Pages hosts the website and logs visitor IP addresses for security. Supabase hosts the journal database and downloadable files and processes requests to them. When an embedded video loads, your browser connects to its provider, such as YouTube or Vimeo. The provider handles that connection under its own privacy policy.</p>
   <p>The journal keeps daily totals for page views and visits. Your browser stores a timestamp in the current tab to estimate a new visit after 30 minutes without opening another page. The journal’s traffic counters store no IP addresses, visitor identifiers, or browsing history. Traffic counting respects Do Not Track and Global Privacy Control.</p>
-  <p>Read later bookmarks are stored in your browser. You can remove them from the reading list or clear this site’s browser data.</p>
+  <p>Your browser keeps a local copy of some public journal pages and images for offline reading. You can remove these copies by clearing this site’s browser data.</p>
   <ul>
     <li><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a></li>
     <li><a href="https://supabase.com/privacy">Supabase privacy policy</a></li>

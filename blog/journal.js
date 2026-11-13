@@ -62,11 +62,23 @@ function loadBody(currentSlug) {
   });
 }
 
+function saveLatestForOffline(posts) {
+  if (demo || !navigator.onLine || !("caches" in window) || navigator.connection?.saveData) return;
+  const save = async () => {
+    for (const post of posts.slice(0, pageSize)) {
+      if (!navigator.onLine) break;
+      try { await loadBody(post.slug); } catch { break; }
+    }
+  };
+  if ("requestIdleCallback" in window) requestIdleCallback(() => void save());
+  else setTimeout(() => void save(), 0);
+}
+
 async function resolveEntry(posts) {
   const index = posts.findIndex(post => post.slug === slug);
   if (index >= 0 || demo || !/^[a-z0-9-]{1,120}$/.test(slug)) return index;
   let alias;
-  try { [alias] = await get("entry_slugs?select=post_id&slug=eq." + slug); }
+  try { [alias] = await publicData("alias:" + slug, () => get("entry_slugs?select=post_id&slug=eq." + slug)); }
   catch (error) { if (!missingFeature(error)) throw error; }
   const target = alias && posts.find(post => post.id === alias.post_id);
   if (!target) return -1;
@@ -79,7 +91,7 @@ async function resolveEntry(posts) {
 }
 
 function recordView(page, post = null) {
-  if (demo || navigator.globalPrivacyControl || navigator.doNotTrack === "1") return;
+  if (demo || !navigator.onLine || navigator.globalPrivacyControl || navigator.doNotTrack === "1") return;
   let visit = true;
   try {
     const key = "common-hours-last-view";
@@ -287,7 +299,7 @@ async function start() {
     <ul class="side-list">${sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month)}</ul>
     ${months.size > 8 ? '<p><a class="back" href="?view=archive">All months →</a></p>' : ""}
     ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
-    ${topics.length ? `<section class="side-section"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topTopics, "tag", name => name, tag)}</ul>
+    ${topics.length ? `<section class="side-section sidebar-topics"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topTopics, "tag", name => name, tag)}</ul>
     ${topics.length > topTopics.length ? '<a class="back" href="?view=topics">All topics →</a>' : ""}</section>` : ""}`;
   if (view === "topics") {
     document.title = "All topics — The Common Hours";
@@ -302,6 +314,7 @@ async function start() {
     await renderPost(posts, await resolveEntry(posts), body);
   } else {
     renderList(posts);
+    if (isJournal) saveLatestForOffline(posts);
     recordView("journal");
   }
   sidebar.innerHTML = sidebarMarkup;
@@ -323,7 +336,8 @@ async function load() {
         count.textContent = "Loading photos…";
         void load();
       });
-    } else showFailure(content, "The journal could not load. Check your connection and try again.", load);
+    } else showFailure(content, navigator.onLine ? "The journal could not load. Check your connection and try again." :
+      "This page hasn’t been saved on this device. Reconnect to open it.", load);
   } finally {
     content.setAttribute("aria-busy", "false");
   }

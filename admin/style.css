@@ -121,6 +121,8 @@ kbd { color: var(--accent); font: 12px/1.4 ui-monospace, monospace; background: 
 .prose iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
 .prose .video-play { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--soft); }
 .prose .video-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.prose .task-item { list-style: none; }
+.prose .task-check { width: auto; margin-inline: 0 .25em; accent-color: var(--accent); }
 .video-play-label { position: relative; padding: 7px 11px; border-radius: 4px; color: #fff; background: #262923e8; }
 .prose pre { overflow: auto; }
 .prose table { display: block; overflow-x: auto; }

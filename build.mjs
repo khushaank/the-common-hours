@@ -19,7 +19,7 @@ async function featuredSnapshot(config) {
     const [first] = photos;
     if (!/^(?:[0-9a-f-]{36}|month-\d{4}-\d{2})$/i.test(first.id)) return null;
     const data = JSON.stringify({ first: { id: first.id, media_id: first.media_id }, width: image.width, height: image.height, version });
-    return { bytes, markup: '<template id="featured-snapshot" data-value="' +
+    return { bytes, version, markup: '<template id="featured-snapshot" data-value="' +
       data.replace(/[&"<>]/g, char => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[char]) + '"></template>' };
   } catch { return null; }
 }
@@ -61,10 +61,13 @@ async function buildApp(app, destination, files, config, childDirectory, feature
       await writeFile(target, sources.get(file).replace(/(\bfrom\s+|\bimport\s*(?:\(\s*)?)(["'])(\.\/[^"']+)\2/g,
         (_, prefix, quote, path) => prefix + quote + version(path) + quote));
     } else if (file === "static-cache.js") {
-      const staticFiles = blogFiles.filter(name => /\.(?:jpg|woff2)$/.test(name));
-      const hash = createHash("sha256");
-      for (const name of staticFiles) hash.update(name).update(await readFile(assetSource(app, name)));
-      await writeFile(target, (await readFile(source, "utf8")).replace("__STATIC_REVISION__", hash.digest("hex").slice(0, 16)));
+      const offline = [...versioned].map(version).concat("index.html", assets.filter(name => /\.(?:jpg|woff2|svg|png|webmanifest)$/.test(name)));
+      if (featured) offline.push("featured.jpg?v=" + featured.version);
+      const hash = createHash("sha256").update(revision).update(JSON.stringify(offline));
+      for (const name of offline.filter(name => !name.includes("?") && name !== "index.html")) hash.update(await readFile(assetSource(app, name)));
+      await writeFile(target, (await readFile(source, "utf8"))
+        .replace("__STATIC_REVISION__", hash.digest("hex").slice(0, 16))
+        .replace('"__OFFLINE_ASSETS__"', JSON.stringify(offline)));
     } else {
       await copyFile(source, target);
     }

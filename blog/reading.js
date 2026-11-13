@@ -1,4 +1,5 @@
 import { escape, request } from "./common.js";
+import { cachedEntries } from "./public-cache.js";
 
 const entryHref = slug => "?post=" + encodeURIComponent(slug);
 
@@ -44,7 +45,16 @@ export async function findEntries(query) {
     const { default: posts } = await import("./demo.js");
     return posts.filter(post => [post.title, post.tag, post.body, post.excerpt].some(value => value.toLowerCase().includes(query.toLowerCase())));
   }
-  return request("/rest/v1/rpc/qmargin_b74_search_posts", { method: "POST", body: { p_query: query } });
+  if (!navigator.onLine) return cachedEntries(query);
+  try {
+    return await request("/rest/v1/rpc/qmargin_b74_search_posts", { method: "POST", body: { p_query: query } });
+  } catch (error) {
+    if (!error.status || error.status >= 500) {
+      const entries = await cachedEntries(query);
+      if (entries.length) return entries;
+    }
+    throw error;
+  }
 }
 
 export function searchCards(entries) {

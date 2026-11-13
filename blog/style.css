@@ -175,6 +175,8 @@ aside:empty { display: none; }
 .prose { max-width: 66ch; font: 19px/1.78 Georgia, serif; overflow-wrap: anywhere; }
 .prose p { white-space: pre-line; }
 .prose ul { list-style-type: disc; }
+.prose .task-item { list-style: none; }
+.prose .task-check { width: auto; margin-inline: 0 .25em; accent-color: var(--accent); }
 .prose ul.square-list { list-style-type: square; }
 .prose h1, .prose h2 { font: 400 34px/1.12 var(--serif); margin: 1.4em 0 .35em; }
 .prose h3, .prose h4, .prose h5, .prose h6 { font: 400 27px/1.2 var(--serif); margin: 1.2em 0 .35em; }
@@ -228,9 +230,11 @@ html:has(#content[aria-busy="true"]) .site-footer { visibility: hidden; }
 .site-footer .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
 
 @media (max-width: 760px) {
-  .mast { min-height: 64px; flex-wrap: wrap; padding-block: 13px 8px; gap: 4px 12px; }
+  .mast { min-height: 64px; flex-direction: column; align-items: stretch; padding-block: 13px 8px; gap: 4px; }
   .brand { font-size: 29px; }
-  .mast nav { gap: 0 clamp(8px, 3vw, 16px); font-size: 13px; }
+  .mast nav { justify-content: space-between; gap: 0 clamp(3px, 1.5vw, 12px); font-size: 13px; }
+  .mast .search-icon { margin-inline-end: -5px; }
+  :is(.home-page, .article-page) .sidebar-topics { display: none; }
   .week-photo { margin: 22px 0 27px; }
   .layout { grid-template-columns: 1fr; gap: 30px; margin-bottom: 42px; }
   html:not(.home-page) .layout, .home-page:has(.week-photo[hidden]) .layout { margin-top: 30px; }
@@ -247,7 +251,6 @@ html:has(#content[aria-busy="true"]) .site-footer { visibility: hidden; }
 @media (max-width: 350px) {
   .mast { gap: 7px; }
   .brand { font-size: 24px; }
-  .mast nav { gap: 10px; }
 }
 
 @media print {
