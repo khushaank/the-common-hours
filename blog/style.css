@@ -46,6 +46,7 @@ img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 .mast nav a[aria-current] { color: var(--ink); text-decoration: underline; text-underline-offset: 7px; }
 
 .week-photo { margin: 34px 0 41px; }
+html:not(.home-page) .week-photo { display: none; }
 .skeleton { background: var(--soft); border-radius: 5px; animation: skeleton-pulse 1.45s ease-in-out infinite alternate; }
 .skeleton-heading { width: min(55%, 380px); height: 32px; margin: 16px 0; }
 .skeleton-line { width: min(94%, 640px); height: 13px; margin: 10px 0; }
@@ -92,7 +93,7 @@ img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 @media (hover: none), (prefers-reduced-motion: reduce) { .slide-label { opacity: 1; transition: none; } }
 
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: clamp(42px, 7vw, 86px); align-items: start; margin: 0 0 72px; }
-.week-photo[hidden] + .layout { margin-top: 49px; min-height: 48vh; }
+html:not(.home-page) .week-photo + .layout, .week-photo[hidden] + .layout { margin-top: 49px; min-height: 48vh; }
 .layout.legal-layout { display: block; max-width: 680px; margin-inline: auto; }
 h1, h2, h3 { font: 400 38px/1.08 var(--serif); margin: 0; overflow-wrap: anywhere; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--ink); }
@@ -187,7 +188,7 @@ button:disabled { opacity: .6; cursor: default; }
   .mast nav { gap: 14px; font-size: 13px; }
   .week-photo { margin: 22px 0 27px; }
   .layout { grid-template-columns: 1fr; gap: 30px; margin-bottom: 42px; }
-  .week-photo[hidden] + .layout { margin-top: 30px; }
+  html:not(.home-page) .week-photo + .layout, .week-photo[hidden] + .layout { margin-top: 30px; }
   .entry { padding: 17px 0; }
   .entry p:not(.meta) { margin-right: 8px; }
   aside { border-left: 0; border-top: 1px solid var(--line); padding: 15px 0 0; }

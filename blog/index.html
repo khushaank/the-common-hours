@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-vvxeX1PYBjVoiDhH/SZMBkLx5x6aNHg8JmxwY5ojcc4='; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<script>const q=new URLSearchParams(location.search);if(q.get("post"))document.documentElement.classList.add("article-page");if(!["view","post","month","tag","series","page"].some(k=>q.has(k)))document.documentElement.classList.add("home-page");</script>
 <title>The Common Hours — An independent journal</title>
 <!-- public-api-connection -->
 <link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
@@ -29,7 +30,7 @@
   </div>
 </header>
 <main class="wrap">
-  <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" aria-busy="true" hidden>
+  <figure class="week-photo" id="week-photo" aria-label="Photo of the Week" aria-busy="true">
     <div class="slide">
       <a id="featured-photo-link" aria-label="Open the featured photo">
         <img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">
