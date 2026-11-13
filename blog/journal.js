@@ -27,9 +27,6 @@ if (!isLegal && view !== "review") {
     ["start", "search", "saved"].includes(view) ? view : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
-if (isLegal || isPhoto || ["search", "review", "start", "saved"].includes(view)) {
-  document.querySelector(".layout").classList.add(isLegal ? "legal-layout" : "photo-layout");
-}
 const canonical = document.createElement("link");
 canonical.rel = "canonical";
 const canonicalUrl = new URL("https://commonhours.qd.je/");
@@ -303,7 +300,18 @@ async function load() {
   try {
     await start();
   } catch {
-    showFailure(content, "The journal could not load. Check your connection and try again.", load);
+    if (view === "photos" && content.querySelector("#photo-results")) {
+      content.querySelector(".photo-archive").classList.remove("route-skeleton");
+      content.querySelectorAll(".route-skeleton, .loading").forEach(item => item.remove());
+      const count = content.querySelector("#photo-count");
+      const results = content.querySelector("#photo-results");
+      count.textContent = "";
+      showFailure(results, "The photos could not load. Try again.", () => {
+        results.replaceChildren();
+        count.textContent = "Loading photos…";
+        void load();
+      });
+    } else showFailure(content, "The journal could not load. Check your connection and try again.", load);
   } finally {
     content.setAttribute("aria-busy", "false");
   }

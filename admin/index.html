@@ -73,7 +73,7 @@
             </div>
             <div id="review-result" class="card" hidden>
               <label>Review link <input type="url" id="review-url" readonly></label>
-              <div class="actions"><button type="button" id="copy-review">Copy link</button><span id="review-expiry"></span></div>
+              <div class="actions"><button type="button" id="copy-review">Copy link</button><a id="open-review" target="_blank" rel="noopener noreferrer" hidden>Open review ↗</a><span id="review-expiry"></span></div>
               <p class="muted">People with this link can see your edits until it expires. After you publish, the link opens the public entry.</p>
               <details id="reconnect-review">
                 <summary>Reconnect a previously shared link</summary>
@@ -98,24 +98,24 @@
             <h2>Photo of the Week</h2>
             <img id="weekly-preview" alt="" decoding="async" hidden>
             <p id="weekly-summary">Feature photographs on the journal homepage.</p>
-            <div class="actions"><button type="button" id="manage-photos">Manage photos</button><a href="../?view=photos">Photo archive ↗</a></div>
+            <div class="actions"><button type="button" id="manage-photos">Manage photos</button><a href="../?view=photos" target="_blank" rel="noopener noreferrer">Photo archive ↗</a></div>
           </section>
         </aside>
       </div>
       <section id="site-panel" hidden>
-        <div class="section-heading"><h1>Photo of the Week</h1><a href="../?view=photos">Photo archive ↗</a></div>
-        <p class="muted">The homepage plays the latest featured week on a continuous 10-second slideshow.</p>
-        <div class="photo-workspace">
-          <section class="card">
-            <div class="body-heading"><h2>Weekly photos</h2><button type="button" id="new-photo">Add photos</button></div>
-            <label>Week of <input id="photo-week" type="date" required></label>
-            <ul id="weekly-photos"></ul>
-          </section>
-          <form id="photo-form" class="card" method="post">
-            <h2 id="photo-editor-title">Add photos</h2>
-            <img id="photo-preview" alt="" decoding="async" hidden>
-            <label id="photo-files">Photos <input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
-            <p id="photo-upload-help" class="muted">Select one or more photos. You can edit the details for each photo after adding it.</p>
+        <div class="section-heading"><h1>Photo of the Week</h1><a href="../?view=photos" target="_blank" rel="noopener noreferrer">Photo archive ↗</a></div>
+        <form id="photo-form" class="card photo-workspace" method="post">
+          <div class="photo-week-toolbar">
+            <label>Week starting <input id="photo-week" type="date" required></label>
+            <p class="muted">Choose any date to select its week. The homepage shows the latest featured week.</p>
+          </div>
+          <div id="photo-upload" class="photo-upload">
+            <label>Photos <input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" aria-describedby="photo-upload-help"></label>
+            <p id="photo-upload-help" class="muted">Select one or more images, then add them to the week.</p>
+          </div>
+          <div id="photo-edit" class="photo-edit" hidden>
+            <div class="body-heading"><h2>Edit photo</h2><button type="button" id="new-photo">Back to upload</button></div>
+            <div id="photo-preview-frame" class="photo-preview-frame" aria-busy="true"><img id="photo-preview" alt="" decoding="async" hidden></div>
             <div id="photo-details" hidden>
               <label>Title <input name="title" maxlength="160"></label>
               <label>Alt text <input name="alt" maxlength="200"></label>
@@ -123,10 +123,13 @@
               <label>Photo series <input name="series" maxlength="100"></label>
               <label class="checkbox"><input name="featured" type="checkbox" checked> Include in the slideshow</label>
             </div>
-            <p id="photo-status" role="status"></p>
-            <button class="primary" type="submit" id="save-photo">Add to this week</button>
-          </form>
-        </div>
+          </div>
+          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to week</button><p id="photo-status" role="status"></p></div>
+          <section class="week-collection" aria-labelledby="week-collection-title">
+            <div class="body-heading"><h2 id="week-collection-title">This week’s photos</h2><small id="weekly-count"></small></div>
+            <ul id="weekly-photos" aria-live="polite"></ul>
+          </section>
+        </form>
       </section>
       <section id="media-panel" hidden>
         <div class="section-heading"><h1>Media</h1></div>

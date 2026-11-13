@@ -23,6 +23,10 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
     const entry = getEntry();
     const link = entry.owner && getLink(keyFor(entry));
     url.value = link ? new URL("../?view=review#" + link.token, location.href).href : "";
+    const open = document.querySelector("#open-review");
+    open.hidden = !link;
+    if (link) open.href = url.value;
+    else open.removeAttribute("href");
     copy.disabled = !link;
     document.querySelector("#review-expiry").textContent = link?.published ? "Opens the published entry" :
       link ? "Draft access expires " + new Date(link.expiry).toLocaleString() : "";

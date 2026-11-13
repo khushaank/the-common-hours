@@ -110,7 +110,7 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
 
   target.innerHTML = md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body);
   if (preview) {
-    for (const link of target.querySelectorAll("a[href^='?post='], a[href^='https://']")) {
+    for (const link of target.querySelectorAll("a[href]:not([href^='#'])")) {
       if (link.getAttribute("href").startsWith("?post=")) link.setAttribute("href", "../" + link.getAttribute("href"));
       link.target = "_blank";
       link.rel = "noopener noreferrer";

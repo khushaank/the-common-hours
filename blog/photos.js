@@ -21,10 +21,18 @@ async function optional(task) {
 
 async function getImage(get, photo, options) {
   if (photo.id === cover.id) return { src: "cover.jpg", width: 1200, height: 800 };
+  const snapshot = featuredSnapshot();
+  if (snapshot?.first?.id === photo.id && snapshot.first.media_id === photo.media_id) {
+    return { src: "featured.jpg?v=" + snapshot.version, width: snapshot.width, height: snapshot.height };
+  }
   const record = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id, options));
   const src = imageSource(record);
   if (!src) throw new Error("Photo unavailable.");
   return { src, width: record.width, height: record.height, alt: record.alt };
+}
+
+function featuredSnapshot() {
+  return JSON.parse(document.querySelector("#featured-snapshot")?.dataset.value || "null");
 }
 
 async function featurePhotos(get, demo) {
@@ -65,7 +73,7 @@ export async function startSlideshow(get, demo) {
   }
   if (!demo) {
     try {
-      const snapshot = JSON.parse(document.querySelector("#featured-snapshot")?.dataset.value || "null");
+      const snapshot = featuredSnapshot();
       const key = "featured:" + weekOf() + ":" + (snapshot?.version || "live");
       photos = useLive(await publicData(key, async () => {
         const first = snapshot?.first;
@@ -156,6 +164,7 @@ function photoDate(photo) {
 }
 
 async function showImage(get, picture, photo) {
+  const frame = picture.parentElement;
   picture.title = photo.alt;
   try {
     const data = await getImage(get, photo);
@@ -164,17 +173,30 @@ async function showImage(get, picture, photo) {
     picture.width = data.width;
     picture.height = data.height;
     picture.src = data.src;
+    try { await picture.decode(); }
+    catch (error) {
+      if (!data.src.startsWith("featured.jpg?")) throw error;
+      const live = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id));
+      const src = imageSource(live);
+      if (!src) throw error;
+      picture.width = live.width;
+      picture.height = live.height;
+      picture.src = src;
+      await picture.decode();
+    }
+    frame.classList.add("photo-ready");
   } catch {
     const unavailable = document.createElement("span");
     unavailable.className = "photo-unavailable";
     unavailable.textContent = "Photo unavailable";
-    picture.replaceWith(unavailable);
+    frame.replaceChildren(unavailable);
   }
 }
 
 function archiveCard(photo) {
-  return '<li><a href="' + escape(photoLink(photo.id)) + '"><img width="320" height="213" decoding="async" alt="' +
-    escape(photo.alt) + '"><strong>' + escape(photo.title) + '</strong><small>' + escape(photoDate(photo)) + '</small></a></li>';
+  return '<li><a href="' + escape(photoLink(photo.id)) + '"><div class="photo-thumb"><img width="320" height="213" decoding="async" alt="' +
+    escape(photo.alt) + '"></div><div class="photo-card-caption"><strong>' + escape(photo.title) + '</strong><small>' + escape(photoDate(photo)) +
+    (photo.series ? ' · ' + escape(photo.series) : '') + '</small></div></a></li>';
 }
 
 async function archiveWeekly(get) {
@@ -196,57 +218,97 @@ export async function renderPhotoView(content, get, demo, view, id) {
     ]));
     const photos = [...weekly, ...legacy.map(legacyPhoto)].sort((a, b) =>
       (b.week || b.month).localeCompare(a.week || a.month));
-    content.innerHTML = '<div class="section-head"><h1>Photo archive</h1></div>' +
-      '<div class="photo-filters"><label>Year <select id="photo-year"></select></label>' +
-      '<label>Series <select id="photo-series"></select></label></div><div id="photo-results"></div>';
+    const archive = content.querySelector(".photo-archive");
+    archive.classList.remove("route-skeleton");
+    content.querySelectorAll(".route-skeleton, .loading").forEach(item => item.remove());
     const year = content.querySelector("#photo-year");
+    const month = content.querySelector("#photo-month");
     const series = content.querySelector("#photo-series");
     const result = content.querySelector("#photo-results");
+    const count = content.querySelector("#photo-count");
+    const clear = content.querySelector("#photo-clear");
     const params = new URLSearchParams(location.search);
-    const photoYear = photo => (photo.week || photo.month).slice(0, 4);
-    year.replaceChildren(new Option("All years", ""), ...[...new Set(photos.map(photoYear))].map(name => new Option(name)));
+    const photoMonth = photo => (photo.week || photo.month).slice(0, 7);
+    const photoYear = photo => photoMonth(photo).slice(0, 4);
+    const unique = values => [...new Set(values)];
+    year.replaceChildren(new Option("All years", ""), ...unique(photos.map(photoYear)).map(name => new Option(name)));
     series.replaceChildren(new Option("All series", ""), ...[...new Set(photos.map(photo => photo.series).filter(Boolean))].sort().map(name => new Option(name)));
-    year.value = params.get("year") || "";
-    series.value = params.get("series") || "";
+    const choose = (select, value) => { select.value = [...select.options].some(option => option.value === value) ? value : ""; };
+    function loadMonths(value) {
+      const months = unique(photos.filter(photo => !year.value || photoYear(photo) === year.value).map(photoMonth));
+      month.replaceChildren(new Option("All months", ""), ...months.map(key => new Option(
+        dateLabel(key + "-01", { month: "long", ...(year.value ? {} : { year: "numeric" }) }), key)));
+      choose(month, value);
+    }
+    choose(year, params.get("year"));
+    choose(series, params.get("series"));
+    loadMonths(params.get("month"));
+    for (const input of [year, month, series]) input.disabled = false;
     let observer;
+    const cards = new Map();
+    const grid = document.createElement("ul");
+    grid.className = "photo-grid";
+    result.replaceChildren(grid);
+    const empty = document.createElement("p");
+    empty.className = "photo-empty";
+    empty.textContent = photos.length ? "No photos match these filters." : "There are no photos in the archive yet.";
+    result.append(empty);
     function render() {
       observer?.disconnect();
-      const matches = photos.filter(photo => (!year.value || photoYear(photo) === year.value) && (!series.value || photo.series === series.value));
-      result.innerHTML = matches.length ? '<ul class="photo-grid">' + matches.map(archiveCard).join("") + '</ul>' : "<p>No photos match these filters.</p>";
-      const pictures = [...result.querySelectorAll("img")];
-      if (typeof IntersectionObserver !== "function") {
-        pictures.forEach((picture, index) => void showImage(get, picture, matches[index]));
-        return;
-      }
-      const byPicture = new Map(pictures.map((picture, index) => [picture, matches[index]]));
+      const matches = photos.filter(photo => (!year.value || photoYear(photo) === year.value) &&
+        (!month.value || photoMonth(photo) === month.value) && (!series.value || photo.series === series.value));
+      count.textContent = matches.length + (matches.length === 1 ? " photo" : " photos");
+      clear.disabled = !(year.value || month.value || series.value);
+      empty.hidden = Boolean(matches.length);
+      grid.hidden = !matches.length;
+      const byPicture = new Map();
+      grid.replaceChildren(...matches.map(photo => {
+        if (!cards.has(photo.id)) {
+          const card = document.createElement("template");
+          card.innerHTML = archiveCard(photo);
+          cards.set(photo.id, card.content.firstElementChild);
+        }
+        const item = cards.get(photo.id);
+        const picture = item.querySelector("img:not([data-requested])");
+        if (picture) byPicture.set(picture, photo);
+        return item;
+      }));
+      const reveal = (picture, photo) => {
+        picture.dataset.requested = "";
+        void showImage(get, picture, photo);
+      };
+      if (typeof IntersectionObserver !== "function") { byPicture.forEach((photo, image) => reveal(image, photo)); return; }
       observer = new IntersectionObserver(entries => {
         for (const { isIntersecting, target } of entries) {
           if (!isIntersecting) continue;
           observer.unobserve(target);
-          void showImage(get, target, byPicture.get(target));
+          reveal(target, byPicture.get(target));
         }
       }, { rootMargin: "180px" });
-      pictures.forEach(picture => observer.observe(picture));
+      byPicture.forEach((_, picture) => observer.observe(picture));
     }
     const update = () => {
       const state = new URLSearchParams({ view: "photos" });
       if (year.value) state.set("year", year.value);
+      if (month.value) state.set("month", month.value);
       if (series.value) state.set("series", series.value);
       history.replaceState(null, "", "?" + state);
       render();
     };
-    year.addEventListener("change", update);
+    year.addEventListener("change", () => { loadMonths(month.value); update(); });
+    month.addEventListener("change", update);
     series.addEventListener("change", update);
+    clear.addEventListener("click", () => { year.value = series.value = ""; loadMonths(""); update(); });
     render();
     return;
   }
 
   let photo = id === cover.id ? cover : undefined;
   if (!demo && mediaId.test(id || "")) {
-    [photo] = await optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id));
+    [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id)));
   }
   if (!demo && /^month-\d{4}-(0[1-9]|1[0-2])$/.test(id || "")) {
-    const [legacy] = await optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01"));
+    const [legacy] = await publicData("photo-detail:" + id, () => optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01")));
     if (legacy) photo = legacyPhoto(legacy);
   }
   if (!photo) {
@@ -258,7 +320,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
   const date = photoDate(photo);
   content.innerHTML = archiveLink + '<article class="photo-detail"><h1>' + escape(photo.title) + '</h1>' +
     (date ? '<p class="meta">' + escape(date) + '</p>' : '') +
-    '<img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high">' +
+    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high"></div>' +
     (photo.description ? '<p class="photo-description">' + escape(photo.description) + '</p>' : '') + '</article>';
-  await showImage(get, content.querySelector(".photo-detail img"), photo);
+  void showImage(get, content.querySelector(".photo-detail img"), photo);
 }

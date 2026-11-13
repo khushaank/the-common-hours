@@ -7,8 +7,10 @@ export function setupPhotoTools(api) {
   const form = document.querySelector("#photo-form");
   const week = document.querySelector("#photo-week");
   const list = document.querySelector("#weekly-photos");
+  const count = document.querySelector("#weekly-count");
   const files = form.elements.namedItem("files");
-  const details = document.querySelector("#photo-details");
+  const upload = document.querySelector("#photo-upload");
+  const editPanel = document.querySelector("#photo-edit");
   const status = document.querySelector("#photo-status");
   const save = document.querySelector("#save-photo");
   const newPhoto = document.querySelector("#new-photo");
@@ -17,6 +19,7 @@ export function setupPhotoTools(api) {
   const summary = document.querySelector("#weekly-summary");
   let selected;
   let pending = [];
+  let ready = false;
   let revision = 0;
   let overviewRevision = 0;
   let supportsSeries = true;
@@ -42,26 +45,37 @@ export function setupPhotoTools(api) {
   }
 
   function edit(photo) {
+    const start = week.value;
     selected = photo;
     form.reset();
+    week.value = start;
     pending = [];
     status.textContent = "";
-    document.querySelector("#photo-editor-title").textContent = photo ? "Edit photo" : "Add photos";
-    document.querySelector("#photo-files").hidden = files.disabled = Boolean(photo);
-    document.querySelector("#photo-upload-help").hidden = Boolean(photo);
+    upload.hidden = files.disabled = Boolean(photo);
+    editPanel.hidden = !photo;
     files.required = !photo;
-    details.hidden = !photo;
     for (const name of ["title", "alt", "description", "series"]) {
       const field = form.elements.namedItem(name);
       field.value = photo?.[name] || "";
       field.required = Boolean(photo) && (name === "title" || name === "alt");
     }
     form.elements.namedItem("featured").checked = photo?.featured ?? true;
-    save.textContent = photo ? "Save photo" : "Add to this week";
+    save.textContent = photo ? "Save photo" : "Add to week";
+    save.disabled = !ready || !photo;
     for (const button of list.querySelectorAll("button")) {
       button.setAttribute("aria-pressed", String(button.dataset.id === photo?.id));
     }
-    void displayImage(preview, photo, () => selected === photo);
+    const frame = preview.parentElement;
+    frame.hidden = !photo;
+    if (photo) {
+      frame.setAttribute("aria-busy", "true");
+      void displayImage(preview, photo, () => selected === photo).finally(() => {
+        if (selected === photo) {
+          frame.removeAttribute("aria-busy");
+          frame.hidden = preview.hidden;
+        }
+      });
+    }
   }
 
   async function loadOverview() {
@@ -78,10 +92,21 @@ export function setupPhotoTools(api) {
   async function loadPhoto({ preserve = false } = {}) {
     const start = weekOf(week.value);
     const loading = ++revision;
-    if (!start) { status.textContent = "Choose a date for the week."; return; }
+    if (!start) {
+      ready = false;
+      save.disabled = true;
+      count.textContent = "";
+      list.replaceChildren();
+      list.removeAttribute("aria-busy");
+      status.textContent = "Choose a date for the week.";
+      return;
+    }
     week.value = start;
     if (!preserve) edit();
-    list.textContent = "Loading photos…";
+    ready = false;
+    count.textContent = "Loading…";
+    list.setAttribute("aria-busy", "true");
+    list.innerHTML = '<li class="photo-placeholder" aria-hidden="true"></li>';
     save.disabled = newPhoto.disabled = true;
     try {
       const filter = "&week=eq." + start + "&order=created_at.asc,id.asc";
@@ -94,8 +119,10 @@ export function setupPhotoTools(api) {
       }
       if (loading !== revision) return;
       list.replaceChildren();
+      count.textContent = photos.length + (photos.length === 1 ? " photo" : " photos");
       if (!photos.length) {
         const empty = document.createElement("li");
+        empty.className = "empty-week";
         empty.textContent = "No photos for this week.";
         list.append(empty);
       }
@@ -109,17 +136,25 @@ export function setupPhotoTools(api) {
         button.setAttribute("aria-pressed", String(photo.id === selected?.id));
         state.textContent = photo.featured ? (photo.week > journalToday() ? "Scheduled" : "In slideshow") : "Archive only";
         button.append(state);
-        button.addEventListener("click", () => edit(photo));
+        button.addEventListener("click", () => {
+          edit(photo);
+          form.elements.namedItem("title").focus();
+        });
         item.append(button);
         list.append(item);
       }
-      save.disabled = false;
+      ready = true;
+      save.disabled = !selected && !pending.length;
     } catch (error) {
       if (loading !== revision) return;
       list.replaceChildren();
+      count.textContent = "";
       status.textContent = missingFeature(error) ? "Apply the Supabase writing desk upgrade to manage weekly photos." : error.message;
     } finally {
-      if (loading === revision) newPhoto.disabled = false;
+      if (loading === revision) {
+        list.removeAttribute("aria-busy");
+        newPhoto.disabled = false;
+      }
     }
   }
 
@@ -127,6 +162,7 @@ export function setupPhotoTools(api) {
   week.addEventListener("change", () => void loadPhoto());
   files.addEventListener("change", () => {
     pending = [...files.files].map(file => ({ file, id: crypto.randomUUID(), media: undefined }));
+    save.disabled = !ready || !pending.length;
   });
 
   form.addEventListener("submit", async event => {
@@ -169,7 +205,7 @@ export function setupPhotoTools(api) {
         edit();
       }
       await loadPhoto({ preserve: true });
-      if (!save.disabled) status.textContent = current ? "Photo saved." : "Photos added to the week.";
+      if (ready) status.textContent = current ? "Photo saved." : "Photos added to the week.";
       void loadOverview();
     } catch (error) {
       status.textContent = missingFeature(error) ? "Apply the Supabase writing desk upgrade to manage weekly photos." : error.message;
@@ -179,17 +215,5 @@ export function setupPhotoTools(api) {
     }
   });
 
-  return {
-    loadPhoto,
-    loadOverview,
-    clear() {
-      revision++;
-      overviewRevision++;
-      week.value = weekOf();
-      list.replaceChildren();
-      edit();
-      clearImage(overview);
-      summary.textContent = "Feature photographs on the journal homepage.";
-    },
-  };
+  return { loadPhoto, loadOverview };
 }

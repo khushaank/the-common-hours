@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-vvxeX1PYBjVoiDhH/SZMBkLx5x6aNHg8JmxwY5ojcc4='; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
-<script>const q=new URLSearchParams(location.search);if(q.get("post"))document.documentElement.classList.add("article-page");if(!["view","post","month","tag","series","page"].some(k=>q.has(k)))document.documentElement.classList.add("home-page");</script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-ybe5ML5JfF8LHGSLmMpk8MvD9outKlvPugEeSKFv1Jg='; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<script>const q=new URLSearchParams(location.search),v=q.get("view"),p=q.get("post"),h=document.documentElement;if(p)h.classList.add("article-page");if(!["view","post","month","tag","series","page"].some(k=>q.has(k)))h.classList.add("home-page");h.dataset.journalPage=({photos:"photos",photo:"photo",search:"search",archive:"archive",review:"article",privacy:"article",terms:"article"})[v]|| (p?"article":"journal");if(["photos","photo","search","review","saved","start"].includes(v)||q.get("series"))h.classList.add("wide-page");if(v==="privacy"||v==="terms")h.classList.add("policy-page");</script>
 <title>The Common Hours — An independent journal</title>
 <!-- public-api-connection -->
 <link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
 <link rel="preload" as="font" type="font/woff2" href="serif.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="sans.woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <link rel="modulepreload" href="journal.js">
 <link rel="modulepreload" href="photos.js">
@@ -54,11 +55,49 @@
   <div class="layout">
     <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true">
       <p class="loading sr-only" role="status">Loading journal…</p>
-      <div class="content-skeleton" aria-hidden="true">
+      <div class="route-skeleton content-skeleton" data-skeleton="article" aria-hidden="true">
         <div class="skeleton skeleton-heading"></div>
         <div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>
         <div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>
         <div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>
+      </div>
+      <div class="route-skeleton list-skeleton" data-skeleton="journal" aria-hidden="true">
+        <div class="section-head"><div class="skeleton skeleton-heading"></div></div>
+        <div class="entry"><div class="skeleton skeleton-line meta-line"></div><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line"></div></div>
+        <div class="entry"><div class="skeleton skeleton-line meta-line"></div><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line short"></div></div>
+        <div class="entry"><div class="skeleton skeleton-line meta-line"></div><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line"></div></div>
+      </div>
+      <div class="route-skeleton list-skeleton" data-skeleton="archive" aria-hidden="true">
+        <div class="section-head"><div class="skeleton skeleton-heading"></div></div>
+        <div class="archive-skeleton-rows"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
+      </div>
+      <div class="route-skeleton list-skeleton" data-skeleton="search" aria-hidden="true">
+        <div class="section-head"><h1>Search</h1></div>
+        <div class="search-skeleton-field skeleton"></div>
+        <div class="entry"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line"></div></div>
+        <div class="entry"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line short"></div></div>
+      </div>
+      <section class="route-skeleton photo-archive" data-skeleton="photos">
+        <header class="photo-archive-head"><p class="photo-kicker">The Common Hours · Photography</p><h1>Photo archive</h1><p>Browse the photographs featured in the journal by date or series.</p></header>
+        <div class="photo-filter-bar">
+          <div class="photo-filters" role="group" aria-label="Filter photos">
+            <label>Year <select id="photo-year" disabled><option>All years</option></select></label>
+            <label>Month <select id="photo-month" disabled><option>All months</option></select></label>
+            <label>Series <select id="photo-series" disabled><option>All series</option></select></label>
+          </div>
+          <div class="photo-filter-meta"><span id="photo-count" aria-live="polite">Loading photos…</span><button id="photo-clear" class="quiet-button" type="button" disabled>Reset</button></div>
+        </div>
+        <div id="photo-results">
+          <div class="photo-grid" aria-hidden="true">
+            <div><div class="photo-thumb skeleton"></div><div class="photo-card-caption"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line meta-line"></div></div></div>
+            <div><div class="photo-thumb skeleton"></div><div class="photo-card-caption"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line meta-line"></div></div></div>
+            <div><div class="photo-thumb skeleton"></div><div class="photo-card-caption"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line meta-line"></div></div></div>
+          </div>
+        </div>
+      </section>
+      <div class="route-skeleton" data-skeleton="photo" aria-hidden="true">
+        <div class="skeleton skeleton-line meta-line"></div><div class="skeleton skeleton-heading"></div>
+        <div class="photo-detail-image skeleton"></div><div class="skeleton skeleton-line short"></div>
       </div>
     </section>
     <aside id="sidebar" aria-label="Blog archive"></aside>

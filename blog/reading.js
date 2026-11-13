@@ -52,7 +52,8 @@ export async function renderSearch(content, query, demoPosts) {
   if (!query) return;
   const result = content.querySelector("#search-results");
   result.setAttribute("aria-busy", "true");
-  result.textContent = "Searching…";
+  result.innerHTML = '<p class="sr-only" role="status">Searching…</p>' +
+    '<div class="entry" aria-hidden="true"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-line"></div></div>'.repeat(2);
   let entries;
   try {
     entries = demoPosts ? demoPosts.filter(post => [post.title, post.tag, post.body, post.excerpt].some(value => value.toLowerCase().includes(query.toLowerCase()))) :
