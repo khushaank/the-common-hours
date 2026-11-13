@@ -42,10 +42,13 @@
         <aside class="entry-aside" aria-label="Entry browser">
           <div class="entry-list-heading">
             <h2>Entries</h2>
-            <button type="button" id="toggle-entries" aria-label="Hide entries" aria-controls="entry-list" aria-expanded="true">
-              <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><path d="M8 4v12"/></svg>
-              <span>Entries</span>
-            </button>
+            <div class="entries-control">
+              <button type="button" id="toggle-entries" aria-labelledby="entries-tooltip" aria-controls="entry-list" aria-expanded="true">
+                <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><path d="M8 4v12"/></svg>
+                <span>Entries</span>
+              </button>
+              <span id="entries-tooltip" role="tooltip">Hide entries</span>
+            </div>
           </div>
           <div class="entry-list" id="entry-list">
             <div class="entry-list-tools">

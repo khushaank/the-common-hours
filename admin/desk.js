@@ -14,6 +14,8 @@ const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
 const entryList = document.querySelector("#entry-list");
 const toggleEntries = document.querySelector("#toggle-entries");
+const entriesTooltip = document.querySelector("#entries-tooltip");
+const entriesControl = toggleEntries.parentElement;
 const entryDetails = document.querySelector("#entry-details");
 const editorTitle = document.querySelector("#editor-title");
 const titleInput = editor.elements.namedItem("title");
@@ -29,8 +31,16 @@ function showEntries(open) {
   if (!open && entryList.contains(document.activeElement)) toggleEntries.focus();
   entryList.hidden = !open;
   toggleEntries.setAttribute("aria-expanded", String(open));
-  toggleEntries.setAttribute("aria-label", open ? "Hide entries" : "Show entries");
+  entriesTooltip.textContent = open ? "Hide entries" : "Show entries";
 }
+const resetEntriesTooltip = () => { entriesControl.removeAttribute("data-tooltip-dismissed"); };
+entriesControl.addEventListener("pointerenter", resetEntriesTooltip);
+toggleEntries.addEventListener("focus", resetEntriesTooltip);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && (entriesControl.matches(":hover") || toggleEntries.matches(":focus-visible"))) {
+    entriesControl.setAttribute("data-tooltip-dismissed", "");
+  }
+});
 narrow.addEventListener("change", () => showEntries(!narrow.matches && desktopEntriesOpen));
 toggleEntries.addEventListener("click", () => {
   const open = entryList.hidden;
