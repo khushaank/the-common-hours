@@ -27,7 +27,7 @@ async function getImage(get, photo, options) {
   if (photo.id === cover.id) return { src: "cover.jpg", width: 1200, height: 800 };
   const snapshot = featuredSnapshot();
   if (snapshot?.first?.id === photo.id && snapshot.first.media_id === photo.media_id) {
-    return { src: "featured.jpg?v=" + snapshot.version, width: snapshot.width, height: snapshot.height };
+    return { src: "featured.webp?v=" + snapshot.version, width: snapshot.width, height: snapshot.height };
   }
   const record = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id, options));
   const src = imageSource(record);
@@ -105,7 +105,7 @@ export async function startSlideshow(get, demo) {
         ready.src = data.src;
         try { await ready.decode(); }
         catch (error) {
-          if (!data.src.startsWith("featured.jpg?") || !photo.media_id) throw error;
+          if (!data.src.startsWith("featured.webp?") || !photo.media_id) throw error;
           const live = await readMediaImage(get, photo.media_id, { timeout: 6500 });
           const src = imageSource(live);
           if (!src) throw error;
@@ -183,7 +183,7 @@ async function showImage(get, picture, photo) {
     picture.src = data.src;
     try { await picture.decode(); }
     catch (error) {
-      if (!data.src.startsWith("featured.jpg?")) throw error;
+      if (!data.src.startsWith("featured.webp?")) throw error;
       const live = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id));
       const src = imageSource(live);
       if (!src) throw error;

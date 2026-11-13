@@ -5,7 +5,7 @@ if (document.documentElement.classList.contains("home-page")) {
       const preload = document.createElement("link");
       preload.rel = "preload";
       preload.as = "image";
-      preload.href = "featured.jpg?v=" + snapshot.version;
+      preload.href = "featured.webp?v=" + snapshot.version;
       document.head.append(preload);
     }
   } catch { /* The live image is still available. */ }

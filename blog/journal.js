@@ -186,9 +186,11 @@ async function renderPost(posts, index, firstBody) {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   if (renderer || !hasFormatting) {
-    const prose = bodyElement.cloneNode(true);
-    prose.querySelectorAll(".media-slot, .attachment, .attachment-status, .video, .footnote-backref").forEach(node => node.remove());
-    const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(bodyElement, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, node => {
+      if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+      return node.matches(".media-slot, .attachment, .attachment-status, .video, .footnote-backref") ?
+        NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+    });
     const text = [];
     while (walker.nextNode()) text.push(walker.currentNode.data);
     const words = text.join(" ").match(/[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*/gu)?.length || 0;

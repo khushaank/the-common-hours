@@ -2,6 +2,7 @@ import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/pr
 import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
 import { createHash } from "node:crypto";
+import sharp from "sharp";
 
 const deskPath = "folio-80f54af81f7d";
 
@@ -14,11 +15,13 @@ async function featuredSnapshot(config) {
     if (!response.ok) return null;
     const { photos, image } = await response.json();
     if (!photos?.length || !/^[A-Za-z0-9+/]+={0,2}$/.test(image?.encoded || "")) return null;
-    const bytes = Buffer.from(image.encoded, "base64");
+    const { data: bytes, info } = await sharp(Buffer.from(image.encoded, "base64"))
+      .resize({ width: 1280, height: 1000, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 76 }).toBuffer({ resolveWithObject: true });
     const version = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
     const [first] = photos;
     if (!/^(?:[0-9a-f-]{36}|month-\d{4}-\d{2})$/i.test(first.id)) return null;
-    const data = JSON.stringify({ first: { id: first.id, media_id: first.media_id }, width: image.width, height: image.height, version });
+    const data = JSON.stringify({ first: { id: first.id, media_id: first.media_id }, width: info.width, height: info.height, version });
     return { bytes, version, markup: '<template id="featured-snapshot" data-value="' +
       data.replace(/[&"<>]/g, char => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[char]) + '"></template>' };
   } catch { return null; }
@@ -42,7 +45,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const revision = release.digest("hex").slice(0, 16);
   const versioned = new Set([...browserAssets, "config.js"]);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
-  if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); }
+  if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); }
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
@@ -60,9 +63,12 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     } else if (file.endsWith(".js") && sources.has(file)) {
       await writeFile(target, sources.get(file).replace(/(\bfrom\s+|\bimport\s*(?:\(\s*)?)(["'])(\.\/[^"']+)\2/g,
         (_, prefix, quote, path) => prefix + quote + version(path) + quote));
+    } else if (app === "blog" && file === "cover.jpg") {
+      await writeFile(target, await sharp(await readFile(source))
+        .resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 76, mozjpeg: true }).toBuffer());
     } else if (file === "static-cache.js") {
       const offline = [...versioned].map(version).concat("index.html", assets.filter(name => /\.(?:jpg|woff2|svg|png|webmanifest)$/.test(name)));
-      if (featured) offline.push("featured.jpg?v=" + featured.version);
+      if (featured) offline.push("featured.webp?v=" + featured.version);
       const hash = createHash("sha256").update(revision).update(JSON.stringify(offline));
       for (const name of offline.filter(name => !name.includes("?") && name !== "index.html")) hash.update(await readFile(assetSource(app, name)));
       await writeFile(target, (await readFile(source, "utf8"))
@@ -72,7 +78,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
       await copyFile(source, target);
     }
   }
-  if (featured) await writeFile(new URL("featured.jpg", output), featured.bytes);
+  if (featured) await writeFile(new URL("featured.webp", output), featured.bytes);
   await writeFile(new URL("config.js", output), settings);
 }
 
