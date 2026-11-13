@@ -1,7 +1,7 @@
 import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
-  "index.html", "404.html", "style.css", "start.js", "journal.js", "legal.js", "photos.js", "reading.js", "cover.jpg", "footer-landscape.jpg",
+  "index.html", "404.html", "style.css", "start.js", "journal.js", "legal.js", "photos.js", "reading.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];

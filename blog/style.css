@@ -176,6 +176,8 @@ body[data-loading] .footer-landscape { opacity: 0; }
 @media (scripting: none) { body[data-loading] .footer-landscape { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .footer-landscape { transition: none; } }
 .site-footer .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.reading-actions { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; margin-block: 12px; }
+.reading-actions button[aria-pressed="true"] { background: var(--soft); }
 
 @media (max-width: 760px) {
   .wrap { width: calc(100% - 36px); }
@@ -200,7 +202,7 @@ body[data-loading] .footer-landscape { opacity: 0; }
   @page { margin: 18mm; }
   body:has(.article) { background: white; color: black; }
   body:has(.article) :is(.site-header, .site-footer, #sidebar, .back, .post-nav, .comments,
-    .related-entries, .series-navigation, .paragraph-share, .skip-link, .attachment, .attachment-status, iframe, video) { display: none !important; }
+    .related-entries, .series-navigation, .paragraph-share, .skip-link, .reading-actions, .attachment, .attachment-status, iframe, video) { display: none !important; }
   body:has(.article) :is(main, .layout, #content, .article, .prose) { display: block; width: auto; max-width: none; min-height: 0; margin: 0; padding: 0; }
   .article h1 { font: 32pt/1.1 Georgia, serif; }
   .article .prose { font: 11pt/1.55 Georgia, serif; }

@@ -18,4 +18,7 @@ cloud working drafts, media editing, body search, series, and private review lin
 Review links expire after 24 hours. The RSS feed is rebuilt by **Publish journal**
 on demand and every six hours while the GitHub Actions schedule is active.
 
+Run `supabase/keep-entry-links.sql` to preserve links to published entries when
+their slugs change. It starts with the slugs currently stored in the database.
+
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

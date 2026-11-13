@@ -1,10 +1,10 @@
 import { url, publishableKey } from "./config.js";
-import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, readMediaImage, request, showFailure, table } from "./common.js";
+import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = new URLSearchParams(location.search);
-const view = ["archive", "privacy", "terms", "photo", "photos", "search", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "privacy", "terms", "photo", "photos", "search", "start", "review", "saved"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
@@ -23,10 +23,10 @@ const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo" || view === "photos";
 if (!isLegal && view !== "review") {
   const currentNav = isPhoto ? "photos" : view === "archive" || month ? "archive" :
-    ["start", "search"].includes(view) ? view : "journal";
+    ["start", "search", "saved"].includes(view) ? view : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
-if (isLegal || isPhoto || ["search", "review", "start"].includes(view)) {
+if (isLegal || isPhoto || ["search", "review", "start", "saved"].includes(view)) {
   document.querySelector(".layout").classList.add(isLegal ? "legal-layout" : "photo-layout");
 }
 const canonical = document.createElement("link");
@@ -51,6 +51,22 @@ async function loadPublicPosts() {
     if (!missingColumn(error)) throw error;
     return allRows(get, "posts?select=" + fields + filter);
   }
+}
+
+async function resolveEntry(posts) {
+  const index = posts.findIndex(post => post.slug === slug);
+  if (index >= 0 || demo || !/^[a-z0-9-]{1,120}$/.test(slug)) return index;
+  let alias;
+  try { [alias] = await get("entry_slugs?select=post_id&slug=eq." + slug); }
+  catch (error) { if (!missingFeature(error)) throw error; }
+  const target = alias && posts.find(post => post.id === alias.post_id);
+  if (!target) return -1;
+  const next = new URL(location.href);
+  next.searchParams.set("post", target.slug);
+  history.replaceState(null, "", next.href);
+  canonicalUrl.searchParams.set("post", target.slug);
+  canonical.href = canonicalUrl;
+  return posts.indexOf(target);
 }
 
 function recordView(page, post = null) {
@@ -146,8 +162,11 @@ async function renderPost(posts, index) {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   const list = document.querySelector("#comment-list");
-  const { addParagraphLinks, relatedEntries } = await import("./reading.js");
+  const [{ addParagraphLinks, relatedEntries }, { addBookmarkButton }] = await Promise.all([
+    import("./reading.js"), import("./bookmarks.js"),
+  ]);
   addParagraphLinks(bodyElement);
+  addBookmarkButton(bodyElement.closest("article"), post.id);
   bodyElement.closest("article").insertAdjacentHTML("afterend", relatedEntries(posts, post));
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
@@ -231,6 +250,11 @@ async function start() {
     return;
   }
   const posts = await loadPublicPosts();
+  if (view === "saved") {
+    const { renderBookmarks } = await import("./bookmarks.js");
+    renderBookmarks(content, posts);
+    return;
+  }
   if (view === "start" || series) {
     const { renderReadingList, seriesEntries } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));
@@ -250,7 +274,7 @@ async function start() {
     recordView("archive");
     content.innerHTML = `<div class="section-head"><h1>Archive</h1></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
   } else if (slug) {
-    await renderPost(posts, posts.findIndex(post => post.slug === slug));
+    await renderPost(posts, await resolveEntry(posts));
   } else {
     renderList(posts);
     recordView("journal");
