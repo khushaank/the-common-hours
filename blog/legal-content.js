@@ -1,6 +1,5 @@
 export const contactDetails = `<section id="contact"><h2>Contact the editor</h2>
-  <p>Email <a href="mailto:uniquevara.ai@gmail.com">uniquevara.ai@gmail.com</a> for privacy, rights, corrections, or takedown requests. This address may look made up, but it is real and was created to protect the editor’s identity.</p>
-  <p>The email link works without JavaScript. You can also use the private form when JavaScript is available.</p>
+  <p>Email <a href="mailto:uniquevara.ai@gmail.com">uniquevara.ai@gmail.com</a> for privacy, rights, corrections, or takedown requests. This address protects the editor’s privacy.</p>
 </section>`;
 
 export const notice = `<h1>Privacy</h1><div class="prose">
@@ -31,5 +30,5 @@ export const terms = `<h1>Terms</h1><div class="prose">
   <h2>External content</h2>
   <p>Links and embedded videos are provided for context. Their publishers control that material and may change or remove it. The journal’s essays express personal views.</p>
   <h2>Contact</h2>
-  <p>Email <a href="mailto:uniquevara.ai@gmail.com">uniquevara.ai@gmail.com</a> or use the <a href="privacy.html#contact">contact form</a> for rights, correction, or takedown requests. This address may look made up, but it is real and was created to protect the editor’s identity.</p>
+  <p>Email <a href="mailto:uniquevara.ai@gmail.com">uniquevara.ai@gmail.com</a> or use the <a href="privacy.html#contact">contact form</a> for rights, correction, or takedown requests. This address protects the editor’s privacy.</p>
 </div>`;

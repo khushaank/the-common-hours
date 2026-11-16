@@ -140,7 +140,7 @@ test("legal pages offer email without scripts, and reading sections explain thei
   const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() });
   for (const file of ["privacy.html", "terms.html"]) {
     assert.match(pages.get(file), /href="mailto:uniquevara.ai@gmail.com"/);
-    assert.match(pages.get(file), /created to protect the editor’s identity/);
+    assert.match(pages.get(file), /This address protects the editor’s privacy/);
   }
   assert.match(pages.get("privacy.html"), /id="contact"/);
   assert.match(pages.get("start.html"), /Find your way in/);
