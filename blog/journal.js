@@ -1,10 +1,11 @@
+import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
-const params = new URLSearchParams(location.search);
+const params = pageParams();
 const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review", "collections", "photo-essays"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
@@ -14,7 +15,7 @@ const collection = view === "collections" ? params.get("collection")?.slice(0, 1
 const demo = !url && !publishableKey;
 const pageSize = 5;
 
-const link = values => "?" + escape(new URLSearchParams(values).toString());
+const link = values => escape(pageHref(values));
 const format = (date, options) => new Date(date).toLocaleDateString("en", { timeZone: "UTC", ...options });
 const dateLabel = date => format(date, { month: "short", day: "numeric", year: "numeric" });
 const monthLabel = date => format(date + "-01", { month: "long", year: "numeric" });
@@ -29,13 +30,14 @@ if (!isLegal && view !== "review") {
     view === "start" ? "start" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
-const canonical = document.createElement("link");
+const canonical = document.querySelector('link[rel="canonical"]') || document.createElement("link");
 canonical.rel = "canonical";
-const canonicalUrl = new URL("https://commonhours.qd.je/");
+const canonicalParams = new URLSearchParams();
 for (const key of ["view", "post", "month", "tag", "page", "photo", "series", "q", "year", "collection"]) {
   const value = key === "view" ? view : params.get(key);
-  if (value) canonicalUrl.searchParams.set(key, value);
+  if (value) canonicalParams.set(key, value);
 }
+const canonicalUrl = new URL(pageHref(canonicalParams), "https://commonhours.qd.je/");
 canonical.href = canonicalUrl;
 document.head.append(canonical);
 
@@ -90,11 +92,8 @@ async function resolveEntry(posts) {
   catch (error) { if (!missingFeature(error)) throw error; }
   const target = alias && posts.find(post => post.id === alias.post_id);
   if (!target) return -1;
-  const next = new URL(location.href);
-  next.searchParams.set("post", target.slug);
-  history.replaceState(null, "", next.href);
-  canonicalUrl.searchParams.set("post", target.slug);
-  canonical.href = canonicalUrl;
+  history.replaceState(null, "", pageHref({ post: target.slug }));
+  canonical.href = new URL(pageHref({ post: target.slug }), "https://commonhours.qd.je/");
   return posts.indexOf(target);
 }
 
@@ -176,7 +175,7 @@ async function renderPost(posts, index, firstBody) {
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article">
-    ${post.photo_essay ? '<p class="meta"><a href="?view=photo-essays">Photo essay</a></p>' : ''}
+    ${post.photo_essay ? '<p class="meta"><a href="photo-essays.html">Photo essay</a></p>' : ''}
     <h1>${escape(post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     <nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>
@@ -185,7 +184,7 @@ async function renderPost(posts, index, firstBody) {
     ${post.reader_prompt ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
     <label>Display name <input name="display_name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
-    <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="?view=privacy">Privacy</a>'}</p>
+    <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy.html">Privacy</a>'}</p>
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form></section>`;
   const bodyElement = document.querySelector("#entry-body");
   if (renderer) {
@@ -320,10 +319,10 @@ async function start() {
   const archives = sideLinks(months, "month", monthLabel, month);
   const sidebarMarkup = `<section class="side-section"><h2 class="side-title">Blog archive</h2>
     <ul class="side-list">${sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month)}</ul>
-    ${months.size > 8 ? '<p><a class="back" href="?view=archive">All months →</a></p>' : ""}
+    ${months.size > 8 ? '<p><a class="back" href="archive.html">All months →</a></p>' : ""}
     ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
     ${topics.length ? `<section class="side-section sidebar-topics"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topTopics, "tag", name => name, tag)}</ul>
-    ${topics.length > topTopics.length ? '<a class="back" href="?view=topics">All topics →</a>' : ""}</section>` : ""}`;
+    ${topics.length > topTopics.length ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
   if (view === "topics") {
     document.title = "All topics — The Common Hours";
     content.innerHTML = `<div class="section-head"><h1>All topics</h1><span class="section-note">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</span></div>` +
@@ -332,7 +331,7 @@ async function start() {
   } else if (view === "archive") {
     document.title = "Archive — The Common Hours";
     recordView("archive");
-    content.innerHTML = `<div class="section-head"><h1>Archive</h1><a class="back" href="?view=collections">Themed collections →</a></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
+    content.innerHTML = `<div class="section-head"><h1>Archive</h1><a class="back" href="collections.html">Themed collections →</a></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
   } else if (slug) {
     await renderPost(posts, await resolveEntry(posts), body);
   } else {
@@ -345,10 +344,17 @@ async function start() {
 
 async function load() {
   content.setAttribute("aria-busy", "true");
+  document.querySelector("#refresh-status")?.remove();
   try {
     await start();
+    delete content.dataset.prerendered;
   } catch {
-    if (view === "photos" && content.querySelector("#photo-results")) {
+    if (content.dataset.prerendered) {
+      const status = document.createElement("div");
+      status.id = "refresh-status";
+      content.after(status);
+      showFailure(status, "The latest updates could not load. You can still read this published copy.", load);
+    } else if (view === "photos" && content.querySelector("#photo-results")) {
       content.querySelector(".photo-archive").classList.remove("route-skeleton");
       content.querySelectorAll(".route-skeleton, .loading").forEach(item => item.remove());
       const count = content.querySelector("#photo-count");

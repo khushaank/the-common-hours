@@ -1,3 +1,5 @@
+import { pageHref } from "./shared/page-url.js";
+
 const home = "https://commonhours.qd.je/";
 const xml = value => String(value ?? "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").replace(/[&<>"']/g, char =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]);
@@ -12,8 +14,9 @@ export async function renderFeed(config) {
     entries = await response.json();
   }
   const items = entries.map(entry => {
-    const link = home + "?post=" + encodeURIComponent(entry.slug);
-    return "    <item><title>" + xml(entry.title) + "</title><link>" + xml(link) + "</link><guid>" + xml(link) +
+    const link = new URL(pageHref({ post: entry.slug }), home).href;
+    const guid = home + "?post=" + encodeURIComponent(entry.slug);
+    return "    <item><title>" + xml(entry.title) + "</title><link>" + xml(link) + "</link><guid>" + xml(guid) +
       "</guid><pubDate>" + new Date(entry.published_on + "T00:00:00+05:30").toUTCString() + "</pubDate><category>" +
       xml(entry.tag) + "</category><description>" + xml(entry.excerpt) + "</description></item>";
   });

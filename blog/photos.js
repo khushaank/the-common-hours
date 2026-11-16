@@ -1,3 +1,5 @@
+import { pageHref, pageParams } from "./page-url.js";
+import { photoArchiveShell } from "./photo-shell.js";
 import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingColumn, missingFeature, readMediaImage, weekOf } from "./common.js";
 import { publicData } from "./public-cache.js";
 
@@ -7,7 +9,7 @@ const cover = {
   id: "cover", title: "From the journal",
   alt: "A wooden jetty reaches into a mist-covered lake",
 };
-const photoLink = id => "?view=photo&photo=" + encodeURIComponent(id);
+const photoLink = id => pageHref({ view: "photo", photo: id });
 const dateLabel = (date, options) => new Date(date + "T00:00:00Z").toLocaleDateString("en", { timeZone: "UTC", ...options });
 
 function legacyPhoto(photo) {
@@ -242,9 +244,10 @@ async function archiveWeekly(get) {
 }
 
 export async function renderPhotoView(content, get, demo, view, id) {
-  const archiveLink = '<a class="back" href="?view=photos">← Photo archive</a>';
+  const archiveLink = '<a class="back" href="photos.html">← Photo archive</a>';
   if (view === "photos") {
     document.title = "Photo archive — The Common Hours";
+    if (!content.querySelector(".photo-archive")) content.innerHTML = photoArchiveShell;
     const [weekly, legacy] = demo ? [[], []] : await publicData("photo-archive", () => Promise.all([
       archiveWeekly(get),
       optional(allRows(get, "photos?select=" + legacyFields + "&order=month.desc")),
@@ -260,7 +263,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
     const result = content.querySelector("#photo-results");
     const count = content.querySelector("#photo-count");
     const clear = content.querySelector("#photo-clear");
-    const params = new URLSearchParams(location.search);
+    const params = pageParams();
     const photoMonth = photo => archiveDate(photo).slice(0, 7);
     const photoYear = photo => photoMonth(photo).slice(0, 4);
     const unique = values => [...new Set(values)];
@@ -325,7 +328,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
       if (year.value) state.set("year", year.value);
       if (month.value) state.set("month", month.value);
       if (series.value) state.set("series", series.value);
-      history.replaceState(null, "", "?" + state);
+      history.replaceState(null, "", pageHref(state));
       render();
     };
     year.addEventListener("change", () => { loadMonths(month.value); update(); });
@@ -352,6 +355,6 @@ export async function renderPhotoView(content, get, demo, view, id) {
   if (photo !== cover) {
     const posts = await pairedEntries(get, id);
     if (posts.length) content.querySelector(".photo-detail").insertAdjacentHTML("beforeend", '<section class="series-navigation"><h2>Paired entries</h2><ul>' +
-      posts.map(post => '<li><a href="?post=' + encodeURIComponent(post.slug) + '">' + escape(post.title) + '</a></li>').join("") + '</ul></section>');
+      posts.map(post => '<li><a href="' + pageHref({ post: post.slug }) + '">' + escape(post.title) + '</a></li>').join("") + '</ul></section>');
   }
 }

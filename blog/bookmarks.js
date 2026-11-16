@@ -1,3 +1,4 @@
+import { pageHref } from "./page-url.js";
 import { escape } from "./common.js";
 
 const storageKey = "common-hours:read-later";
@@ -54,7 +55,7 @@ export function renderBookmarks(content, posts) {
       const entries = saved.filter(id => byId.has(id));
       content.innerHTML = heading + (entries.length ? entries.map(id => {
         const post = byId.get(id);
-        return '<article class="entry"><h2 class="entry-title"><a href="?post=' + encodeURIComponent(post.slug) +
+        return '<article class="entry"><h2 class="entry-title"><a href="' + pageHref({ post: post.slug }) +
           '">' + escape(post.title) + '</a></h2><p>' + escape(post.excerpt) +
           '</p><button class="quiet-button" type="button" data-remove="' + escape(id) +
           '" aria-label="Remove ' + escape(post.title) + ' from Read later">Remove</button></article>';

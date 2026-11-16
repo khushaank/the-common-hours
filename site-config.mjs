@@ -2,7 +2,7 @@ import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
   "manifest.webmanifest", "app-192.png", "app-512.png", "app-maskable.png",
-  "index.html", "favicon.svg", "404.html", "style.css", "route.js", "start.js", "journal.js", "legal.js", "photos.js", "reading.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js", "public-cache.js",
+  "index.html", "favicon.svg", "404.html", "style.css", "route.js", "start.js", "journal.js", "legal.js", "legal-content.js", "photos.js", "photo-shell.js", "reading.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js", "public-cache.js",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
@@ -10,7 +10,7 @@ export const adminFiles = [
   "index.html", "favicon.svg", "style.css", "desk.js", "editor-tools.js", "review-links.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
-export const sharedFiles = ["common.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
+export const sharedFiles = ["common.js", "text.js", "page-url.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
   "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt"];
 export const assetSource = (app, file) => {
   const folder = sharedFiles.includes(file) ? "shared" : /\.(?:woff2|txt)$/.test(file) || file === "favicon.svg" ? "blog" : app;

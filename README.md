@@ -27,6 +27,18 @@ open its entry in the writing desk and use **Reconnect a previously shared link*
 Private access still expires after 24 hours. Once published, a review link
 opens the public entry, including after a slug change.
 
+**Publish journal** also generates HTML for the journal, archive, photos, public
+entries, and policies, plus `sitemap.xml`. These pages can be read without
+JavaScript. Existing query links still work in the app; new links use separate
+HTML pages so search engines and link previews receive the right content.
+Search, photo filters, comments, and the contact form use JavaScript.
+The HTML copy refreshes with each workflow run, including the six-hour schedule;
+the app continues to load current public data. Unpublishing an entry or photo
+also requires a successful **Publish journal** run to remove its HTML/image copy.
+
+Run `node --test` for the rendering checks, `node build.mjs` to build, and
+`node preview.mjs blog 8000 --built` to inspect the generated site locally.
+
 Run [`supabase/add-journal-features.sql`](supabase/add-journal-features.sql) to enable
 reader prompts, photo pairings, themed collections, and photo essays. Set them under
 **Entries → Reader prompt, photo essay, and collection** in the Writing Desk.

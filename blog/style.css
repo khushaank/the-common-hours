@@ -227,7 +227,7 @@ button:disabled { opacity: .6; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
 .comments > div > .status { margin-top: 8px; }
 .site-footer { position: relative; isolation: isolate; min-height: clamp(98px, 12vw, 182px); border-top: 1px solid var(--line); color: var(--ink); font-size: 13px; }
-html:has(#content[aria-busy="true"]) .site-footer { visibility: hidden; }
+html:has(#content[aria-busy="true"]:not([data-prerendered])) .site-footer { visibility: hidden; }
 .home-page .layout { min-height: min(570px, 65vh); }
 .footer-landscape { aspect-ratio: 1440 / 182; }
 .footer-landscape { position: absolute; z-index: -1; bottom: 0; width: 100%; height: auto; display: block; }

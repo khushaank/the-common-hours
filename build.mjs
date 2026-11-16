@@ -1,6 +1,7 @@
-import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
+import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerender.mjs";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 
@@ -27,7 +28,7 @@ async function featuredSnapshot(config) {
   } catch { return null; }
 }
 
-async function buildApp(app, destination, files, config, childDirectory, featured) {
+async function buildApp(app, destination, files, config, childDirectory, featured, snapshot) {
   const directory = new URL(destination, import.meta.url);
   await mkdir(directory, { recursive: true });
   if (!(await lstat(directory)).isDirectory()) {
@@ -42,6 +43,11 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const release = createHash("sha256").update(await readFile(new URL(import.meta.url))).update(settings);
   for (const [name, source] of sources) release.update(name).update(source);
   release.update(await readFile(assetSource(app, "index.html")));
+  if (snapshot) {
+    release.update(await readFile(new URL("./prerender.mjs", import.meta.url)));
+    release.update(JSON.stringify([snapshot.posts, snapshot.photos, [...snapshot.images]]));
+    for (const [name, bytes] of snapshot.files) release.update(name).update(bytes);
+  }
   const revision = release.digest("hex").slice(0, 16);
   const versioned = new Set([...browserAssets, "config.js"]);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
@@ -49,17 +55,22 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
-    : !entry.isFile() || !allowedFiles.has(entry.name))) {
+    : !entry.isFile() || !(allowedFiles.has(entry.name) || app === "blog" && generatedFile.test(entry.name)))) {
     throw new Error("Clear the extra files from " + destination + " before building.");
   }
 
+  let publicPages;
   for (const file of assets) {
     const source = assetSource(app, file);
     const target = new URL(file, output);
     if (file === "index.html") {
       const html = withConnectSource(await readFile(source, "utf8"), config);
-      await writeFile(target, html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`)
-        .replace("<!-- featured-snapshot -->", featured?.markup || ""));
+      const document = html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`)
+        .replace("<!-- featured-snapshot -->", featured?.markup || "");
+      if (snapshot) {
+        publicPages = renderPublicPages(document, snapshot);
+        for (const [name, data] of publicPages) await writeFile(new URL(name, output), data);
+      } else await writeFile(target, document);
     } else if (file.endsWith(".js") && sources.has(file)) {
       await writeFile(target, sources.get(file).replace(/(\bfrom\s+|\bimport\s*(?:\(\s*)?)(["'])(\.\/[^"']+)\2/g,
         (_, prefix, quote, path) => prefix + quote + version(path) + quote));
@@ -79,14 +90,17 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     }
   }
   if (featured) await writeFile(new URL("featured.webp", output), featured.bytes);
+  if (publicPages) for (const entry of existing) {
+    if (entry.isFile() && generatedFile.test(entry.name) && !publicPages.has(entry.name)) await unlink(new URL(entry.name, output));
+  }
   await writeFile(new URL("config.js", output), settings);
 }
 
 try {
   const config = readSiteConfig({ required: true });
   const publicConfig = process.argv.includes("--offline-feed") ? {} : config;
-  const [feed, featured] = await Promise.all([renderFeed(publicConfig), featuredSnapshot(publicConfig)]);
-  await buildApp("blog", "./dist", blogFiles, config, deskPath, featured);
+  const [feed, featured, snapshot] = await Promise.all([renderFeed(publicConfig), featuredSnapshot(publicConfig), loadPublicSnapshot(publicConfig)]);
+  await buildApp("blog", "./dist", blogFiles, config, deskPath, featured, snapshot);
   await buildApp("admin", "./dist/" + deskPath, adminFiles, config);
   await writeFile(new URL("./dist/feed.xml", import.meta.url), feed);
   console.log("Built the journal and writing desk in dist/.");

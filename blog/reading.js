@@ -1,7 +1,8 @@
+import { pageHref } from "./page-url.js";
 import { escape, request } from "./common.js";
 import { cachedEntries } from "./public-cache.js";
 
-const entryHref = slug => "?post=" + encodeURIComponent(slug);
+const entryHref = slug => pageHref({ post: slug });
 
 export function seriesEntries(posts, series) {
   return posts.filter(post => post.series === series).sort((a, b) =>
@@ -30,7 +31,7 @@ export function renderCollections(content, posts, name) {
   if (name) {
     const entries = groups.get(name) || [];
     renderReadingList(content, entries.length ? name : "Collection unavailable", entries);
-    content.insertAdjacentHTML("afterbegin", '<a class="back" href="?view=collections">← All collections</a>');
+    content.insertAdjacentHTML("afterbegin", '<a class="back" href="collections.html">← All collections</a>');
     const intro = introduction(entries);
     if (intro) content.querySelector(".section-head").insertAdjacentHTML("afterend", '<p class="collection-intro">' + escape(intro) + '</p>');
     return;
@@ -38,7 +39,7 @@ export function renderCollections(content, posts, name) {
   renderReadingList(content, "Themed collections", [], "No collections have been published yet.");
   if (!groups.size) return;
   content.lastElementChild.outerHTML = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([title, entries]) =>
-    '<article class="entry"><a class="entry-title" href="?view=collections&amp;collection=' + encodeURIComponent(title) + '">' +
+    '<article class="entry"><a class="entry-title" href="collections.html?collection=' + encodeURIComponent(title) + '">' +
     escape(title) + '</a><p>' + escape(introduction(entries) || `${entries.length} ${entries.length === 1 ? "entry" : "entries"}`) + '</p></article>').join("");
 }
 
@@ -48,7 +49,7 @@ export function seriesNavigation(posts, post) {
   const next = group[group.findIndex(item => item.id === post.id) + 1];
   return '<section class="series-navigation"><h2>' + escape(post.series) + '</h2>' +
     (next ? '<p><a href="' + entryHref(next.slug) + '">Next in the series · ' + escape(next.title) + '</a></p>' : "") +
-    '<a href="?series=' + encodeURIComponent(post.series) + '">See the full series</a></section>';
+    '<a href="./?series=' + encodeURIComponent(post.series) + '">See the full series</a></section>';
 }
 
 export function restoreArticleAnchors(body) {
@@ -103,7 +104,7 @@ export async function renderReview(content) {
     return;
   }
   if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.published_slug || "")) {
-    location.replace("?post=" + encodeURIComponent(draft.published_slug));
+    location.replace(pageHref({ post: draft.published_slug }));
     return;
   }
   const { renderText } = await import("./rich.js");

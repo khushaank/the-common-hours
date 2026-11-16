@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - name: Install the image build dependency
         run: npm ci --no-audit --no-fund
+      - name: Check public page rendering
+        run: node --test
       - name: Build the journal and writing desk
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

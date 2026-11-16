@@ -2,6 +2,8 @@ document.addEventListener("contextmenu", event => {
   if (event.target.closest("img")) event.preventDefault();
 });
 
+import { pageParams } from "./page-url.js";
+
 import("./journal.js").catch(() => {
   const content = document.querySelector("#content");
   if (!content) return;
@@ -14,10 +16,11 @@ import("./journal.js").catch(() => {
   retry.className = "quiet-button";
   retry.textContent = "Reload";
   retry.addEventListener("click", () => location.reload());
-  content.replaceChildren(message, retry);
+  if (content.dataset.prerendered) content.append(message, retry);
+  else content.replaceChildren(message, retry);
 });
 
-const route = new URLSearchParams(location.search);
+const route = pageParams();
 setupSearch();
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
   const register = () => void navigator.serviceWorker.register("./static-cache.js").catch(() => {});

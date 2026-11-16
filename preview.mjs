@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
+import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerender.mjs";
 
 const app = process.argv[2];
 if (app !== "blog" && app !== "admin") {
@@ -14,10 +15,12 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   process.exit(1);
 }
 const files = new Set(app === "blog" ? [...blogFiles, "demo.js", "feed.xml"] : adminFiles);
+const built = app === "blog" && process.argv.includes("--built");
 for (const file of sharedFiles) files.add(file);
 files.add("config.js");
 const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", png: "image/png", svg: "image/svg+xml", webmanifest: "application/manifest+json", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml" };
 let config;
+let publicPages;
 try {
   config = readSiteConfig();
 } catch (error) {
@@ -29,15 +32,32 @@ const server = createServer(async (request, response) => {
   try {
     const path = new URL(request.url, "http://localhost").pathname;
     const file = path === "/" ? "index.html" : path.slice(1);
-    if (!files.has(file)) throw new Error("Unknown path");
-    let data = file === "feed.xml" ? await renderFeed(config) :
+    if (!files.has(file) && !(app === "blog" && generatedFile.test(file))) {
+      response.writeHead(404);
+      response.end("Page not found");
+      return;
+    }
+    if (app === "blog" && !built && (file === "index.html" || generatedFile.test(file)) && !publicPages) {
+      publicPages = Promise.all([readFile(assetSource(app, "index.html"), "utf8"), loadPublicSnapshot(config)]).then(async ([html, snapshot]) => {
+        if (!config.origin) snapshot.posts = (await import("./blog/demo.js")).default;
+        return renderPublicPages(withConnectSource(html, config), snapshot);
+      }).catch(error => { publicPages = null; throw error; });
+    }
+    let data = built ? await readFile(new URL("./dist/" + file, import.meta.url)) :
+      app === "blog" && (file === "index.html" || generatedFile.test(file)) ? (await publicPages).get(file) :
+      file === "feed.xml" ? await renderFeed(config) :
       file === "config.js" ? browserConfig(config) : await readFile(assetSource(app, file));
+    if (data === undefined) {
+      response.writeHead(404);
+      response.end("Page not found");
+      return;
+    }
     if (file === "index.html") data = withConnectSource(data.toString("utf8"), config);
     response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + "; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY" });
     response.end(data);
-  } catch {
-    response.writeHead(404);
-    response.end("Page not found");
+  } catch (error) {
+    response.writeHead(error.code === "ENOENT" ? 404 : 503);
+    response.end(error.code === "ENOENT" ? "Page not found" : "Preview unavailable. Try again.");
   }
 });
 server.on("error", error => {
