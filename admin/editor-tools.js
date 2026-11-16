@@ -156,7 +156,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     count.textContent = words + (words === 1 ? " word" : " words");
   }
 
-  function choose([type, name, template]) {
+  function choose([type, name, template], selected = "") {
     const { start, end } = command;
     closeMenu();
     if (type === "library") {
@@ -179,6 +179,12 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     }
     if (template) {
       try {
+        if (selected && type !== "divider") {
+          const formatted = type === "bold" ? "**" + selected + "**" : type === "italic" ? "*" + selected + "*" :
+            selected.split("\n").map((line, index) => (type === "numbered" ? (index + 1) + ". " : template.slice(0, template.indexOf(" ") + 1)) + line).join("\n");
+          replace(["bold", "italic"].includes(type) ? formatted : "\n\n" + formatted + "\n\n", start, end);
+          return;
+        }
         const line = ["bold", "italic", "footnote"].includes(type) ? template : "\n\n" + template + "\n\n";
         const text = /[A-Za-z].*/.exec(template)?.[0].replace(/[*\]]+$/, "");
         const at = text ? line.indexOf(text) : -1;
@@ -189,6 +195,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
 
     insertion = { type, start, end };
     insert.reset();
+    insert.elements.namedItem("label").value = selected;
     attachmentId = undefined;
     insertStatus.textContent = "";
     document.querySelector("#insert-title").textContent = type === "video" ? "Embed video" :
@@ -282,6 +289,19 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   menu.addEventListener("click", event => {
     const button = event.target.closest("[data-command]");
     if (button && command) choose(commands.find(([key]) => key === button.dataset.command));
+  });
+  const formatTools = document.querySelector(".format-tools");
+  formatTools.addEventListener("mousedown", event => event.preventDefault());
+  formatTools.addEventListener("click", event => {
+    const button = event.target.closest("[data-format], #more-formats");
+    if (!button) return;
+    command = { start: body.selectionStart, end: body.selectionEnd };
+    if (button.id === "more-formats") {
+      matches = commands;
+      active = 0;
+      renderMenu();
+      menu.querySelector("button")?.focus();
+    } else choose(commands.find(([key]) => key === button.dataset.format), body.value.slice(command.start, command.end));
   });
   body.addEventListener("paste", event => {
     const raw = event.clipboardData?.getData("text/plain").trim();
@@ -385,6 +405,9 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     previewPanel.hidden = !show;
     writeMode.setAttribute("aria-pressed", String(!show));
     previewMode.setAttribute("aria-pressed", String(show));
+    writeMode.hidden = !show;
+    previewMode.hidden = show;
+    formatTools.hidden = show;
     if (show) void renderPreview();
     else previewRevision++;
   }

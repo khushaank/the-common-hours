@@ -30,46 +30,64 @@
   </form>
   <div id="desk" hidden>
     <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections" popover="auto">
-      <button type="button" aria-pressed="true" data-section="entries">Entries</button>
-      <button type="button" aria-pressed="false" data-section="site">Photos</button>
-      <button type="button" aria-pressed="false" data-section="media">Media</button>
-      <button type="button" aria-pressed="false" data-section="stats">Stats</button>
-      <button type="button" aria-pressed="false" data-section="inbox">Inbox</button>
-      <button type="button" id="desk-logout">Log out</button>
+      <div class="rail-brand" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 53 45 19M21 45C17 24 34 9 56 7 52 28 39 42 21 45ZM25 36l14-3M32 27l13-3M39 19l10-2"/></svg>
+        <span>Writing desk</span><small>Editorial CMS</small>
+      </div>
+      <button type="button" aria-pressed="true" data-section="entries"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8ZM14 3v5h5M8 12h8M8 16h6"/></svg>Entries</button>
+      <button type="button" aria-pressed="false" data-section="site"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg>Photos</button>
+      <button type="button" aria-pressed="false" data-section="media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7ZM3 7l9 5 9-5M12 12v10M7 4.8l10 5.5v8.5"/></svg>Media</button>
+      <button type="button" aria-pressed="false" data-section="inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg>Inbox</button>
+      <button type="button" aria-pressed="false" data-section="stats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V11M10 21V4M16 21V8M22 21V1"/></svg>Stats</button>
+      <button type="button" id="desk-logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M8 12h13m-5-5 5 5-5 5"/></svg>Log out</button>
+      <svg class="rail-landscape" viewBox="0 0 220 250" fill="none" stroke="currentColor" stroke-width=".8" aria-hidden="true">
+        <path d="M-10 180Q43 164 90 183T230 178M-10 187Q43 171 90 190T230 185M-10 194Q43 178 90 197T230 192M-10 201Q43 185 90 204T230 199M-10 208Q43 192 90 211T230 206M-10 215Q43 199 90 218T230 213M-10 222Q43 206 90 225T230 220M-10 229Q43 213 90 232T230 227M-10 236Q43 220 90 239T230 234M80 184q8-54 1-106m-1 70-30-38m32 22 35-44M81 115 65 80m16 21 22-32M79 139l-13-37m18 48 24-32"/>
+        <path d="M39 112q-20-15-2-24-16-20 9-24-2-19 19-17 9-24 27-8 23-11 25 12 27-1 21 22 20 9 4 25-2 23-24 17-11 16-27 3-21 13-28-5-17 10-24-1Z"/>
+        <path d="m40 86 18 5m-5-24 13 10m9-27 5 17m13-16-3 15m16-2-7 14m24 0-14 8m17 13-18 1m-58 1 16 6m18-31-3 12m16 5-6 11m-18-6 9 8m30 2-12 9M69 161l-6 20m23-10 10 15"/>
+      </svg>
     </nav>
     <div class="workspace">
       <div class="entries-panel" id="entries-panel">
         <aside class="entry-aside" aria-label="Entry browser">
           <div class="entry-list-heading">
             <h2>Entries</h2>
-            <div class="entries-control">
-              <button type="button" id="toggle-entries" aria-labelledby="entries-tooltip" aria-controls="entry-list" aria-expanded="true">
-                <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"/><path d="M8 4v12"/></svg>
-                <span>Entries</span>
-              </button>
-              <span id="entries-tooltip" role="tooltip">Hide entries</span>
-            </div>
+            <button type="button" id="new-post" class="primary"><span aria-hidden="true">＋</span> New entry</button>
           </div>
           <div class="entry-list" id="entry-list">
             <div class="entry-list-tools">
-              <button type="button" id="new-post">New entry</button>
-              <input id="find-entry" type="search" aria-label="Find an entry" placeholder="Find an entry" autocomplete="off">
+              <input id="find-entry" type="search" aria-label="Find an entry" placeholder="Search entries…" autocomplete="off">
+              <select id="entry-filter" aria-label="Filter entries by status"><option value="all">All entries</option><option value="published">Published</option><option value="draft">Drafts</option></select>
               <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh</button></div>
             </div>
             <ul id="posts" aria-label="Entries"></ul>
           </div>
         </aside>
-        <div class="compose">
+        <form id="editor" class="compose" method="post">
+          <div class="compose-topbar">
+            <div class="breadcrumb">
+              <div class="entries-control">
+                <button type="button" id="toggle-entries" aria-labelledby="entries-tooltip" aria-controls="entry-list" aria-expanded="true">Entries</button>
+                <span id="entries-tooltip" role="tooltip">Hide entries</span>
+              </div>
+              <span aria-hidden="true">›</span><span id="editor-breadcrumb">New entry</span>
+            </div>
+            <div class="actions compose-actions">
+              <button type="submit" value="draft" formnovalidate>Save draft</button>
+              <div class="editor-mode" role="group" aria-label="Editor mode">
+                <button type="button" id="write-mode" aria-pressed="true" aria-controls="write-panel" hidden>Write</button>
+                <button type="button" id="preview-mode" aria-pressed="false" aria-controls="entry-preview">Preview <span aria-hidden="true">↗</span></button>
+              </div>
+              <button type="submit" class="primary" value="publish" formnovalidate>Publish</button>
+            </div>
+          </div>
           <header class="compose-heading">
-            <p id="editor-state" class="muted">Draft</p>
-            <h1 id="editor-title" tabindex="-1">New entry</h1>
+            <h1><textarea id="editor-title" name="title" rows="1" maxlength="180" placeholder="New entry" aria-label="Entry title" required></textarea></h1>
+            <p class="entry-state"><span id="editor-state">Draft</span><span id="editor-date"></span></p>
           </header>
-          <form id="editor" method="post">
-            <details class="entry-details" id="entry-details">
-              <summary>Entry Details</summary>
+            <details class="entry-details" id="entry-details" open>
+              <summary>Publish settings</summary>
               <div class="metadata">
               <div class="fields">
-                <label>Title<input name="title" maxlength="180" required></label>
                 <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title"></label>
                 <div class="tag-field"><label for="entry-tag">Tag</label><input id="entry-tag" name="tag" maxlength="40" placeholder="Choose or type a tag" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="tags" autocomplete="off" required><div id="tags" role="listbox" aria-label="Tag suggestions" hidden></div></div>
                 <label>Publication date<input name="published_on" type="date" required></label>
@@ -92,15 +110,37 @@
                 <label class="checkbox"><input name="photo_essay" type="checkbox" value="true"> List as a photo essay</label>
                 <p class="muted">Use /image in the body to add photos in order, with optional captions. Use /library to reuse an uploaded image.</p>
               </details>
+              <button type="button" id="review-entry">Create review link ↗</button>
+              <div id="review-result" class="card" hidden>
+                <label>Review link <input type="url" id="review-url" readonly></label>
+                <div class="actions"><button type="button" id="copy-review">Copy link</button><a id="open-review" target="_blank" rel="noopener noreferrer" hidden>Open review ↗</a><span id="review-expiry"></span></div>
+                <p class="muted">People with this link can see your edits until it expires. After you publish, the link opens the public entry.</p>
+                <details id="reconnect-review">
+                  <summary>Reconnect a previously shared link</summary>
+                  <label>Previous link <input type="text" inputmode="url" id="previous-review-url" autocomplete="off"></label>
+                  <button type="button" id="attach-review">Reconnect link</button>
+                </details>
+              </div>
               </div>
             </details>
             <div class="editor-workspace">
               <div class="editor-toolbar">
-                <div class="editor-mode" role="group" aria-label="Editor mode">
-                  <button type="button" id="write-mode" aria-pressed="true" aria-controls="write-panel">Write</button>
-                  <button type="button" id="preview-mode" aria-pressed="false" aria-controls="entry-preview">Preview</button>
+                <div class="format-tools" role="group" aria-label="Format entry">
+                  <button type="button" data-format="heading" class="heading-tool" aria-label="Insert heading">Heading <span aria-hidden="true">⌄</span></button>
+                  <button type="button" data-format="bold" aria-label="Bold" title="Bold"><b>B</b></button>
+                  <button type="button" data-format="italic" aria-label="Italic" title="Italic"><i>I</i></button>
+                  <span class="tool-divider"></span>
+                  <button type="button" data-format="link" aria-label="Insert link" title="Insert link"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 13 4-4m-6 7-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 3 1-1a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0" transform="translate(2 0)"/></svg></button>
+                  <button type="button" data-format="quote" aria-label="Insert quote" title="Quote"><span class="quote-icon">“</span></button>
+                  <span class="tool-divider"></span>
+                  <button type="button" data-format="list" aria-label="Bulleted list" title="Bulleted list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/></svg></button>
+                  <button type="button" data-format="numbered" aria-label="Numbered list" title="Numbered list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6h11M10 12h11M10 18h11M3 3h1v5M2 11q4-2 3 1l-3 4h4M2 19h3l-2 2h2"/></svg></button>
+                  <button type="button" data-format="divider" aria-label="Insert divider" title="Divider"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h11"/></svg></button>
+                  <span class="tool-divider"></span>
+                  <button type="button" data-format="library" aria-label="Insert image from library" title="Image library"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-5 5 6"/></svg></button>
+                  <button type="button" data-format="video" aria-label="Embed video" title="Embed video"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></svg></button>
+                  <button type="button" id="more-formats" aria-label="More insert tools" title="More insert tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg></button>
                 </div>
-                <span id="word-count">0 words</span>
               </div>
               <div class="editor-body" id="write-panel">
                 <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
@@ -113,24 +153,11 @@
                 <p id="preview-prompt" hidden></p>
               </section>
             </div>
-            <div id="review-result" class="card" hidden>
-              <label>Review link <input type="url" id="review-url" readonly></label>
-              <div class="actions"><button type="button" id="copy-review">Copy link</button><a id="open-review" target="_blank" rel="noopener noreferrer" hidden>Open review ↗</a><span id="review-expiry"></span></div>
-              <p class="muted">People with this link can see your edits until it expires. After you publish, the link opens the public entry.</p>
-              <details id="reconnect-review">
-                <summary>Reconnect a previously shared link</summary>
-                <label>Previous link <input type="text" inputmode="url" id="previous-review-url" autocomplete="off"></label>
-                <button type="button" id="attach-review">Reconnect link</button>
-              </details>
-            </div>
-            <div class="actions compose-actions">
+            <footer class="compose-footer">
               <span id="draft-status" role="status"></span>
-              <button type="submit" value="draft" formnovalidate>Save draft</button>
-              <button type="button" id="review-entry">Review link</button>
-              <button type="submit" class="primary" value="publish" formnovalidate>Publish</button>
-            </div>
+              <span id="word-count">0 words</span>
+            </footer>
           </form>
-        </div>
       </div>
       <section id="site-panel" hidden>
         <div class="section-heading"><h1>Photos</h1><a href="../photos.html" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>

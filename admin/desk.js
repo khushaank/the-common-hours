@@ -20,12 +20,24 @@ const entryDetails = document.querySelector("#entry-details");
 const editorTitle = document.querySelector("#editor-title");
 const titleInput = editor.elements.namedItem("title");
 const search = document.querySelector("#find-entry");
+const entryFilter = document.querySelector("#entry-filter");
 const inbox = document.querySelector("#privacy-requests");
 const draftStatus = document.querySelector("#draft-status");
 const deskMenu = document.querySelector("#desk-menu");
 const deskNav = document.querySelector("#desk-nav");
 const sections = [...document.querySelectorAll("[data-section]")];
 const narrow = matchMedia("(max-width: 760px)");
+const wide = matchMedia("(min-width: 1100px)");
+function syncNavigation() {
+  if (deskNav.matches(":popover-open")) deskNav.hidePopover();
+  if (wide.matches) deskNav.removeAttribute("popover");
+  else deskNav.setAttribute("popover", "auto");
+}
+wide.addEventListener("change", syncNavigation);
+syncNavigation();
+const publishSidebar = matchMedia("(min-width: 1250px)");
+publishSidebar.addEventListener("change", () => { entryDetails.open = publishSidebar.matches; });
+entryDetails.open = publishSidebar.matches;
 let desktopEntriesOpen = true;
 function showEntries(open) {
   if (!open && entryList.contains(document.activeElement)) toggleEntries.focus();
@@ -263,13 +275,16 @@ async function run(button, action) {
 }
 
 function renderPostList() {
+  const scrollTop = postList.scrollTop;
   postList.replaceChildren();
   const term = search.value.trim().toLowerCase();
-  const filtered = posts.filter(post => !term || post.title.toLowerCase().includes(term) || post.tag.toLowerCase().includes(term));
-  document.querySelector("#entry-count").textContent = (term ? filtered.length + " of " : "") + posts.length + (posts.length === 1 ? " entry" : " entries");
+  const filtered = posts.filter(post =>
+    (entryFilter.value === "all" || post.published === (entryFilter.value === "published")) &&
+    (!term || post.title.toLowerCase().includes(term) || post.tag.toLowerCase().includes(term)));
+  document.querySelector("#entry-count").textContent = (filtered.length !== posts.length ? filtered.length + " of " : "") + posts.length + (posts.length === 1 ? " entry" : " entries");
   if (!filtered.length) {
     const item = document.createElement("li");
-    item.textContent = term ? "No matching entries." : "No entries yet.";
+    item.textContent = term || entryFilter.value !== "all" ? "No matching entries." : "No entries yet.";
     postList.append(item);
   }
   for (const post of filtered) {
@@ -278,6 +293,7 @@ function renderPostList() {
     const state = document.createElement("small");
     button.textContent = post.title;
     state.textContent = (post.published ? "Published" : "Draft") + " · " + post.published_on;
+    state.dataset.published = String(post.published);
     button.append(state);
     if (post.id === current) button.setAttribute("aria-current", "true");
     button.addEventListener("click", () => {
@@ -288,11 +304,12 @@ function renderPostList() {
         openEditor(record);
         await recoverDraft();
         if (narrow.matches) showEntries(false);
-      }).then(() => { if (!busy && current === post.id) editorTitle.focus(); });
+      }).then(() => { if (!busy && current === post.id) editorTitle.focus({ preventScroll: true }); });
     });
     li.append(button);
     postList.append(li);
   }
+  postList.scrollTop = scrollTop;
 }
 
 const tags = document.querySelector("#tags");
@@ -366,12 +383,13 @@ tagInput.addEventListener("keydown", event => {
 });
 
 function updateEditorTitle() {
-  editorTitle.textContent = titleInput.value.trim() || (activePost ? "Untitled entry" : "New entry");
+  document.querySelector("#editor-breadcrumb").textContent = titleInput.value.trim() || (activePost ? "Untitled entry" : "New entry");
+  const date = editor.elements.namedItem("published_on").value;
+  document.querySelector("#editor-date").textContent = date ? " · " + new Date(date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 }
 
 function openEditor(post) {
   if (post?.id !== current) {
-    entryDetails.open = false;
     featurePanel.open = false;
     editorTools.write();
   }
@@ -394,6 +412,7 @@ function openEditor(post) {
   if (!post) editor.elements.namedItem("published_on").value = journalToday();
   updateEditorTitle();
   document.querySelector("#editor-state").textContent = post?.published ? "Published" : "Draft";
+  document.querySelector("#editor-state").dataset.published = String(Boolean(post?.published));
   editor.querySelector('[value="publish"]').textContent = post?.published ? "Update published entry" : "Publish";
   baseline = snapshot();
   reviews.open();
@@ -492,6 +511,7 @@ async function openDesk() {
   login.reset();
   login.hidden = true;
   desk.hidden = false;
+  document.body.classList.add("desk-open");
   deskMenu.hidden = false;
 }
 
@@ -556,7 +576,7 @@ newPost.addEventListener("click", () => {
     await recoverDraft();
     if (narrow.matches) showEntries(false);
     entryDetails.open = true;
-  }).then(() => { if (!busy && !current) titleInput.focus(); });
+  }).then(() => { if (!busy && !current) titleInput.focus({ preventScroll: true }); });
 });
 
 refreshComments.addEventListener("click", () => run(refreshComments, async () => {
@@ -653,7 +673,9 @@ editor.addEventListener("submit", event => {
 });
 
 search.addEventListener("input", renderPostList);
+entryFilter.addEventListener("change", renderPostList);
 titleInput.addEventListener("input", updateEditorTitle);
+editor.elements.namedItem("published_on").addEventListener("input", updateEditorTitle);
 editor.addEventListener("input", () => { saveBackup(); reviews.changed(); });
 
 function showSection(section) {
@@ -740,8 +762,8 @@ async function openMedia() {
 document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
 for (const button of sections) {
   button.addEventListener("click", () => {
-    deskNav.hidePopover();
-    deskMenu.focus();
+    if (deskNav.matches(":popover-open")) deskNav.hidePopover();
+    if (!wide.matches) deskMenu.focus();
     if (busy) return;
     if (button.getAttribute("aria-pressed") === "true") return;
     const section = button.dataset.section;
@@ -757,7 +779,7 @@ document.querySelector("#desk-logout").addEventListener("click", event => {
   if (busy) return;
   saveBackup();
   if (!canLeaveDraft()) return;
-  deskNav.hidePopover();
+  if (deskNav.matches(":popover-open")) deskNav.hidePopover();
   void run(event.currentTarget, async () => {
     try {
       const token = await sessionToken();
