@@ -37,10 +37,11 @@ export async function encodeImage(file) {
 
 const markdownLabel = text => text.replace(/[\\[\]*_`<>&]/g, "\\$&").replace(/[\r\n]+/g, " ");
 const imageTypes = [...allowedImages].join(",");
-const commands = [
-  ["heading", "Heading", "## Heading"],
+const inlineFormats = [
   ["bold", "Bold", "**Bold text**"],
   ["italic", "Italic", "*Italic text*"],
+];
+const commands = [
   ["list", "Bulleted list", "- List item"],
   ["square", "Square list", "+ List item"],
   ["numbered", "Numbered list", "1. List item"],
@@ -87,6 +88,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   const previewMode = document.querySelector("#preview-mode");
   const menu = document.querySelector("#command-menu");
   const count = document.querySelector("#word-count");
+  const blockFormat = document.querySelector("#block-format");
   const status = document.querySelector("#status");
   const entryDialog = document.querySelector("#entry-link-dialog");
   const entrySearch = document.querySelector("#entry-link-search");
@@ -152,9 +154,28 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
 
   function refresh() {
     closeMenu();
+    updateBlockFormat();
     const words = body.value.trim().split(/\s+/).filter(Boolean).length;
     count.textContent = words + (words === 1 ? " word" : " words");
   }
+
+  function updateBlockFormat() {
+    const start = body.value.slice(0, body.selectionStart).lastIndexOf("\n") + 1;
+    blockFormat.value = /^(#{1,6})\s/.exec(body.value.slice(start))?.[1].length.toString() || "";
+  }
+
+  blockFormat.addEventListener("change", () => {
+    const start = body.value.slice(0, body.selectionStart).lastIndexOf("\n") + 1;
+    const last = Math.max(body.selectionStart, body.selectionEnd - 1);
+    const newline = body.value.indexOf("\n", last);
+    const end = newline < 0 ? body.value.length : newline;
+    const prefix = blockFormat.value ? "#".repeat(Number(blockFormat.value)) + " " : "";
+    try {
+      replace(body.value.slice(start, end).split("\n").map(line => prefix + line.replace(/^#{1,6}[ \t]+/, "")).join("\n"), start, end);
+    } catch (error) { status.textContent = error.message; updateBlockFormat(); }
+  });
+  body.addEventListener("select", updateBlockFormat);
+  body.addEventListener("keyup", updateBlockFormat);
 
   function choose([type, name, template], selected = "") {
     const { start, end } = command;
@@ -242,7 +263,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   entryDialog.addEventListener("close", () => body.focus());
 
   body.addEventListener("input", () => { refresh(); updateMenu(); });
-  body.addEventListener("click", updateMenu);
+  body.addEventListener("click", () => { updateMenu(); updateBlockFormat(); });
   body.addEventListener("blur", event => {
     if (!menu.contains(event.relatedTarget)) closeMenu();
   });
@@ -291,7 +312,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     if (button && command) choose(commands.find(([key]) => key === button.dataset.command));
   });
   const formatTools = document.querySelector(".format-tools");
-  formatTools.addEventListener("mousedown", event => event.preventDefault());
+  formatTools.addEventListener("mousedown", event => { if (!event.target.closest("select")) event.preventDefault(); });
   formatTools.addEventListener("click", event => {
     const button = event.target.closest("[data-format], #more-formats");
     if (!button) return;
@@ -301,7 +322,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
       active = 0;
       renderMenu();
       menu.querySelector("button")?.focus();
-    } else choose(commands.find(([key]) => key === button.dataset.format), body.value.slice(command.start, command.end));
+    } else choose([...inlineFormats, ...commands].find(([key]) => key === button.dataset.format), body.value.slice(command.start, command.end));
   });
   body.addEventListener("paste", event => {
     const raw = event.clipboardData?.getData("text/plain").trim();
@@ -405,8 +426,6 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     previewPanel.hidden = !show;
     writeMode.setAttribute("aria-pressed", String(!show));
     previewMode.setAttribute("aria-pressed", String(show));
-    writeMode.hidden = !show;
-    previewMode.hidden = show;
     formatTools.hidden = show;
     if (show) void renderPreview();
     else previewRevision++;

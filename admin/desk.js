@@ -26,7 +26,7 @@ const draftStatus = document.querySelector("#draft-status");
 const deskMenu = document.querySelector("#desk-menu");
 const deskNav = document.querySelector("#desk-nav");
 const sections = [...document.querySelectorAll("[data-section]")];
-const narrow = matchMedia("(max-width: 760px)");
+const narrow = matchMedia("(max-width: 1099px)");
 const wide = matchMedia("(min-width: 1100px)");
 function syncNavigation() {
   if (deskNav.matches(":popover-open")) deskNav.hidePopover();
@@ -35,9 +35,13 @@ function syncNavigation() {
 }
 wide.addEventListener("change", syncNavigation);
 syncNavigation();
-const publishSidebar = matchMedia("(min-width: 1250px)");
-publishSidebar.addEventListener("change", () => { entryDetails.open = publishSidebar.matches; });
-entryDetails.open = publishSidebar.matches;
+const collapseRail = document.querySelector("#collapse-rail");
+collapseRail.addEventListener("click", () => {
+  const collapsed = document.body.classList.toggle("rail-collapsed");
+  collapseRail.setAttribute("aria-expanded", String(!collapsed));
+  collapseRail.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  collapseRail.setAttribute("aria-label", collapseRail.title);
+});
 let desktopEntriesOpen = true;
 function showEntries(open) {
   if (!open && entryList.contains(document.activeElement)) toggleEntries.focus();
@@ -383,10 +387,13 @@ tagInput.addEventListener("keydown", event => {
 });
 
 function updateEditorTitle() {
+  titleInput.style.height = "auto";
+  titleInput.style.height = titleInput.scrollHeight + "px";
   document.querySelector("#editor-breadcrumb").textContent = titleInput.value.trim() || (activePost ? "Untitled entry" : "New entry");
   const date = editor.elements.namedItem("published_on").value;
   document.querySelector("#editor-date").textContent = date ? " · " + new Date(date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 }
+new ResizeObserver(updateEditorTitle).observe(editorTitle.parentElement);
 
 function openEditor(post) {
   if (post?.id !== current) {
@@ -575,7 +582,6 @@ newPost.addEventListener("click", () => {
     openEditor();
     await recoverDraft();
     if (narrow.matches) showEntries(false);
-    entryDetails.open = true;
   }).then(() => { if (!busy && !current) titleInput.focus({ preventScroll: true }); });
 });
 
@@ -615,12 +621,13 @@ editor.addEventListener("submit", event => {
       return;
     }
     if (!validSlug || !complete) {
-      entryDetails.open = true;
+      entryDetails.scrollIntoView({ block: "nearest" });
       if (!validSlug) throw new Error("Enter a slug using lowercase letters, numbers, and hyphens.");
       throw new Error("Fill in the title, tag, excerpt, date, and body.");
     }
     if (record.collection_intro && !record.collection) {
-      entryDetails.open = featurePanel.open = true;
+      featurePanel.open = true;
+      entryDetails.scrollIntoView({ block: "nearest" });
       throw new Error("Name the collection before adding its introduction.");
     }
     if (record.paired_photo && !mediaId.test(record.paired_photo) && !/^month-\d{4}-(0[1-9]|1[0-2])$/.test(record.paired_photo)) {

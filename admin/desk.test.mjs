@@ -48,7 +48,6 @@ test("toolbar formats only the selection and keeps slash command insertion worki
   for (const [format, selected, result] of [
     ["bold", "some words", "**some words**"],
     ["italic", "some words", "*some words*"],
-    ["heading", "A heading", "## A heading"],
     ["quote", "First\nSecond", "> First\n> Second"],
     ["list", "First\nSecond", "- First\n- Second"],
     ["numbered", "First\nSecond", "1. First\n2. Second"],
@@ -61,10 +60,41 @@ test("toolbar formats only the selection and keeps slash command insertion worki
   const empty = editorTools("", 0, 0);
   empty.format("bold");
   assert.equal(empty.body.value, "**Bold text**");
-  const slash = editorTools("/bold", 5, 5);
+  const slash = editorTools("/list", 5, 5);
   slash.body.dispatchEvent(new Event("input"));
   slash.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
-  assert.equal(slash.body.value, "**Bold text**");
+  assert.equal(slash.body.value, "\n\n- List item\n\n");
+});
+
+test("heading dropdown changes complete lines, replaces existing headings, and restores paragraphs", () => {
+  const view = editorTools("Before\n## A heading\nAfter", 12, 15);
+  const dropdown = view.query("#block-format");
+  dropdown.value = "3";
+  dropdown.dispatchEvent(new Event("change"));
+  assert.equal(view.body.value, "Before\n### A heading\nAfter");
+  assert.equal(dropdown.value, "3");
+  dropdown.value = "";
+  dropdown.dispatchEvent(new Event("change"));
+  assert.equal(view.body.value, "Before\nA heading\nAfter");
+  const multiple = editorTools("First\nSecond\nAfter", 0, 13);
+  multiple.query("#block-format").value = "2";
+  multiple.query("#block-format").dispatchEvent(new Event("change"));
+  assert.equal(multiple.body.value, "## First\n## Second\nAfter");
+  let prevented = false;
+  view.query(".format-tools").dispatchEvent({ type: "mousedown", target: { closest: () => dropdown }, preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+});
+
+test("slash menu omits toolbar formatting and retains every other insert command", () => {
+  const view = editorTools("/", 1, 1);
+  view.body.dispatchEvent(new Event("input"));
+  const names = Array.from(view.query("#command-menu").children, button => button.dataset.command);
+  assert.deepEqual(names, ["list", "square", "numbered", "letters", "quote", "image", "library", "video", "file", "pdf", "link", "entry", "footnote", "divider"]);
+  for (const name of ["heading", "bold", "italic"]) {
+    const removed = editorTools("/" + name, name.length + 1, name.length + 1);
+    removed.body.dispatchEvent(new Event("input"));
+    assert.equal(removed.query("#command-menu").hidden, true);
+  }
 });
 
 test("toolbar honors the body limit, passes selected link text, and exposes remaining tools", () => {
@@ -86,6 +116,7 @@ test("toolbar honors the body limit, passes selected link text, and exposes rema
   assert.equal(menu.query("#write-panel").hidden, true);
   assert.equal(menu.query(".format-tools").hidden, true);
   assert.equal(menu.query("#write-mode").hidden, false);
+  assert.equal(menu.query("#preview-mode").hidden, false);
   menu.tools.write();
   assert.equal(menu.query("#write-panel").hidden, false);
   assert.equal(menu.query(".format-tools").hidden, false);
@@ -124,4 +155,35 @@ test("entry status filter combines with title and tag search without changing th
   assert.equal(list.children[0].textContent, "No matching entries.");
   assert.equal(count.textContent, "0 of 3 entries");
   assert.deepEqual(posts.map(post => post.id), ["one", "two", "three"]);
+});
+
+test("sidebar collapse switches to icons and offers expansion", () => {
+  const button = element();
+  const attributes = new Map();
+  button.setAttribute = (name, value) => attributes.set(name, value);
+  const classes = new Set();
+  runInNewContext(deskSource.slice(deskSource.indexOf("const collapseRail ="), deskSource.indexOf("let desktopEntriesOpen")), {
+    document: { querySelector: () => button, body: { classList: { toggle(name) {
+      if (classes.has(name)) { classes.delete(name); return false; }
+      classes.add(name); return true;
+    } } } },
+  });
+  button.dispatchEvent(new Event("click"));
+  assert.equal(attributes.get("aria-expanded"), "false");
+  assert.equal(attributes.get("aria-label"), "Expand sidebar");
+  button.dispatchEvent(new Event("click"));
+  assert.equal(attributes.get("aria-expanded"), "true");
+  assert.equal(classes.size, 0);
+});
+
+test("layout preserves all entry fields, previews, dialogs, and review controls", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  for (const name of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order", "start_here", "reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay", "body"]) {
+    assert.ok(html.includes('name="' + name + '"'), name);
+  }
+  for (const id of ["write-mode", "preview-mode", "review-entry", "review-result", "reconnect-review", "insert-dialog", "entry-link-dialog", "library-dialog", "media-dialog"]) {
+    assert.ok(html.includes('id="' + id + '"'), id);
+  }
+  assert.match(html, /<section[^>]+id="entry-details"/);
+  assert.doesNotMatch(html, /<details[^>]+id="entry-details"/);
 });
