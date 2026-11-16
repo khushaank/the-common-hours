@@ -76,6 +76,10 @@ The confirmed sample cleanup and its optional undo are saved as
 [`supabase/remove-confirmed-samples.sql`](supabase/remove-confirmed-samples.sql)
 and [`supabase/restore-confirmed-samples.sql`](supabase/restore-confirmed-samples.sql).
 The cleanup keeps a private database backup with no visitor or signed-in client
-grants. Browser-only development previews contain no sample articles.
+grants. It was applied on 16 November 2026: 68 sample entries, 32 sample photos,
+and 57 attached comments were removed. Elephant, Love - the test, This shall pass,
+and the five actual photo uploads remain. The read-only confirmation is saved in
+[`supabase/verify-confirmed-samples.sql`](supabase/verify-confirmed-samples.sql).
+Browser-only development previews contain no sample articles.
 
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.
