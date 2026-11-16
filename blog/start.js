@@ -2,7 +2,14 @@ document.addEventListener("contextmenu", event => {
   if (event.target.closest("img")) event.preventDefault();
 });
 
-import { pageParams } from "./page-url.js";
+import { pageHref, pageParams } from "./page-url.js";
+
+const route = pageParams();
+if (location.search) {
+  const target = new URL(pageHref(route), location.href);
+  target.hash = location.hash;
+  if (target.pathname !== location.pathname && target.pathname.endsWith(".html")) location.replace(target.href);
+}
 
 import("./journal.js").catch(() => {
   const content = document.querySelector("#content");
@@ -20,10 +27,9 @@ import("./journal.js").catch(() => {
   else content.replaceChildren(message, retry);
 });
 
-const route = pageParams();
 setupSearch();
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
-  const register = () => void navigator.serviceWorker.register("./static-cache.js").catch(() => {});
+  const register = () => void navigator.serviceWorker.register("./static-cache.js", { updateViaCache: "none" }).catch(() => {});
   // Preparing the offline copy should not compete with the first visible page.
   const afterLoad = () => {
     if ("requestIdleCallback" in window) requestIdleCallback(register);

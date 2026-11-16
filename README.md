@@ -29,12 +29,21 @@ opens the public entry, including after a slug change.
 
 **Publish journal** also generates HTML for the journal, archive, photos, public
 entries, and policies, plus `sitemap.xml`. These pages can be read without
-JavaScript. Existing query links still work in the app; new links use separate
+JavaScript. Legacy query links redirect in the browser; new links use separate
 HTML pages so search engines and link previews receive the right content.
+GitHub Pages cannot redirect query strings on the server: HTML-only visitors
+must use the `.html` links. The archive has 15 entries per page and separate
+pages for years, months, and topics, all browsable without JavaScript.
 Search, photo filters, comments, and the contact form use JavaScript.
 The HTML copy refreshes with each workflow run, including the six-hour schedule;
 the app continues to load current public data. Unpublishing an entry or photo
 also requires a successful **Publish journal** run to remove its HTML/image copy.
+Published attachments are copied as binary downloads with their original link
+labels as filenames. Only files readable with the public key and referenced by
+published entries are included; private draft attachments stay in Supabase.
+Removing a published attachment also requires a successful publishing run.
+Offline documents are cached by exact URL; an unavailable page never falls back
+to the homepage. Live document requests revalidate the browser’s HTTP cache.
 
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
@@ -49,6 +58,9 @@ to reuse an image.
 
 For public archive photos, go to **Writing Desk → Photos → Archive uploads**.
 Choose one or more image files and select **Add to archive**. Select an uploaded
-photo to edit its title, alt text, description, or photo series.
+photo to edit its title, alt text, description, or photo series. New uploads
+require a descriptive title and alt text for each photo before publication.
+Existing filename-like public titles and alt text use neutral placeholders until
+the editor supplies descriptions; stored originals are preserved in the desk.
 
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

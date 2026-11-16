@@ -1,5 +1,6 @@
 import { allRows, archivePhotoWeek, imageSource, journalToday, missingColumn, missingFeature, weekOf } from "./common.js";
 import { loadImage, uploadImage } from "./editor-tools.js";
+import { photoText } from "./photo-text.js";
 
 const fields = "id,week,media_id,title,alt,description,featured";
 
@@ -19,6 +20,7 @@ export function setupPhotoTools(api) {
   const count = document.querySelector("#weekly-count");
   const files = form.elements.namedItem("files");
   const upload = document.querySelector("#photo-upload");
+  const uploadDetails = document.querySelector("#photo-upload-details");
   const editPanel = document.querySelector("#photo-edit");
   const status = document.querySelector("#photo-status");
   const save = document.querySelector("#save-photo");
@@ -45,7 +47,7 @@ export function setupPhotoTools(api) {
     clear.hidden = archive;
     week.required = !archive;
     document.querySelector("#week-collection-title").textContent = archive ? "Archive uploads" : "This week’s photos";
-    document.querySelector("#photo-upload-help").textContent = archive ? "These images go straight to the archive." : "Select one or more images, then add them to the week.";
+    document.querySelector("#photo-upload-help").textContent = "Select images and add a descriptive title and alt text for each before publishing.";
     void loadPhoto();
   });
 
@@ -75,6 +77,7 @@ export function setupPhotoTools(api) {
     form.reset();
     week.value = start;
     pending = [];
+    uploadDetails.replaceChildren();
     status.textContent = "";
     upload.hidden = files.disabled = Boolean(photo);
     editPanel.hidden = !photo;
@@ -197,7 +200,25 @@ export function setupPhotoTools(api) {
   newPhoto.addEventListener("click", () => { edit(); files.focus(); });
   week.addEventListener("change", () => void loadPhoto());
   files.addEventListener("change", () => {
-    pending = [...files.files].map(file => ({ file, id: crypto.randomUUID(), media: undefined }));
+    pending = [...files.files].map(file => ({ file, id: crypto.randomUUID(), media: undefined, title: "", alt: "" }));
+    uploadDetails.replaceChildren(...pending.map(entry => {
+      const group = document.createElement("fieldset");
+      const legend = document.createElement("legend");
+      legend.textContent = entry.file.name;
+      group.append(legend);
+      for (const [name, title, maxLength] of [["title", "Photo title", 160], ["alt", "Alt text — describe what the image shows", 200]]) {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        label.textContent = title;
+        input.name = name + "-" + entry.id;
+        input.required = true;
+        input.maxLength = maxLength;
+        input.addEventListener("input", () => { entry[name] = input.value.trim(); });
+        label.append(input);
+        group.append(label);
+      }
+      return group;
+    }));
     save.disabled = !ready || !pending.length;
   });
 
@@ -220,6 +241,7 @@ export function setupPhotoTools(api) {
         if (supportsSeries) record.series = series;
         else if (series) throw new Error("Apply the editor upgrade to save photo series.");
         if (!record.title || !record.alt) throw new Error("Enter a title and alt text.");
+        if (!photoText(record.title) || !photoText(record.alt)) throw new Error("Use descriptive titles and alt text, without filenames or URLs.");
         status.textContent = "Saving photo…";
         const [saved] = await api("weekly_photos?id=eq." + current.id, {
           method: "PATCH", body: record, prefer: "return=representation",
@@ -228,12 +250,12 @@ export function setupPhotoTools(api) {
         edit(saved);
       } else {
         if (!pending.length) throw new Error("Choose one or more photos.");
+        if (pending.some(entry => !photoText(entry.title) || !photoText(entry.alt))) throw new Error("Add a descriptive title and alt text for every photo, without filenames or URLs.");
         const rows = [];
         for (const [index, entry] of pending.entries()) {
           status.textContent = "Preparing photo " + (index + 1) + " of " + pending.length + "…";
-          entry.media ??= await uploadImage(api, entry.file);
-          const title = entry.file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim().slice(0, 160) || "Untitled photo";
-          rows.push({ id: entry.id, week: start, media_id: entry.media.id, title, alt: title, featured: !archive });
+          entry.media ??= await uploadImage(api, entry.file, entry.alt);
+          rows.push({ id: entry.id, week: start, media_id: entry.media.id, title: entry.title, alt: entry.alt, featured: !archive });
         }
         await api("weekly_photos?on_conflict=id", {
           method: "POST", body: rows, prefer: "resolution=ignore-duplicates,return=minimal",

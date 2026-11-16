@@ -2,6 +2,7 @@ import { pageHref, pageParams } from "./page-url.js";
 import { photoArchiveShell } from "./photo-shell.js";
 import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingColumn, missingFeature, readMediaImage, weekOf } from "./common.js";
 import { publicData } from "./public-cache.js";
+import { publicPhoto } from "./photo-text.js";
 
 const weeklyFields = "id,week,media_id,title,alt,created_at";
 const legacyFields = "month,media_id,alt,caption";
@@ -13,7 +14,7 @@ const photoLink = id => pageHref({ view: "photo", photo: id });
 const dateLabel = (date, options) => new Date(date + "T00:00:00Z").toLocaleDateString("en", { timeZone: "UTC", ...options });
 
 function legacyPhoto(photo) {
-  return { ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" };
+  return publicPhoto({ ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" });
 }
 
 function archiveDate(photo) {
@@ -70,7 +71,7 @@ export async function startSlideshow(get, demo) {
   let requestedIndex = 0;
   const images = new Map();
 
-  const photos = demo ? [cover] : await publicData("featured-v5", () => featurePhotos(get)).catch(() => []);
+  const photos = (demo ? [cover] : await publicData("featured-v5", () => featurePhotos(get)).catch(() => [])).map(publicPhoto);
   if (!photos.length) { figure.hidden = true; return; }
   if (photos.length > 1) {
     slide.tabIndex = 0;
@@ -210,7 +211,7 @@ function archiveCard(photo) {
 async function loadArchivePhoto(get, id) {
   if (mediaId.test(id || "")) {
     const [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id)));
-    return photo;
+    return photo && publicPhoto(photo);
   }
   if (/^month-\d{4}-(0[1-9]|1[0-2])$/.test(id || "")) {
     const [photo] = await publicData("photo-detail:" + id, () => optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01")));
@@ -252,7 +253,7 @@ export async function renderPhotoView(content, get, demo, view, id) {
       archiveWeekly(get),
       optional(allRows(get, "photos?select=" + legacyFields + "&order=month.desc")),
     ]));
-    const photos = [...weekly, ...legacy.map(legacyPhoto)].sort((a, b) =>
+    const photos = [...weekly, ...legacy.map(legacyPhoto)].map(publicPhoto).sort((a, b) =>
       archiveDate(b).localeCompare(archiveDate(a)));
     const archive = content.querySelector(".photo-archive");
     archive.classList.remove("route-skeleton");

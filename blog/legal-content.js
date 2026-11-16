@@ -1,3 +1,8 @@
+export const contactDetails = `<section id="contact"><h2>Contact the editor</h2>
+  <p>Email <a href="mailto:uniquevara.ai@gmail.com">uniquevara.ai@gmail.com</a> for privacy, rights, corrections, or takedown requests. This address may look made up, but it is real and was created to protect the editor’s identity.</p>
+  <p>The email link works without JavaScript. You can also use the private form when JavaScript is available.</p>
+</section>`;
+
 export const notice = `<h1>Privacy</h1><div class="prose">
   <p>The Common Hours is an independent journal operated from India.</p>
   <h2>What the journal collects</h2>
@@ -14,7 +19,8 @@ export const notice = `<h1>Privacy</h1><div class="prose">
     <li><a href="https://vimeo.com/privacy">Vimeo privacy policy</a></li>
   </ul>
   <h2>Retention and requests</h2>
-  <p>Comments remain in the journal database until removed by the editor. You can ask to access, correct, or remove information you submitted, withdraw permission to display your comment, or raise a privacy concern using the form below. Include the entry title and display name for a comment request. The editor may need to verify which submission is yours.</p>
+  <p>Comments remain in the journal database until removed by the editor. You can ask to access, correct, or remove information you submitted, withdraw permission to display your comment, or raise a privacy concern by email or through the private contact form. Include the entry title and display name for a comment request. The editor may need to verify which submission is yours.</p>
+  ${contactDetails}
 </div>`;
 
 export const terms = `<h1>Terms</h1><div class="prose">
@@ -25,5 +31,5 @@ export const terms = `<h1>Terms</h1><div class="prose">
   <h2>External content</h2>
   <p>Links and embedded videos are provided for context. Their publishers control that material and may change or remove it. The journal’s essays express personal views.</p>
   <h2>Contact</h2>
-  <p>Use the <a href="privacy.html#contact">contact form</a> for rights, correction, or takedown requests.</p>
+  <p>Email <a href="mailto:uniquevara.ai@gmail.com">uniquevara.ai@gmail.com</a> or use the <a href="privacy.html#contact">contact form</a> for rights, correction, or takedown requests. This address may look made up, but it is real and was created to protect the editor’s identity.</p>
 </div>`;

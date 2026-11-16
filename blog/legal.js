@@ -5,15 +5,12 @@ import { notice, terms } from "./legal-content.js";
 export function renderLegal(content, view, demo) {
   content.innerHTML = `<article class="legal">${view === "privacy" ? notice : terms}</article>`;
   if (view !== "privacy") return;
-  const contact = document.createElement("section");
-  contact.id = "contact";
-  contact.innerHTML = `<h2>Contact the editor</h2>
-    <form method="post"><label>Reply email <input type="email" name="email" required maxlength="254" autocomplete="email"></label>
+  const contact = content.querySelector("#contact");
+  contact.insertAdjacentHTML("beforeend", `<form method="post"><label>Reply email <input type="email" name="email" required maxlength="254" autocomplete="email"></label>
       <label>Message <textarea name="message" required maxlength="2000" rows="5"></textarea></label>
       <p class="status">Your message and reply email go to the editor privately.</p>
       <button type="submit">Send request</button><p role="status" class="status"></p>
-    </form>`;
-  content.firstElementChild.append(contact);
+    </form>`);
   const form = contact.querySelector("form");
   const status = form.querySelector("[role=status]");
   const button = form.querySelector("button");

@@ -2,6 +2,8 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
+import { archiveTitle, renderArchive } from "./archive.js";
+import { startIntroduction, startEmpty, photoEssayEmpty, exploreJournal } from "./reading-copy.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
@@ -125,13 +127,13 @@ function grouped(posts, value) {
 
 function sideLinks(groups, key, label, selected) {
   return [...groups].map(([name, count]) =>
-    `<li><a href="${link({ [key]: name })}" ${name === selected ? 'aria-current="page"' : ""}>${escape(label(name))}<span>${count}</span></a></li>`
+    `<li><a href="${link({ view: "archive", [key]: name })}" ${name === selected ? 'aria-current="page"' : ""}>${escape(label(name))}<span>${count}</span></a></li>`
   ).join("");
 }
 
 function metadata(post, byline = false) {
   return `<p class="meta"><time datetime="${escape(post.published_on)}">${dateLabel(post.published_on)}</time>
-    <a class="tag" href="${link({ tag: post.tag })}">${escape(post.tag)}</a>${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
+    <a class="tag" href="${link({ view: "archive", tag: post.tag })}">${escape(post.tag)}</a>${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
 }
 
 function renderList(posts) {
@@ -304,13 +306,20 @@ async function start() {
   if (view === "collections" || view === "photo-essays") {
     const { renderCollections, renderReadingList } = await import("./reading.js");
     if (view === "collections") renderCollections(content, posts, collection);
-    else renderReadingList(content, "Photo essays", posts.filter(post => post.photo_essay), "No photo essays have been published yet.");
+    else {
+      const essays = posts.filter(post => post.photo_essay);
+      renderReadingList(content, "Photo essays", essays, photoEssayEmpty);
+      if (!essays.length) content.insertAdjacentHTML("beforeend", exploreJournal);
+    }
     return;
   }
   if (view === "start" || series) {
     const { renderReadingList, seriesEntries } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));
-    else renderReadingList(content, "Start here", posts.filter(post => post.start_here), "No starter entries have been selected yet.");
+    else {
+      renderReadingList(content, "Start here", posts.filter(post => post.start_here), startEmpty);
+      content.querySelector(".section-head").insertAdjacentHTML("afterend", startIntroduction);
+    }
     return;
   }
   const months = grouped(posts, post => post.published_on.slice(0, 7));
@@ -329,9 +338,9 @@ async function start() {
       (topics.length ? `<ul class="side-list all-topics">${sideLinks(topics, "tag", name => name, tag)}</ul>` : "<p>No topics yet.</p>");
     return;
   } else if (view === "archive") {
-    document.title = "Archive — The Common Hours";
+    document.title = archiveTitle(params) + " — The Common Hours";
     recordView("archive");
-    content.innerHTML = `<div class="section-head"><h1>Archive</h1><a class="back" href="collections.html">Themed collections →</a></div><ul class="side-list">${archives}</ul>${archives ? "" : "<p>No entries yet.</p>"}`;
+    content.innerHTML = renderArchive(posts, params);
   } else if (slug) {
     await renderPost(posts, await resolveEntry(posts), body);
   } else {

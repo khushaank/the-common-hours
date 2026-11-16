@@ -133,8 +133,8 @@
         </div>
       </div>
       <section id="site-panel" hidden>
-        <div class="section-heading"><h1>Photos</h1><a href="../?view=photos" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
-        <p class="muted">To add photos to the public archive, choose Archive uploads, select your files, then choose Add to archive.</p>
+        <div class="section-heading"><h1>Photos</h1><a href="../photos.html" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
+        <p class="muted">Choose Archive uploads, select your files, and write a title and alt text for each before adding them to the public archive.</p>
         <form id="photo-form" class="card photo-workspace" method="post">
           <div class="actions" role="group" aria-label="Photo collection"><button type="button" id="show-week-photos" aria-pressed="true">Photo of the Week</button><button type="button" id="show-archive-photos" aria-pressed="false">Archive uploads</button></div>
           <div class="photo-week-toolbar" id="photo-week-toolbar">
@@ -143,7 +143,8 @@
           </div>
           <div id="photo-upload" class="photo-upload">
             <label>Photos <input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" aria-describedby="photo-upload-help"></label>
-            <p id="photo-upload-help" class="muted">Select one or more images, then add them to the week.</p>
+            <p id="photo-upload-help" class="muted">Select images and add a descriptive title and alt text for each before publishing.</p>
+            <div id="photo-upload-details"></div>
           </div>
           <div id="photo-edit" class="photo-edit" hidden>
             <div class="body-heading"><h2>Edit photo</h2><button type="button" id="new-photo">Back to upload</button></div>

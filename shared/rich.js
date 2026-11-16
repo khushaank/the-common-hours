@@ -215,6 +215,13 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
   } else for (const slot of slots) reveal(slot);
 
   for (const link of target.querySelectorAll("[data-attachment]")) {
+    const file = "attachment-" + link.dataset.attachment + ".bin";
+    if (!preview && document.querySelector("#public-pages")?.dataset.files.split(" ").includes(file)) {
+      link.href = file;
+      link.download = (link.textContent || "Attachment").replace(/[\x00-\x1f\x7f/\\]/g, "").slice(0, 200);
+      link.removeAttribute("data-attachment");
+      continue;
+    }
     const button = document.createElement("button");
     const label = link.textContent || "Attachment";
     const id = link.dataset.attachment;

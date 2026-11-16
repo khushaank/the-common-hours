@@ -1,6 +1,7 @@
 import { pageHref } from "./page-url.js";
 import { escape, request } from "./common.js";
 import { cachedEntries } from "./public-cache.js";
+import { collectionEmpty, exploreJournal } from "./reading-copy.js";
 
 const entryHref = slug => pageHref({ post: slug });
 
@@ -36,8 +37,8 @@ export function renderCollections(content, posts, name) {
     if (intro) content.querySelector(".section-head").insertAdjacentHTML("afterend", '<p class="collection-intro">' + escape(intro) + '</p>');
     return;
   }
-  renderReadingList(content, "Themed collections", [], "No collections have been published yet.");
-  if (!groups.size) return;
+  renderReadingList(content, "Themed collections", [], collectionEmpty);
+  if (!groups.size) { content.insertAdjacentHTML("beforeend", exploreJournal); return; }
   content.lastElementChild.outerHTML = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([title, entries]) =>
     '<article class="entry"><a class="entry-title" href="collections.html?collection=' + encodeURIComponent(title) + '">' +
     escape(title) + '</a><p>' + escape(introduction(entries) || `${entries.length} ${entries.length === 1 ? "entry" : "entries"}`) + '</p></article>').join("");

@@ -18,7 +18,7 @@ const files = new Set(app === "blog" ? [...blogFiles, "demo.js", "feed.xml"] : a
 const built = app === "blog" && process.argv.includes("--built");
 for (const file of sharedFiles) files.add(file);
 files.add("config.js");
-const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", png: "image/png", svg: "image/svg+xml", webmanifest: "application/manifest+json", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml" };
+const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", png: "image/png", svg: "image/svg+xml", webmanifest: "application/manifest+json", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml", bin: "application/octet-stream" };
 let config;
 let publicPages;
 try {
@@ -53,7 +53,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (file === "index.html") data = withConnectSource(data.toString("utf8"), config);
-    response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + "; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY" });
+    response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + (file.endsWith(".bin") ? "" : "; charset=utf-8"), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY" });
     response.end(data);
   } catch (error) {
     response.writeHead(error.code === "ENOENT" ? 404 : 503);

@@ -220,6 +220,9 @@ dialog .actions { justify-content: flex-end; }
 .traffic-leaders li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; }
 .traffic-leaders meter { width: 100%; grid-column: 1 / -1; accent-color: var(--accent); }
 #insert-status, #photo-status { color: var(--muted); }
+#photo-upload-details { display: grid; gap: 14px; }
+#photo-upload-details fieldset { display: grid; gap: 10px; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+#photo-upload-details legend { max-width: 100%; overflow-wrap: anywhere; font-size: 13px; }
 #insert-status:empty, #photo-status:empty { display: none; }
 @media (max-width: 760px) {
   .entries-panel, .entries-panel:has(.entry-list[hidden]) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 6px; }

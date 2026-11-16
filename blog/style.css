@@ -147,6 +147,11 @@ h1, h2, h3 { font: 400 38px/1.08 var(--serif); margin: 0; overflow-wrap: anywher
 .section-head h1, .section-head h2 { font-size: clamp(38px, 4.7vw, 52px); letter-spacing: -.025em; }
 .section-note, .meta, .side-title, .post-nav span { color: var(--muted); font: 600 12px/1.5 var(--sans); }
 .section-note { white-space: nowrap; }
+.archive-browse { margin-block: 18px; overflow-wrap: anywhere; }
+.archive-browse summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
+.archive-browse h2 { font: 600 14px var(--sans); margin-top: 15px; }
+.archive-browse details a { display: inline-flex; align-items: center; min-height: 44px; margin-right: 16px; text-decoration: underline; }
+.start-introduction { margin-block: 22px; }
 .entry { padding: 19px 0 20px; border-bottom: 1px solid var(--line); }
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 6px; }
 .meta :is(time, .byline, .read-time) { white-space: nowrap; }

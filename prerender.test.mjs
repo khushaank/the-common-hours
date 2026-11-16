@@ -7,6 +7,8 @@ import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerende
 import { pageHref, pageParams } from "./shared/page-url.js";
 import { markdownMarker } from "./shared/text.js";
 import { renderFeed } from "./feed.mjs";
+import { archiveEntries, archivePageSize, renderArchive } from "./shared/archive.js";
+import { photoText, publicPhoto } from "./shared/photo-text.js";
 
 const template = await readFile(new URL("./blog/index.html", import.meta.url), "utf8");
 const imageId = "12345678-1234-1234-1234-123456789abc";
@@ -69,19 +71,112 @@ test("offline navigation does not display the homepage as an entry or intercept 
   const handlers = {};
   const cached = renderPublicPages(template, { posts: [post], photos: [], images: new Map(), files: new Map() }).get("index.html");
   runInNewContext(source, {
-    URL, Request, Response, Set,
+    URL, Request: class { constructor(request, options) { Object.assign(this, request, options); } }, Response, Set,
     self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; } },
     fetch: async () => { throw new Error("Offline"); },
-    caches: { match: async () => new Response(cached) },
+    caches: { match: async key => String(key) === "https://example.com/index.html" ? new Response(cached) : undefined },
   });
   let result;
-  handlers.fetch({ request: { url: "https://example.com/entry-first-entry.html", method: "GET", mode: "navigate" }, respondWith: response => { result = response; } });
+  handlers.fetch({ request: { url: "https://example.com/entry-first-entry.html", method: "GET", mode: "navigate" }, respondWith: response => { result = response; }, waitUntil: () => {} });
   const html = await (await result).text();
   assert.doesNotMatch(html, /data-prerendered/);
   assert.doesNotMatch(html, /<h1>Latest entries/);
   result = undefined;
   handlers.fetch({ request: { url: "https://example.com/?view=review", method: "GET", mode: "navigate" }, respondWith: response => { result = response; } });
   assert.equal(result, undefined);
+});
+
+test("offline documents retain their exact route, and live requests revalidate HTTP caches", async () => {
+  const source = (await readFile(new URL("./blog/static-cache.js", import.meta.url), "utf8")).replace('"__OFFLINE_ASSETS__"', '["index.html"]');
+  const handlers = {};
+  const saved = new Map();
+  const tasks = [];
+  let online = true;
+  const cache = {
+    put: async (request, response) => saved.set(request.url, response),
+    keys: async () => [...saved.keys()].map(url => ({ url })),
+    delete: async request => saved.delete(request.url),
+  };
+  runInNewContext(source, {
+    URL, Response, Set, Request: class { constructor(request, options) { Object.assign(this, request, options); } },
+    self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; } },
+    fetch: async request => { assert.equal(request.cache, "no-cache"); if (!online) throw new Error("Offline"); return new Response("Privacy document"); },
+    caches: { open: async () => cache, match: async request => saved.get(request.url)?.clone() },
+  });
+  async function navigate(url) {
+    let result;
+    handlers.fetch({ request: { url, method: "GET", mode: "navigate" }, waitUntil: task => tasks.push(task), respondWith: task => { result = task; } });
+    const response = await result;
+    await Promise.all(tasks.splice(0));
+    return response;
+  }
+  assert.equal(await (await navigate("https://example.com/privacy.html")).text(), "Privacy document");
+  online = false;
+  assert.equal(await (await navigate("https://example.com/privacy.html")).text(), "Privacy document");
+  const other = await navigate("https://example.com/photos.html");
+  assert.equal(other.status, 503);
+  assert.doesNotMatch(await other.text(), /Privacy document/);
+  assert.equal((await navigate("https://example.com/privacy.html?different=1")).status, 503);
+});
+
+test("archives have accessible pagination and static year, month, and Unicode topic routes", () => {
+  const posts = Array.from({ length: 32 }, (_, index) => ({ ...post, slug: "entry-" + index, tag: index % 2 ? "प्रकृति & art" : "Notes", published_on: index < 20 ? "2026-11-16" : "2025-10-14" }));
+  const pages = renderPublicPages(template, { posts, photos: [], images: new Map(), files: new Map() });
+  for (const values of [{ view: "archive", page: "2" }, { view: "archive", year: "2026" }, { view: "archive", month: "2025-10" }, { view: "archive", tag: "प्रकृति & art", page: "2" }]) {
+    const file = pageHref(values);
+    assert.equal(generatedFile.test(file), true);
+    const url = new URL(file, "https://example.com/");
+    assert.deepEqual(Object.fromEntries(pageParams(url.search, url.pathname)), values);
+    assert.ok(pages.has(file), file);
+  }
+  assert.equal((pages.get("archive.html").match(/<article class="entry">/g) || []).length, archivePageSize);
+  assert.match(pages.get("archive.html"), /rel="next" href="archive-page-2.html"/);
+  assert.match(pages.get("archive-page-2.html"), /rel="prev" href="archive.html"/);
+  assert.equal(archiveEntries(posts, new URLSearchParams({ year: "2025" })).length, 12);
+  assert.match(renderArchive(posts, new URLSearchParams({ page: "999" })), /Page 3 of 3/);
+});
+
+test("legal pages offer email without scripts, and reading sections explain their purpose", () => {
+  const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() });
+  for (const file of ["privacy.html", "terms.html"]) {
+    assert.match(pages.get(file), /href="mailto:uniquevara.ai@gmail.com"/);
+    assert.match(pages.get(file), /created to protect the editor’s identity/);
+  }
+  assert.match(pages.get("privacy.html"), /id="contact"/);
+  assert.match(pages.get("start.html"), /Find your way in/);
+  assert.match(pages.get("photo-essays.html"), /sequence of photographs/);
+  assert.match(pages.get("collections.html"), /shared theme/);
+});
+
+test("photo metadata preserves descriptions and suppresses filenames and tracking URLs", () => {
+  assert.equal(photoText("Blue ridges beneath a pale morning sky"), "Blue ridges beneath a pale morning sky");
+  for (const value of ["IMG_1234.jpg", "250px Billie Jean Single.jpg utm source=en.wikipedia", "https://example.com/x", "sayan nath FWnbuCU8Axk unsplash"]) assert.equal(photoText(value), "");
+  const clean = publicPhoto({ title: "IMG_1234.jpg", alt: "https://example.com/x" });
+  assert.equal(clean.title, "Untitled photograph");
+  assert.match(clean.alt, /description not yet provided/);
+  const pages = renderPublicPages(template, { posts: [], photos: [{ ...photo, title: "bad.jpg", alt: "bad.jpg" }], images: new Map(), files: new Map() });
+  assert.doesNotMatch(pages.get("photos.html"), /bad.jpg/);
+});
+
+test("published attachments become binary direct downloads without exposing credentials or draft files", async t => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (address, options) => {
+    calls.push(address);
+    if (address.includes("/storage/")) {
+      assert.ok(address.endsWith("/" + imageId));
+      assert.equal(options.headers.Authorization, "Bearer public");
+      return new Response("Published PDF bytes");
+    }
+    if (address.includes("_posts?")) return Response.json([{ ...post, body: markdownMarker + '[Guide.pdf](attachment:' + imageId + ' "A guide")' }]);
+    return Response.json({ code: "PGRST205" }, { status: 404 });
+  });
+  const snapshot = await loadPublicSnapshot({ origin: "https://example.com", key: "public" });
+  const file = "attachment-" + imageId + ".bin";
+  assert.equal(snapshot.files.get(file).toString(), "Published PDF bytes");
+  const article = renderPublicPages(template, snapshot).get("entry-first-entry.html");
+  assert.match(article, new RegExp('href="' + file + '" download="Guide.pdf"'));
+  assert.doesNotMatch(article, /download with JavaScript|Bearer public/);
+  assert.equal(calls.filter(url => url.includes("/storage/")).length, 1);
 });
 
 test("empty archives render an empty state without a loading placeholder", () => {
@@ -127,6 +222,17 @@ test("the initial route script matches its CSP hash and handles direct and legac
     const classes = new Set();
     runInNewContext(script, { URLSearchParams, location: { pathname, search }, document: { documentElement: { dataset: {}, classList: { add: value => classes.add(value), remove: (...values) => values.forEach(value => classes.delete(value)) } } } });
     assert.ok(classes.has(expected), pathname + search);
+  }
+});
+
+test("legacy section URLs redirect to canonical pages while retaining filters and contact anchors", () => {
+  const script = template.match(/<script>([\s\S]*?)<\/script>/)[1];
+  for (const view of ["archive", "topics", "photos", "start", "privacy", "terms", "collections", "photo-essays", "review", "https://bad.example"]) {
+    const url = new URL("https://commonhours.qd.je/?view=" + encodeURIComponent(view) + "&year=2026#contact");
+    let redirected;
+    const location = { href: url.href, search: url.search, pathname: url.pathname, hash: url.hash, replace: address => { redirected = address; } };
+    runInNewContext(script, { URL, URLSearchParams, location, document: { documentElement: { dataset: {}, classList: { add() {}, remove() {} } } } });
+    assert.equal(redirected, ["review", "https://bad.example"].includes(view) ? undefined : "https://commonhours.qd.je/" + view + ".html?year=2026#contact");
   }
 });
 
