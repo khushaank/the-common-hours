@@ -66,10 +66,7 @@ export function restoreArticleAnchors(body) {
 
 export async function findEntries(query) {
   const { url } = await import("./config.js");
-  if (!url) {
-    const { default: posts } = await import("./demo.js");
-    return posts.filter(post => [post.title, post.tag, post.body, post.excerpt].some(value => value.toLowerCase().includes(query.toLowerCase())));
-  }
+  if (!url) return [];
   if (!navigator.onLine) return cachedEntries(query);
   try {
     return await request("/rest/v1/rpc/qmargin_b74_search_posts", { method: "POST", body: { p_query: query } });

@@ -1,7 +1,25 @@
 # Applying the security fixes
 
-Nothing in this change has been applied to production. Run the Supabase steps
-yourself. The journal and legacy SQL are separate because the older tables serve
+## Desk checks — 16 November 2026
+
+[`supabase/verify-desk-security.sql`](supabase/verify-desk-security.sql) passed
+against the journal database. It checks journal RLS, visitor and non-admin access,
+private drafts/inbox/analytics, attachment-helper permissions, and the private
+cleanup backup when present. The renderer tests reject executable URLs and check
+that HTML and attribute payloads stay escaped. The desk refuses to initialize in
+a frame. Review-link creation and its background draft-sharing calls were removed.
+
+The live host did not return CSP, X-Frame-Options, X-Content-Type-Options,
+Referrer-Policy, or HSTS response headers during inspection. The HTML retains
+its CSP/referrer meta policies; response-header protection still needs hosting
+configuration. The database advisor also reports
+[leaked-password protection disabled](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+These checks do not establish that every possible attack is prevented.
+
+The following sections document the earlier hardening/deployment procedures.
+
+For a new installation, run the Supabase steps below. The journal and legacy SQL
+are separate because the older tables serve
 another application. Neither script deletes application records. Take a database
 backup before applying either migration.
 

@@ -1,8 +1,12 @@
 import { getProjectOrigin } from "./config.js";
 import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, mediaId, missingColumn, missingFeature, readMediaImage, request, showFailure, table, uploadAttachment, weekOf } from "./common.js";
 import { setupEditorTools } from "./editor-tools.js";
-import { setupReviewLinks } from "./review-links.js";
 import { setupPhotoTools } from "./photo-tools.js";
+
+if (window.top !== window.self) {
+  document.body.replaceChildren();
+  throw new Error("Open the writing desk directly in its own tab.");
+}
 
 const login = document.querySelector("#login");
 const editor = document.querySelector("#editor");
@@ -41,6 +45,13 @@ document.querySelector("#back-entries").addEventListener("click", () => {
   if (busy) return;
   showSection("entries");
   document.querySelector("#entries-panel h1").focus({ preventScroll: true });
+});
+const entryActions = document.querySelector("#entry-actions");
+for (const [id, target] of [["edit-entry-title", titleInput], ["edit-entry-body", editor.elements.namedItem("body")], ["edit-entry-settings", entryDetails]]) {
+  document.querySelector("#" + id).addEventListener("click", () => target.focus());
+}
+entryActions.addEventListener("click", event => {
+  if (event.target.closest("button") && entryActions.matches(":popover-open")) entryActions.hidePopover();
 });
 const featureFields = ["reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay"];
 const featurePanel = document.querySelector("#entry-features");
@@ -153,7 +164,7 @@ featurePanel.addEventListener("toggle", async () => {
     photoPicker.replaceChildren(new Option("No paired photo", ""), ...photos.map(photo => new Option(photo.title, photo.id)),
       ...monthly.map(photo => new Option(photo.caption || photo.month.slice(0, 7), "month-" + photo.month.slice(0, 7))));
     selectPairedPhoto(selected);
-    pairingStatus.textContent = photos.length || monthly.length ? "" : "Add a photo under Photos → Archive uploads to pair it with an entry.";
+    pairingStatus.textContent = photos.length || monthly.length ? "" : "Add a photo under Photos → Archive to pair it with an entry.";
   } catch {
     pairingStatus.textContent = "Archive photos could not load. Reopen this section to try again.";
   }
@@ -164,10 +175,16 @@ const slot = () => current || "new";
 const backupKey = () => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + slot();
 const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
 const cloudPath = () => "working_drafts?slot=eq." + slot();
-const reviews = setupReviewLinks(adminRpc, () => ({ owner: draftOwner, slot: slot(), fields: entryFields(), dirty: dirty() }), run, status, showDraftStatus);
 
 function showDraftStatus(message) {
   if (draftStatus.textContent !== message) draftStatus.textContent = message;
+}
+
+function updatePublishActions() {
+  for (const button of editor.querySelectorAll('[value="publish"]')) {
+    button.textContent = activePost?.published ? "Update published entry" : "Publish";
+    button.hidden = Boolean(activePost?.published) && !dirty();
+  }
 }
 
 function readBackup() {
@@ -194,6 +211,7 @@ function saveBackup() {
     } catch { backupStored = false; }
     showDraftStatus(backupStored ? "Draft backed up on this device." : "Unsaved changes. Use Save draft.");
   }
+  updatePublishActions();
   updateExitWarning();
 }
 
@@ -221,7 +239,6 @@ async function recoverDraft() {
   updateEditorTitle();
   saveBackup();
   showDraftStatus(chosen === local ? "Draft recovered from this device." : "Saved draft restored.");
-  reviews.changed();
 }
 
 async function deleteCloudDraft() {
@@ -406,9 +423,8 @@ function openEditor(post) {
   updateEditorTitle();
   document.querySelector("#editor-state").textContent = post?.published ? "Published" : "Draft";
   document.querySelector("#editor-state").dataset.published = String(Boolean(post?.published));
-  editor.querySelector('[value="publish"]').textContent = post?.published ? "Update published entry" : "Publish";
   baseline = snapshot();
-  reviews.open();
+  updatePublishActions();
   backupStored = cloudDraft = false;
   showDraftStatus("");
   editorTools.refresh();
@@ -607,7 +623,7 @@ editor.addEventListener("submit", event => {
       backupStored = true;
       updateExitWarning();
       showDraftStatus("Draft saved.");
-      status.textContent = (activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.") + await reviews.save();
+      status.textContent = (activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.");
       return;
     }
     if (!validSlug || !complete) {
@@ -656,7 +672,6 @@ editor.addEventListener("submit", event => {
     }
     if (!saved) throw new Error("The entry could not be saved.");
     entriesRevision++;
-    const reviewNote = await reviews.save({ p_post: saved.id, p_publish: publishing });
     removeBackup();
     const cleared = await deleteCloudDraft().then(() => true, () => false);
     const { id, slug, title, tag, published, published_on } = saved;
@@ -665,7 +680,7 @@ editor.addEventListener("submit", event => {
       b.published_on.localeCompare(a.published_on) || b.id.localeCompare(a.id));
     openEditor(saved);
     status.textContent = (saved.published ? "Entry published." : "Draft saved.") +
-      (cleared ? "" : " The previous cloud draft could not be cleared.") + reviewNote;
+      (cleared ? "" : " The previous cloud draft could not be cleared.");
   });
 });
 
@@ -673,7 +688,7 @@ search.addEventListener("input", renderPostList);
 entryFilter.addEventListener("change", renderPostList);
 titleInput.addEventListener("input", updateEditorTitle);
 editor.elements.namedItem("published_on").addEventListener("input", updateEditorTitle);
-editor.addEventListener("input", () => { saveBackup(); reviews.changed(); });
+editor.addEventListener("input", saveBackup);
 
 function showSection(section) {
   if (!document.querySelector("#entries-panel").hidden) entryListScroll = window.scrollY;

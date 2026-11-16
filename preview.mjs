@@ -14,7 +14,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   console.error("Use a port from 0 to 65535. Port 0 picks an available port.");
   process.exit(1);
 }
-const files = new Set(app === "blog" ? [...blogFiles, "demo.js", "feed.xml"] : adminFiles);
+const files = new Set(app === "blog" ? [...blogFiles, "feed.xml"] : adminFiles);
 const built = app === "blog" && process.argv.includes("--built");
 for (const file of sharedFiles) files.add(file);
 files.add("config.js");
@@ -40,7 +40,6 @@ const server = createServer(async (request, response) => {
     }
     if (app === "blog" && !built && (file === "index.html" || generatedFile.test(file)) && !publicPages) {
       publicPages = Promise.all([readFile(assetSource(app, "index.html"), "utf8"), loadPublicSnapshot(config)]).then(async ([html, snapshot]) => {
-        if (!config.origin) snapshot.posts = (await import("./blog/demo.js")).default;
         return renderPublicPages(withConnectSource(html, config), snapshot);
       }).catch(error => { publicPages = null; throw error; });
     }

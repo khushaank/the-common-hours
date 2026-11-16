@@ -3,8 +3,10 @@ import { readFile } from "node:fs/promises";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 import { reviewAttachment } from "./supabase/functions/review-attachment/handler.mjs";
 import { securityHeaders } from "./site-config.mjs";
+import { renderMarkup } from "./shared/rich.js";
 
 const id = "12345678-1234-1234-1234-123456789abc";
 const token = "a".repeat(64);
@@ -70,10 +72,38 @@ test("preview sends security headers on assets and missing pages", async t => {
   }
 });
 
-test("review snapshots no longer mint or return signed URLs", async () => {
-  const editor = await readFile(new URL("./admin/review-links.js", import.meta.url), "utf8");
-  assert.doesNotMatch(editor, /expiresIn|signedURL|object\/sign/);
+test("desk no longer creates reviews and existing review downloads keep access checks", async () => {
+  const editor = await readFile(new URL("./admin/desk.js", import.meta.url), "utf8");
+  assert.doesNotMatch(editor, /setupReviewLinks|review-links\.js|expiresIn|signedURL|object\/sign/);
   const reader = await readFile(new URL("./blog/reading.js", import.meta.url), "utf8");
   assert.match(reader, /\/functions\/v1\/review-attachment/);
   assert.doesNotMatch(reader, /draft\.files|object\/sign/);
+});
+
+test("article markup cannot inject scripts, handlers, frames, or executable URLs", () => {
+  for (const input of [
+    '<script>alert(1)</script>', '<img src=x onerror="alert(1)">', '<svg onload="alert(1)"></svg>',
+    '<iframe src="https://attacker.invalid"></iframe>', '[click](javascript:alert(1))',
+    '[click](jav&#x61;script:alert(1))', '[click](data:text/html;base64,PHNjcmlwdD4=)',
+    '![" onerror="alert(1)](media:12345678-1234-1234-1234-123456789abc)',
+    '![caption](media:12345678-1234-1234-1234-123456789abc "<img src=x onerror=alert(1)>")',
+    '^[<script>alert(1)</script>]',
+  ]) {
+    const html = renderMarkup(input);
+    assert.doesNotMatch(html, /<(?:script|iframe|svg|object|embed)\b/i);
+    for (const tag of html.match(/<[^>]+>/g) || []) {
+      assert.doesNotMatch(tag.replace(/"[^"]*"|'[^']*'/g, '""'), /\son(?:error|load|click)\s*=/i);
+    }
+    assert.doesNotMatch(html, /(?:href|src)="(?:javascript|data|vbscript):/i);
+  }
+});
+
+test("the desk refuses to expose its UI inside a frame", async () => {
+  const source = await readFile(new URL("./admin/desk.js", import.meta.url), "utf8");
+  const guard = source.slice(source.indexOf("if (window.top"), source.indexOf("const login ="));
+  let cleared = false;
+  assert.throws(() => runInNewContext(guard, { window: { top: {}, self: {} }, document: { body: { replaceChildren() { cleared = true; } } } }), /Open the writing desk directly/);
+  assert.equal(cleared, true);
+  const sameWindow = {};
+  assert.doesNotThrow(() => runInNewContext(guard, { window: { top: sameWindow, self: sameWindow } }));
 });

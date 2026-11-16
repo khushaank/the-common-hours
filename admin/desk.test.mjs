@@ -6,6 +6,7 @@ import { test } from "node:test";
 const source = await readFile(new URL("./editor-tools.js", import.meta.url), "utf8");
 const deskSource = await readFile(new URL("./desk.js", import.meta.url), "utf8");
 const statsSource = await readFile(new URL("./stats.js", import.meta.url), "utf8");
+const photosSource = await readFile(new URL("./photo-tools.js", import.meta.url), "utf8");
 
 function element() {
   const listeners = new Map();
@@ -177,22 +178,40 @@ test("sidebar collapse switches to icons and offers expansion", () => {
   assert.equal(classes.size, 0);
 });
 
-test("layout preserves all entry fields, previews, dialogs, and review controls", async () => {
+test("layout preserves entry fields and previews and removes review creation", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   for (const name of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order", "start_here", "reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay", "body"]) {
     assert.ok(html.includes('name="' + name + '"'), name);
   }
-  for (const id of ["write-mode", "preview-mode", "review-entry", "review-result", "reconnect-review", "insert-dialog", "entry-link-dialog", "library-dialog", "media-dialog"]) {
+  for (const id of ["write-mode", "preview-mode", "entry-actions", "insert-dialog", "entry-link-dialog", "library-dialog", "media-dialog"]) {
     assert.ok(html.includes('id="' + id + '"'), id);
   }
   assert.match(html, /<section[^>]+id="entry-details"/);
   assert.doesNotMatch(html, /<details[^>]+id="entry-details"/);
+  assert.doesNotMatch(html, /id="(?:review-entry|review-result|reconnect-review)"/);
   for (const id of ["entries-panel", "compose-panel", "stats-panel", "comments-panel"]) assert.ok(html.includes('id="' + id + '" data-desk-panel'));
   for (const id of ["collapse-rail", "desk-logout"]) {
     const button = html.match(new RegExp('<button[^>]+id="' + id + '"[^>]*>[\\s\\S]*?</button>'))[0];
     assert.doesNotMatch(button, /nav-label/);
     assert.match(button, /aria-label=/);
   }
+});
+
+test("published updates appear only while changed, including the entry actions menu", () => {
+  const buttons = [element(), element()];
+  const context = { activePost: { published: true }, dirty: () => false, editor: { querySelectorAll: () => buttons } };
+  const update = runInNewContext(deskSource.slice(deskSource.indexOf("function updatePublishActions("), deskSource.indexOf("function readBackup(")) + "\nupdatePublishActions", context);
+  update();
+  assert.ok(buttons.every(button => button.hidden));
+  context.dirty = () => true;
+  update();
+  assert.ok(buttons.every(button => !button.hidden && button.textContent === "Update published entry"));
+  context.dirty = () => false;
+  update();
+  assert.ok(buttons.every(button => button.hidden));
+  context.activePost = undefined;
+  update();
+  assert.ok(buttons.every(button => !button.hidden && button.textContent === "Publish"));
 });
 
 test("Dashboard, Entries, and the editor are separate screens with the correct navigation state", () => {
@@ -283,4 +302,48 @@ test("Comments includes published and pending comments and filters them independ
   filter.value = "pending";
   await load();
   assert.equal(comments.children[0].children[2].textContent, "Pending comment");
+});
+
+test("Photos opens on the full archive and metadata edits preserve slideshow selection", async () => {
+  const nodes = new Map();
+  function photoNode(tagName) {
+    const node = element();
+    const listeners = new Map();
+    node.tagName = tagName;
+    node.addEventListener = (type, handler) => listeners.set(type, handler);
+    node.fire = type => listeners.get(type)?.({ preventDefault() {} });
+    node.removeAttribute = () => {};
+    node.querySelectorAll = () => node.children.flatMap(item => item.children).filter(item => item.tagName === "button");
+    node.parentElement = { setAttribute() {}, removeAttribute() {} };
+    return node;
+  }
+  const query = selector => { if (!nodes.has(selector)) nodes.set(selector, photoNode()); return nodes.get(selector); };
+  const form = query("#photo-form");
+  form.elements = { namedItem: query };
+  form.reset = () => {};
+  query("files").files = [];
+  const paths = [];
+  let saved;
+  const photo = { id: "photo", media_id: "media", title: "A real photograph", alt: "Trees by the river", description: "", week: "2026-11-09", featured: true };
+  const setup = runInNewContext(photosSource.replace(/^import[^\n]+\n/gm, "").replaceAll("export ", "") + "\nsetupPhotoTools", {
+    document: { querySelector: query, createElement: photoNode }, window: {},
+    archivePhotoWeek: "1900-01-01", weekOf: () => "2026-11-16", journalToday: () => "2026-11-16",
+    allRows: (api, path) => api(path), loadImage: async () => null, imageSource: () => "", photoText: () => true,
+    missingColumn: () => false, missingFeature: () => false,
+    FormData: class { get(name) { return query(name).value; } has(name) { return Boolean(query(name).checked); } },
+  });
+  const tools = setup(async (path, options) => {
+    paths.push(path);
+    if (options?.method === "PATCH") { saved = options.body; return [{ ...photo, ...saved }]; }
+    return [photo];
+  });
+  await tools.loadPhoto();
+  assert.doesNotMatch(paths[0], /week=eq\./);
+  assert.equal(query("#photo-week").required, false);
+  query("#weekly-photos").children[0].children[0].fire("click");
+  query("featured").checked = false;
+  await form.fire("submit");
+  assert.equal(saved.featured, true);
+  query("#show-week-photos").fire("click");
+  assert.match(paths.at(-1), /week=eq\.2026-11-16/);
 });

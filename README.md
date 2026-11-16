@@ -25,11 +25,9 @@ on demand and every six hours while the GitHub Actions schedule is active.
 Run `supabase/keep-entry-links.sql` to preserve links to published entries when
 their slugs change. It starts with the slugs currently stored in the database.
 
-Run `supabase/live-review-links.sql` before publishing the editor update that
-keeps review links in sync. To keep using a link created before this update,
-open its entry in the writing desk and use **Reconnect a previously shared link**.
-Private access still expires after 24 hours. Once published, a review link
-opens the public entry, including after a slug change.
+The desk no longer creates or refreshes review links. Write and Preview remain
+available in the editor. Previously shared links retain their existing expiry;
+the reader and protected attachment endpoint still handle them.
 
 **Publish journal** also generates HTML for the journal, archive, photos, public
 entries, and policies, plus `sitemap.xml`. These pages can be read without
@@ -67,11 +65,17 @@ To publish a photo essay, add at least two different images to the entry body in
 order you want them to appear. Use `/image` to upload with a caption or `/library`
 to reuse an image.
 
-For public archive photos, go to **Writing Desk → Photos → Archive uploads**.
+For public archive photos, go to **Writing Desk → Photos → Archive** (the default).
 Choose one or more image files and select **Add to archive**. Select an uploaded
 photo to edit its title, alt text, description, or photo series. New uploads
 require a descriptive title and alt text for each photo before publication.
 Existing filename-like public titles and alt text use neutral placeholders until
 the editor supplies descriptions; stored originals are preserved in the desk.
+
+The confirmed sample cleanup and its optional undo are saved as
+[`supabase/remove-confirmed-samples.sql`](supabase/remove-confirmed-samples.sql)
+and [`supabase/restore-confirmed-samples.sql`](supabase/restore-confirmed-samples.sql).
+The cleanup keeps a private database backup with no visitor or signed-in client
+grants. Browser-only development previews contain no sample articles.
 
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

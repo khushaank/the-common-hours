@@ -82,7 +82,16 @@
             </div>
           </div>
           <header class="compose-heading">
-            <h1><textarea id="editor-title" name="title" rows="1" maxlength="180" placeholder="New entry" aria-label="Entry title" required></textarea></h1>
+            <div class="compose-title-row"><h1><textarea id="editor-title" name="title" rows="1" maxlength="180" placeholder="New entry" aria-label="Entry title" required></textarea></h1>
+              <button type="button" id="entry-actions-button" popovertarget="entry-actions" aria-label="Entry actions" title="Entry actions"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+              <div id="entry-actions" popover="auto" aria-label="Entry actions">
+                <button type="button" id="edit-entry-title">Edit title</button>
+                <button type="button" id="edit-entry-body">Edit body</button>
+                <button type="button" id="edit-entry-settings">Publish settings</button>
+                <button type="submit" value="draft" formnovalidate>Save draft</button>
+                <button type="submit" value="publish" formnovalidate>Publish</button>
+              </div>
+            </div>
             <p class="entry-state"><span id="editor-state">Draft</span><span id="editor-date"></span></p>
           </header>
             <section class="entry-details" id="entry-details" aria-labelledby="publish-settings-title" tabindex="-1">
@@ -111,17 +120,6 @@
                 <label class="checkbox"><input name="photo_essay" type="checkbox" value="true"> List as a photo essay</label>
                 <p class="muted">Use /image in the body to add photos in order, with optional captions. Use /library to reuse an uploaded image.</p>
               </details>
-              <button type="button" id="review-entry">Create review link ↗</button>
-              <div id="review-result" class="card" hidden>
-                <label>Review link <input type="url" id="review-url" readonly></label>
-                <div class="actions"><button type="button" id="copy-review">Copy link</button><a id="open-review" target="_blank" rel="noopener noreferrer" hidden>Open review ↗</a><span id="review-expiry"></span></div>
-                <p class="muted">People with this link can see your edits until it expires. After you publish, the link opens the public entry.</p>
-                <details id="reconnect-review">
-                  <summary>Reconnect a previously shared link</summary>
-                  <label>Previous link <input type="text" inputmode="url" id="previous-review-url" autocomplete="off"></label>
-                  <button type="button" id="attach-review">Reconnect link</button>
-                </details>
-              </div>
               </div>
             </section>
             <div class="editor-workspace">
@@ -164,13 +162,14 @@
       </section>
       <section id="site-panel" data-desk-panel hidden>
         <div class="section-heading"><h1>Photos</h1><a href="../photos.html" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
-        <p class="muted">Choose Archive uploads, select your files, and write a title and alt text for each before adding them to the public archive.</p>
+        <p class="muted">Manage the photo archive, or choose Photo of the Week to arrange the slideshow.</p>
         <form id="photo-form" class="card photo-workspace" method="post">
-          <div class="actions" role="group" aria-label="Photo collection"><button type="button" id="show-week-photos" aria-pressed="true">Photo of the Week</button><button type="button" id="show-archive-photos" aria-pressed="false">Archive uploads</button></div>
-          <div class="photo-week-toolbar" id="photo-week-toolbar">
+          <div class="actions" role="group" aria-label="Photo collection"><button type="button" id="show-week-photos" aria-pressed="false">Photo of the Week</button><button type="button" id="show-archive-photos" aria-pressed="true">Archive</button></div>
+          <div class="photo-week-toolbar" id="photo-week-toolbar" hidden>
             <label>Week starting <input id="photo-week" type="date" required></label>
             <p class="muted">Choose any date to select its week. The homepage shows the latest featured week.</p>
           </div>
+          <div class="photo-main">
           <div id="photo-upload" class="photo-upload">
             <label>Photos <input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" aria-describedby="photo-upload-help"></label>
             <p id="photo-upload-help" class="muted">Select images and add a descriptive title and alt text for each before publishing.</p>
@@ -184,13 +183,14 @@
               <label>Alt text <input name="alt" maxlength="200"></label>
               <label>Description <textarea name="description" maxlength="4000" rows="5"></textarea></label>
               <label>Photo series <input name="series" maxlength="100"></label>
-              <label class="checkbox" id="photo-featured"><input name="featured" type="checkbox" checked> Include in the slideshow</label>
+              <label class="checkbox" id="photo-featured" hidden><input name="featured" type="checkbox" checked> Include in the slideshow</label>
             </div>
           </div>
-          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to week</button><p id="photo-status" role="status"></p></div>
+          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to archive</button><p id="photo-status" role="status"></p></div>
+          </div>
           <section class="week-collection" aria-labelledby="week-collection-title">
-            <div class="body-heading"><h2 id="week-collection-title">This week’s photos</h2><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" disabled>Clear slideshow queue</button></div></div>
-            <p id="photo-queue-help" class="muted queue-help">Cleared photos stay in the archive. To feature one again, select it below and check “Include in the slideshow.”</p>
+            <div class="body-heading"><h2 id="week-collection-title">Photo archive</h2><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" hidden disabled>Clear slideshow queue</button></div></div>
+            <p id="photo-queue-help" class="muted queue-help" hidden>Cleared photos stay in the archive. To feature one again, select it below and check “Include in the slideshow.”</p>
             <ul id="weekly-photos" aria-live="polite"></ul>
           </section>
         </form>

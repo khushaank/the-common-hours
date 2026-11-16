@@ -47,7 +47,7 @@ const get = (path, options) => request(table(path), options);
 const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
 
 async function loadPublicPosts() {
-  if (demo) return (await import("./demo.js")).default;
+  if (demo) return [];
   return publicData("posts", fetchPublicPosts, 0);
 }
 
