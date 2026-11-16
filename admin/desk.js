@@ -12,10 +12,6 @@ const postList = document.querySelector("#posts");
 const comments = document.querySelector("#comments");
 const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
-const entryList = document.querySelector("#entry-list");
-const toggleEntries = document.querySelector("#toggle-entries");
-const entriesTooltip = document.querySelector("#entries-tooltip");
-const entriesControl = toggleEntries.parentElement;
 const entryDetails = document.querySelector("#entry-details");
 const editorTitle = document.querySelector("#editor-title");
 const titleInput = editor.elements.namedItem("title");
@@ -26,7 +22,6 @@ const draftStatus = document.querySelector("#draft-status");
 const deskMenu = document.querySelector("#desk-menu");
 const deskNav = document.querySelector("#desk-nav");
 const sections = [...document.querySelectorAll("[data-section]")];
-const narrow = matchMedia("(max-width: 1099px)");
 const wide = matchMedia("(min-width: 1100px)");
 function syncNavigation() {
   if (deskNav.matches(":popover-open")) deskNav.hidePopover();
@@ -42,26 +37,10 @@ collapseRail.addEventListener("click", () => {
   collapseRail.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
   collapseRail.setAttribute("aria-label", collapseRail.title);
 });
-let desktopEntriesOpen = true;
-function showEntries(open) {
-  if (!open && entryList.contains(document.activeElement)) toggleEntries.focus();
-  entryList.hidden = !open;
-  toggleEntries.setAttribute("aria-expanded", String(open));
-  entriesTooltip.textContent = open ? "Hide entries" : "Show entries";
-}
-const resetEntriesTooltip = () => { entriesControl.removeAttribute("data-tooltip-dismissed"); };
-entriesControl.addEventListener("pointerenter", resetEntriesTooltip);
-toggleEntries.addEventListener("focus", resetEntriesTooltip);
-document.addEventListener("keydown", event => {
-  if (event.key === "Escape" && (entriesControl.matches(":hover") || toggleEntries.matches(":focus-visible"))) {
-    entriesControl.setAttribute("data-tooltip-dismissed", "");
-  }
-});
-narrow.addEventListener("change", () => showEntries(!narrow.matches && desktopEntriesOpen));
-toggleEntries.addEventListener("click", () => {
-  const open = entryList.hidden;
-  if (!narrow.matches) desktopEntriesOpen = open;
-  showEntries(open);
+document.querySelector("#back-entries").addEventListener("click", () => {
+  if (busy) return;
+  showSection("entries");
+  document.querySelector("#entries-panel h1").focus({ preventScroll: true });
 });
 const featureFields = ["reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay"];
 const featurePanel = document.querySelector("#entry-features");
@@ -92,6 +71,8 @@ let backupStored = false;
 let cloudDraft = false;
 let editorialFields = true;
 let entriesRevision = 0;
+let commentsRevision = 0;
+let entryListScroll = 0;
 
 const sessionKey = () => "common-hours:desk-session:" + getProjectOrigin();
 
@@ -294,26 +275,31 @@ function renderPostList() {
   for (const post of filtered) {
     const li = document.createElement("li");
     const button = document.createElement("button");
+    button.type = "button";
     const state = document.createElement("small");
     button.textContent = post.title;
     state.textContent = (post.published ? "Published" : "Draft") + " · " + post.published_on;
     state.dataset.published = String(post.published);
     button.append(state);
     if (post.id === current) button.setAttribute("aria-current", "true");
-    button.addEventListener("click", () => {
-      if (post.id === current || !canLeaveDraft()) return;
-      run(button, async () => {
-        const [record] = await api("posts?id=eq." + post.id);
-        if (!record) throw new Error("This entry is unavailable.");
-        openEditor(record);
-        await recoverDraft();
-        if (narrow.matches) showEntries(false);
-      }).then(() => { if (!busy && current === post.id) editorTitle.focus({ preventScroll: true }); });
-    });
+    button.addEventListener("click", () => editEntry(post, button));
     li.append(button);
     postList.append(li);
   }
   postList.scrollTop = scrollTop;
+}
+
+function editEntry(post, button) {
+  if (busy || !canLeaveDraft()) return;
+  run(button, async () => {
+    if (post.id !== current) {
+      const [record] = await api("posts?id=eq." + post.id);
+      if (!record) throw new Error("This entry is unavailable.");
+      openEditor(record);
+      await recoverDraft();
+    }
+    showSection("compose");
+  }).then(() => { if (!busy && current === post.id) editorTitle.focus({ preventScroll: true }); });
 }
 
 const tags = document.querySelector("#tags");
@@ -455,9 +441,13 @@ document.addEventListener("visibilitychange", () => {
 });
 
 async function loadComments() {
-  const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc");
+  const revision = ++commentsRevision;
+  const filter = document.querySelector("#comment-filter").value;
+  const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc" +
+    (filter === "all" ? "" : "&approved=eq." + (filter === "published")));
+  if (revision !== commentsRevision) return;
   comments.replaceChildren();
-  if (!rows.length) comments.textContent = "No comments yet.";
+  if (!rows.length) comments.textContent = filter === "all" ? "No comments yet." : "No " + filter + " comments.";
   const titles = new Map(posts.map(post => [post.id, post.title]));
   for (const row of rows) {
     const article = document.createElement("article");
@@ -465,7 +455,7 @@ async function loadComments() {
     const name = document.createElement("strong");
     name.textContent = row.display_name;
     const context = document.createElement("small");
-    context.textContent = (row.approved ? "Visible" : "Pending") + " · " + (titles.get(row.post_id) || "Entry");
+    context.textContent = (row.approved ? "Published" : "Pending") + " · " + (titles.get(row.post_id) || "Entry");
     const body = document.createElement("p");
     body.textContent = row.body;
     const actions = document.createElement("div");
@@ -512,14 +502,14 @@ async function openDesk() {
   } catch { /* A remembered entry is optional. */ }
   openEditor(lastEntry);
   await recoverDraft();
-  showSection("entries");
-  showEntries(!narrow.matches && desktopEntriesOpen);
+  showSection("stats");
   storeSession();
   login.reset();
   login.hidden = true;
   desk.hidden = false;
   document.body.classList.add("desk-open");
   deskMenu.hidden = false;
+  void openStats();
 }
 
 try {
@@ -581,7 +571,7 @@ newPost.addEventListener("click", () => {
   run(newPost, async () => {
     openEditor();
     await recoverDraft();
-    if (narrow.matches) showEntries(false);
+    showSection("compose");
   }).then(() => { if (!busy && !current) titleInput.focus({ preventScroll: true }); });
 });
 
@@ -686,12 +676,14 @@ editor.elements.namedItem("published_on").addEventListener("input", updateEditor
 editor.addEventListener("input", () => { saveBackup(); reviews.changed(); });
 
 function showSection(section) {
-  document.body.classList.toggle("writing", section === "entries");
+  if (!document.querySelector("#entries-panel").hidden) entryListScroll = window.scrollY;
+  document.body.classList.toggle("writing", section === "compose");
+  for (const panel of document.querySelectorAll("[data-desk-panel]")) panel.hidden = panel.id !== section + "-panel";
   for (const button of sections) {
-    const selected = button.dataset.section === section;
+    const selected = button.dataset.section === section || section === "compose" && button.dataset.section === "entries";
     button.setAttribute("aria-pressed", String(selected));
-    document.querySelector("#" + button.dataset.section + "-panel").hidden = !selected;
   }
+  window.scrollTo(0, section === "entries" ? entryListScroll : 0);
 }
 
 async function loadPrivacyRequests() {
@@ -731,22 +723,24 @@ async function loadPrivacyRequests() {
 }
 
 async function openInbox() {
-  comments.textContent = "Loading comments…";
   inbox.textContent = "Loading privacy requests…";
-  await Promise.allSettled([
-    loadComments().catch(() => showFailure(comments, "Comments could not load.", openInbox)),
-    loadPrivacyRequests(),
-  ]);
+  await loadPrivacyRequests();
 }
+
+async function openComments() {
+  comments.textContent = "Loading comments…";
+  await loadComments().catch(() => showFailure(comments, "Comments could not load.", openComments));
+}
+document.querySelector("#comment-filter").addEventListener("change", openComments);
 
 async function openStats() {
   try {
     const { setupStats } = await import("./stats.js");
     if (!session || document.querySelector("#stats-panel").hidden) return;
-    stats ??= setupStats(api, () => posts);
+    stats ??= setupStats(api, () => posts, editEntry);
     await stats.load();
   } catch {
-    document.querySelector("#stats-status").textContent = "Stats could not open. Try again.";
+    document.querySelector("#stats-status").textContent = "Dashboard could not open. Try again.";
   }
 }
 
@@ -772,11 +766,12 @@ for (const button of sections) {
     if (deskNav.matches(":popover-open")) deskNav.hidePopover();
     if (!wide.matches) deskMenu.focus();
     if (busy) return;
-    if (button.getAttribute("aria-pressed") === "true") return;
     const section = button.dataset.section;
+    if (button.getAttribute("aria-pressed") === "true" && !document.body.classList.contains("writing")) return;
     showSection(section);
     if (section === "site") void photoTools.loadPhoto();
     if (section === "inbox") void openInbox();
+    if (section === "comments") void openComments();
     if (section === "stats") void openStats();
     if (section === "media") void openMedia();
   });

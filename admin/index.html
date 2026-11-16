@@ -34,13 +34,14 @@
         <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 53 45 19M21 45C17 24 34 9 56 7 52 28 39 42 21 45ZM25 36l14-3M32 27l13-3M39 19l10-2"/></svg>
         <span>Writing desk</span><small>Editorial CMS</small>
       </div>
-      <button type="button" aria-pressed="true" data-section="entries" aria-label="Entries" title="Entries"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8ZM14 3v5h5M8 12h8M8 16h6"/></svg><span class="nav-label">Entries</span></button>
+      <button type="button" aria-pressed="true" data-section="stats" aria-label="Dashboard" title="Dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V11M10 21V4M16 21V8M22 21V1"/></svg><span class="nav-label">Dashboard</span></button>
+      <button type="button" aria-pressed="false" data-section="entries" aria-label="Entries" title="Entries"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8ZM14 3v5h5M8 12h8M8 16h6"/></svg><span class="nav-label">Entries</span></button>
       <button type="button" aria-pressed="false" data-section="site" aria-label="Photos" title="Photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span class="nav-label">Photos</span></button>
       <button type="button" aria-pressed="false" data-section="media" aria-label="Media" title="Media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7ZM3 7l9 5 9-5M12 12v10M7 4.8l10 5.5v8.5"/></svg><span class="nav-label">Media</span></button>
+      <button type="button" aria-pressed="false" data-section="comments" aria-label="Comments" title="Comments"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Comments</span></button>
       <button type="button" aria-pressed="false" data-section="inbox" aria-label="Inbox" title="Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Inbox</span></button>
-      <button type="button" aria-pressed="false" data-section="stats" aria-label="Stats" title="Stats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V11M10 21V4M16 21V8M22 21V1"/></svg><span class="nav-label">Stats</span></button>
-      <button type="button" id="collapse-rail" aria-label="Collapse sidebar" title="Collapse sidebar" aria-controls="desk-nav" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m7-13-4 4 4 4"/></svg><span class="nav-label">Collapse</span></button>
-      <button type="button" id="desk-logout" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M8 12h13m-5-5 5 5-5 5"/></svg><span class="nav-label">Log out</span></button>
+      <button type="button" id="collapse-rail" aria-label="Collapse sidebar" title="Collapse sidebar" aria-controls="desk-nav" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m7-13-4 4 4 4"/></svg></button>
+      <button type="button" id="desk-logout" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M8 12h13m-5-5 5 5-5 5"/></svg></button>
       <svg class="rail-landscape" viewBox="0 0 220 250" fill="none" stroke="currentColor" stroke-width=".8" aria-hidden="true">
         <path d="M-10 180Q43 164 90 183T230 178M-10 187Q43 171 90 190T230 185M-10 194Q43 178 90 197T230 192M-10 201Q43 185 90 204T230 199M-10 208Q43 192 90 211T230 206M-10 215Q43 199 90 218T230 213M-10 222Q43 206 90 225T230 220M-10 229Q43 213 90 232T230 227M-10 236Q43 220 90 239T230 234M80 184q8-54 1-106m-1 70-30-38m32 22 35-44M81 115 65 80m16 21 22-32M79 139l-13-37m18 48 24-32"/>
         <path d="M39 112q-20-15-2-24-16-20 9-24-2-19 19-17 9-24 27-8 23-11 25 12 27-1 21 22 20 9 4 25-2 23-24 17-11 16-27 3-21 13-28-5-17 10-24-1Z"/>
@@ -48,10 +49,10 @@
       </svg>
     </nav>
     <div class="workspace">
-      <div class="entries-panel" id="entries-panel">
-        <aside class="entry-aside" aria-label="Entry browser">
+      <section class="entries-page" id="entries-panel" data-desk-panel hidden>
+        <div class="entry-browser" aria-label="Entry browser">
           <div class="entry-list-heading">
-            <h2>Entries</h2>
+            <h1 tabindex="-1">Entries</h1>
             <button type="button" id="new-post" class="primary"><span aria-hidden="true">＋</span> New entry</button>
           </div>
           <div class="entry-list" id="entry-list">
@@ -62,14 +63,13 @@
             </div>
             <ul id="posts" aria-label="Entries"></ul>
           </div>
-        </aside>
+        </div>
+      </section>
+      <section class="compose-panel" id="compose-panel" data-desk-panel hidden>
         <form id="editor" class="compose" method="post">
           <div class="compose-topbar">
             <div class="breadcrumb">
-              <div class="entries-control">
-                <button type="button" id="toggle-entries" aria-labelledby="entries-tooltip" aria-controls="entry-list" aria-expanded="true">Entries</button>
-                <span id="entries-tooltip" role="tooltip">Hide entries</span>
-              </div>
+              <button type="button" id="back-entries" aria-controls="entries-panel">← Entries</button>
               <span aria-hidden="true">›</span><span id="editor-breadcrumb">New entry</span>
             </div>
             <div class="actions compose-actions">
@@ -161,8 +161,8 @@
               <span id="word-count">0 words</span>
             </footer>
           </form>
-      </div>
-      <section id="site-panel" hidden>
+      </section>
+      <section id="site-panel" data-desk-panel hidden>
         <div class="section-heading"><h1>Photos</h1><a href="../photos.html" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
         <p class="muted">Choose Archive uploads, select your files, and write a title and alt text for each before adding them to the public archive.</p>
         <form id="photo-form" class="card photo-workspace" method="post">
@@ -195,7 +195,7 @@
           </section>
         </form>
       </section>
-      <section id="media-panel" hidden>
+      <section id="media-panel" data-desk-panel hidden>
         <div class="section-heading"><h1>Media</h1></div>
         <div class="card">
           <div class="fields media-filters">
@@ -210,20 +210,28 @@
           <button type="button" id="media-more" hidden>Show more</button>
         </div>
       </section>
-      <section id="stats-panel" hidden>
+      <section id="stats-panel" data-desk-panel hidden>
         <div class="section-heading">
-          <h1>Journal stats</h1>
+          <div><p class="eyebrow">The Common Hours</p><h1>Dashboard</h1></div>
           <label>Period <select id="stats-period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></label>
+        </div>
+        <div class="dashboard-overview">
+          <section class="card dashboard-latest"><span class="eyebrow">Last published entry</span><button type="button" id="last-published-entry" disabled>No published entries yet</button><p id="last-published-date" class="muted"></p></section>
+          <section class="card stats-metric"><span>Days since publishing</span><strong id="publishing-age">—</strong><small id="publishing-note"></small></section>
+          <section class="card stats-metric"><span>Busiest day</span><strong id="active-day">—</strong><small id="active-day-note">Loading activity…</small></section>
         </div>
         <p id="stats-status" role="status"></p>
         <div id="stats-report"></div>
       </section>
-      <div id="inbox-panel" hidden>
-        <div class="section-heading"><h1>Inbox</h1></div>
+      <section id="comments-panel" data-desk-panel hidden>
+        <div class="section-heading"><h1>Comments</h1><label>Show <select id="comment-filter"><option value="all">All comments</option><option value="published">Published</option><option value="pending">Pending</option></select></label></div>
         <section class="card moderation">
-          <div class="body-heading"><h2>Comments</h2><button id="refresh-comments" type="button">Refresh</button></div>
+          <div class="body-heading"><p class="muted">Published and pending comments</p><button id="refresh-comments" type="button">Refresh</button></div>
           <div id="comments"></div>
         </section>
+      </section>
+      <div id="inbox-panel" data-desk-panel hidden>
+        <div class="section-heading"><h1>Inbox</h1></div>
         <section class="card moderation">
           <div class="body-heading"><h2>Privacy requests</h2><button id="refresh-privacy" type="button">Refresh</button></div>
           <div id="privacy-requests"></div>

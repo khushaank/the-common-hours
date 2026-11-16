@@ -4,11 +4,31 @@ const number = new Intl.NumberFormat();
 const date = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
 const formatDay = day => date.format(new Date(day + "T00:00:00Z"));
 
-export function setupStats(api, getPosts) {
+export function publishingSummary(posts, today = journalToday()) {
+  const last = posts.filter(post => post.published && post.published_on <= today)
+    .reduce((latest, post) => !latest || post.published_on > latest.published_on ? post : latest, null);
+  return { last, days: last ? Math.floor((Date.parse(today) - Date.parse(last.published_on)) / 86400000) : null };
+}
+
+export function setupStats(api, getPosts, editEntry) {
   const period = document.querySelector("#stats-period");
   const status = document.querySelector("#stats-status");
   const report = document.querySelector("#stats-report");
+  const lastEntry = document.querySelector("#last-published-entry");
+  let latest;
   let revision = 0;
+  lastEntry.addEventListener("click", () => { if (latest) editEntry(latest, lastEntry); });
+
+  function renderPublishing() {
+    const { last, days } = publishingSummary(getPosts());
+    latest = last;
+    lastEntry.textContent = last?.title || "No published entries yet";
+    lastEntry.disabled = !last;
+    document.querySelector("#last-published-date").textContent = last ?
+      "Published " + new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(new Date(last.published_on + "T00:00:00Z")) : "Your next entry starts here.";
+    document.querySelector("#publishing-age").textContent = days === null ? "—" : number.format(days);
+    document.querySelector("#publishing-note").textContent = days === null ? "No publications yet" : days === 0 ? "Published today" : "Based on the publication date";
+  }
 
   function render(days, rows) {
     const daily = new Map(days.map(day => [day, { day, views: 0, visits: 0 }]));
@@ -30,6 +50,9 @@ export function setupStats(api, getPosts) {
       }
     }
     const records = [...daily.values()];
+    const peak = records.reduce((best, row) => row.views > (best?.views || 0) ? row : best, null);
+    document.querySelector("#active-day").textContent = peak ? formatDay(peak.day) : "—";
+    document.querySelector("#active-day-note").textContent = peak ? number.format(peak.views) + " page views" : "No daily activity recorded yet";
     const maxViews = Math.max(1, ...records.map(row => row.views));
     const leaders = [...posts.values()].filter(post => post.views > 0).sort((a, b) => b.views - a.views).slice(0, 10);
     const scale = leaders[0]?.views || 1;
@@ -69,6 +92,9 @@ export function setupStats(api, getPosts) {
     const today = Date.parse(journalToday() + "T00:00:00Z");
     const days = Array.from({ length: count }, (_, index) =>
       new Date(today - (count - index - 1) * 86400000).toISOString().slice(0, 10));
+    renderPublishing();
+    document.querySelector("#active-day").textContent = "—";
+    document.querySelector("#active-day-note").textContent = "Loading activity…";
     status.textContent = "Loading traffic…";
     report.replaceChildren();
     try {
@@ -77,7 +103,8 @@ export function setupStats(api, getPosts) {
     } catch (error) {
       if (revision !== loading) return;
       status.textContent = missingFeature(error) ? "Apply the Supabase traffic upgrade to enable stats." :
-        "Traffic could not load. Reopen Stats or choose another period to retry.";
+        "Traffic could not load. Reopen Dashboard or choose another period to retry.";
+      document.querySelector("#active-day-note").textContent = "Daily activity could not load";
     }
   }
 

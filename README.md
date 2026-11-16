@@ -52,6 +52,13 @@ to the homepage. Live document requests revalidate the browser’s HTTP cache.
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
 
+The Writing Desk opens on **Dashboard**. **Entries** lists every entry; selecting
+one opens its editor and publish settings on a separate screen. **Comments** shows
+all comments, with Published and Pending filters; privacy requests stay in Inbox.
+
+Dashboard uses the existing daily traffic totals and each entry’s publication
+date. No new database migration is required for this layout.
+
 Run [`supabase/add-journal-features.sql`](supabase/add-journal-features.sql) to enable
 reader prompts, photo pairings, themed collections, and photo essays. Set them under
 **Entries → Reader prompt, photo essay, and collection** in the Writing Desk.

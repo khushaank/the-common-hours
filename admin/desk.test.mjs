@@ -5,15 +5,16 @@ import { test } from "node:test";
 
 const source = await readFile(new URL("./editor-tools.js", import.meta.url), "utf8");
 const deskSource = await readFile(new URL("./desk.js", import.meta.url), "utf8");
+const statsSource = await readFile(new URL("./stats.js", import.meta.url), "utf8");
 
 function element() {
   const listeners = new Map();
   return {
-    value: "", textContent: "", hidden: false, scrollTop: 0, dataset: {}, children: [], parentElement: { firstChild: {} },
+    value: "", textContent: "", hidden: false, scrollTop: 0, dataset: {}, style: {}, children: [], parentElement: { firstChild: {} },
     classList: { toggle() {} }, setAttribute() {}, focus() {}, scrollIntoView() {},
     addEventListener(type, listener) { listeners.set(type, [...listeners.get(type) || [], listener]); },
     dispatchEvent(event) { for (const listener of listeners.get(event.type) || []) listener(event); },
-    append(child) { this.children.push(child); },
+    append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; this.scrollTop = 0; },
     querySelector() { return this.children[0]; },
   };
@@ -162,7 +163,7 @@ test("sidebar collapse switches to icons and offers expansion", () => {
   const attributes = new Map();
   button.setAttribute = (name, value) => attributes.set(name, value);
   const classes = new Set();
-  runInNewContext(deskSource.slice(deskSource.indexOf("const collapseRail ="), deskSource.indexOf("let desktopEntriesOpen")), {
+  runInNewContext(deskSource.slice(deskSource.indexOf("const collapseRail ="), deskSource.indexOf('document.querySelector("#back-entries")')), {
     document: { querySelector: () => button, body: { classList: { toggle(name) {
       if (classes.has(name)) { classes.delete(name); return false; }
       classes.add(name); return true;
@@ -186,4 +187,100 @@ test("layout preserves all entry fields, previews, dialogs, and review controls"
   }
   assert.match(html, /<section[^>]+id="entry-details"/);
   assert.doesNotMatch(html, /<details[^>]+id="entry-details"/);
+  for (const id of ["entries-panel", "compose-panel", "stats-panel", "comments-panel"]) assert.ok(html.includes('id="' + id + '" data-desk-panel'));
+  for (const id of ["collapse-rail", "desk-logout"]) {
+    const button = html.match(new RegExp('<button[^>]+id="' + id + '"[^>]*>[\\s\\S]*?</button>'))[0];
+    assert.doesNotMatch(button, /nav-label/);
+    assert.match(button, /aria-label=/);
+  }
+});
+
+test("Dashboard, Entries, and the editor are separate screens with the correct navigation state", () => {
+  const panels = ["stats", "entries", "compose", "comments"].map(name => ({ id: name + "-panel", hidden: true }));
+  const nav = ["stats", "entries", "comments"].map(name => ({ dataset: { section: name }, setAttribute(key, value) { this[key] = value; } }));
+  let writing;
+  const show = runInNewContext(deskSource.slice(deskSource.indexOf("function showSection("), deskSource.indexOf("async function loadPrivacyRequests")) + "\nshowSection", {
+    sections: nav, entryListScroll: 0, window: { scrollY: 240, scrollTo() {} }, document: { querySelector: () => panels[1], querySelectorAll: () => panels, body: { classList: { toggle(name, value) { writing = value; } } } },
+  });
+  for (const screen of ["stats", "entries", "compose", "entries", "comments"]) {
+    show(screen);
+    assert.deepEqual(panels.filter(panel => !panel.hidden).map(panel => panel.id), [screen + "-panel"]);
+    assert.equal(writing, screen === "compose");
+    assert.equal(nav.find(button => button["aria-pressed"] === "true").dataset.section, screen === "compose" ? "entries" : screen);
+  }
+});
+
+test("reopening the selected entry shows its editor without resetting unsaved content", async () => {
+  let screen;
+  let pending;
+  let requests = 0;
+  let focused = false;
+  const edit = runInNewContext(deskSource.slice(deskSource.indexOf("function editEntry("), deskSource.indexOf("const tags =")) + "\neditEntry", {
+    busy: false, current: "one", canLeaveDraft: () => true,
+    run(button, action) { pending = Promise.resolve().then(action); return pending; },
+    api() { requests++; throw new Error("The selected entry must stay in memory"); },
+    showSection(value) { screen = value; }, editorTitle: { focus() { focused = true; } },
+  });
+  edit({ id: "one" }, element());
+  await pending;
+  assert.equal(screen, "compose");
+  assert.equal(requests, 0);
+  assert.equal(focused, true);
+});
+
+test("publishing recency uses published dates, ignores future entries, and handles no publications", () => {
+  const summary = runInNewContext(statsSource.slice(statsSource.indexOf("export function publishingSummary"), statsSource.indexOf("export function setupStats")).replaceAll("export ", "") + "\npublishingSummary");
+  const posts = [{ id: "old", published: true, published_on: "2026-11-01" }, { id: "draft", published: false, published_on: "2026-11-16" },
+    { id: "last", published: true, published_on: "2026-11-13" }, { id: "future", published: true, published_on: "2026-12-01" }];
+  assert.equal(summary(posts, "2026-11-16").last.id, "last");
+  assert.equal(summary(posts, "2026-11-16").days, 3);
+  assert.equal(summary(posts, "2026-11-13").days, 0);
+  assert.equal(summary([], "2026-11-16").days, null);
+  assert.deepEqual(posts.map(post => post.id), ["old", "draft", "last", "future"]);
+});
+
+test("Dashboard sums daily page views for the busiest day without requesting hourly data", async () => {
+  const nodes = new Map();
+  const query = selector => { if (!nodes.has(selector)) nodes.set(selector, element()); return nodes.get(selector); };
+  query("#stats-period").value = "30";
+  query("#stats-report").querySelector = () => query("chart");
+  const paths = [];
+  const setup = runInNewContext(statsSource.replace(/^import[^\n]+\n/, "").replaceAll("export ", "") + "\nsetupStats", {
+    document: { querySelector: query, createElement: element }, journalToday: () => "2026-11-16", escape: value => value,
+    allRows: (api, path) => api(path), missingFeature: () => false,
+  });
+  const stats = setup(async path => {
+    paths.push(path);
+    return [{ day: "2026-11-15", page: "journal", views: 4, visits: 2 }, { day: "2026-11-15", page: "post/one", views: 7, visits: 3 },
+      { day: "2026-11-14", page: "journal", views: 5, visits: 2 }];
+  }, () => [{ id: "one", title: "Market", published: true, published_on: "2026-11-13" }], () => {});
+  await stats.load();
+  assert.equal(query("#last-published-entry").textContent, "Market");
+  assert.equal(query("#publishing-age").textContent, "3");
+  assert.equal(query("#active-day-note").textContent, "11 page views");
+  assert.match(query("#active-day").textContent, /15/);
+  assert.equal(paths.length, 1);
+  assert.match(paths[0], /^traffic\?/);
+});
+
+test("Comments includes published and pending comments and filters them independently of Inbox", async () => {
+  const comments = element();
+  const filter = { value: "all" };
+  const rows = [{ id: "a", display_name: "A reader", approved: true, body: "Published comment", post_id: "one" },
+    { id: "b", display_name: "Another reader", approved: false, body: "Pending comment", post_id: "one" }];
+  const load = runInNewContext(deskSource.slice(deskSource.indexOf("async function loadComments("), deskSource.indexOf("async function openDesk(")) + "\nloadComments", {
+    comments, commentsRevision: 0, posts: [{ id: "one", title: "Market" }], api() {},
+    allRows: async (_, path) => rows.filter(row => !path.includes("&approved=") || row.approved === path.includes("&approved=eq.true")),
+    document: { querySelector: () => filter, createElement: element },
+  });
+  await load();
+  assert.equal(comments.children.length, 2);
+  assert.match(comments.children[0].children[1].textContent, /^Published/);
+  filter.value = "published";
+  await load();
+  assert.equal(comments.children.length, 1);
+  assert.equal(comments.children[0].children[2].textContent, "Published comment");
+  filter.value = "pending";
+  await load();
+  assert.equal(comments.children[0].children[2].textContent, "Pending comment");
 });
