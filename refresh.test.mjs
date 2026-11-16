@@ -25,14 +25,16 @@ function carousel(get) {
   const caption = element();
   const items = { img: picture, "#photo-caption": caption, "#slide-next": element(), "#slide-count": element(), ".slide": element() };
   const figure = { ...element(), querySelector: selector => items[selector], removeAttribute() {} };
-  const source = photosSource.slice(photosSource.indexOf("async function featurePhotos"), photosSource.indexOf("\nfunction photoDate"));
+  const source = photosSource.slice(photosSource.indexOf("async function optional"), photosSource.indexOf("\nasync function getImage")) +
+    photosSource.slice(photosSource.indexOf("async function featurePhotos"), photosSource.indexOf("\nfunction photoDate"));
   const run = runInNewContext(source.replace("export ", "") + "\nstartSlideshow", {
     document: { querySelector: () => figure, addEventListener() {}, hidden: false },
     matchMedia: () => ({ matches: true, addEventListener() {} }),
-    publicData: async (key, fetch, age) => { assert.equal(age, 0); return fetch(); },
+    publicData: () => { throw new Error("The featured list must not reuse a cached fallback"); },
     publicPhoto: photo => photo,
     cover: { id: "cover", title: "Cover" }, archivePhotoWeek: "1900-01-01", weekOf: () => "2026-11-16",
-    optional: async task => task, allRows: () => { throw new Error("Unexpected pagination"); }, weeklyFields: "id,week,media_id",
+    missingFeature: error => ["42P01", "PGRST205"].includes(error?.code),
+    allRows: () => { throw new Error("Unexpected pagination"); }, weeklyFields: "id,week,media_id",
     getImage: async (_, photo) => ({ src: photo.id === "cover" ? "cover.jpg" : "live.jpg", width: 1200, height: 800 }),
     Image: class { async decode() {} }, clearTimeout() {}, setTimeout() {},
   });
@@ -63,4 +65,22 @@ test("cover is used only after a successful empty result, never a request error"
   assert.equal(failed.attributes.has("src"), false);
   assert.equal(failed.figure.hidden, false);
   assert.match(failed.caption.textContent, /Photo could not load/);
+  const unavailable = carousel(async () => { throw Object.assign(new Error("Table unavailable"), { code: "PGRST205" }); });
+  await unavailable.run();
+  assert.equal(unavailable.attributes.has("src"), false);
+  assert.match(unavailable.caption.textContent, /Photo could not load/);
+});
+
+test("photo media is refreshed before display, and deleted media is not replaced with a cover", async () => {
+  const source = photosSource.slice(photosSource.indexOf("async function getImage"), photosSource.indexOf("\nasync function featurePhotos"));
+  let record = { src: "current.jpg", width: 800, height: 600 };
+  const getImage = runInNewContext(source + "\ngetImage", {
+    cover: { id: "cover" }, document: { querySelector: () => null },
+    publicData: async (key, fetch, age) => { assert.equal(age, 0); return fetch(); },
+    readMediaImage: async () => record, imageSource: image => image?.src,
+  });
+  const photo = { id: "photo", media_id: "media" };
+  assert.equal((await getImage(null, photo)).src, "current.jpg");
+  record = undefined;
+  await assert.rejects(getImage(null, photo), /Photo unavailable/);
 });

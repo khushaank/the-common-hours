@@ -32,7 +32,7 @@ async function getImage(get, photo, options) {
   if (snapshot?.first?.id === photo.id && snapshot.first.media_id === photo.media_id) {
     return { src: "featured.webp?v=" + snapshot.version, width: snapshot.width, height: snapshot.height };
   }
-  const record = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id, options));
+  const record = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id, options), 0);
   const src = imageSource(record);
   if (!src) throw new Error("Photo unavailable.");
   return { src, width: record.width, height: record.height, alt: record.alt };
@@ -44,8 +44,8 @@ function featuredSnapshot() {
 
 async function featurePhotos(get) {
   const options = { timeout: 5000 };
-  const rows = await optional(get("weekly_photos?select=" + weeklyFields + ",featured&and=(week.lte." + weekOf() +
-    ",week.neq." + archivePhotoWeek + ")&featured=eq.true&order=week.desc,created_at.asc,id.asc&limit=100", options));
+  const rows = await get("weekly_photos?select=" + weeklyFields + ",featured&and=(week.lte." + weekOf() +
+    ",week.neq." + archivePhotoWeek + ")&featured=eq.true&order=week.desc,created_at.asc,id.asc&limit=100", options);
   if (rows.length) {
     const week = rows[0].week;
     if (rows.length === 100 && rows.at(-1).week === week) return allRows(path => get(path, options),
@@ -73,7 +73,7 @@ export async function startSlideshow(get, demo) {
 
   let photos;
   try {
-    photos = (demo ? [cover] : await publicData("featured-v6", () => featurePhotos(get), 0)).map(publicPhoto);
+    photos = (demo ? [cover] : await featurePhotos(get)).map(publicPhoto);
   } catch {
     figure.removeAttribute("aria-busy");
     caption.textContent = "Photo could not load. Refresh to try again.";
@@ -193,7 +193,7 @@ async function showImage(get, picture, photo) {
     try { await picture.decode(); }
     catch (error) {
       if (!data.src.startsWith("featured.webp?")) throw error;
-      const live = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id));
+      const live = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id), 0);
       const src = imageSource(live);
       if (!src) throw error;
       picture.width = live.width;
