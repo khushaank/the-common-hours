@@ -1,0 +1,3 @@
+[functions.review-attachment]
+verify_jwt = false
+entrypoint = "./functions/review-attachment/index.ts"

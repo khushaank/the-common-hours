@@ -48,7 +48,7 @@ const insert = (path, body) => get(path, { method: "POST", body, prefer: "return
 
 async function loadPublicPosts() {
   if (demo) return (await import("./demo.js")).default;
-  return publicData("posts", fetchPublicPosts);
+  return publicData("posts", fetchPublicPosts, 0);
 }
 
 async function fetchPublicPosts() {
@@ -258,8 +258,8 @@ async function renderPost(posts, index, firstBody) {
       }
       form.reset();
       status.textContent = demo ? "Comment saved in this browser." : "Comment submitted for moderation.";
-    } catch {
-      status.textContent = "Your comment could not be saved. Please try again.";
+    } catch (error) {
+      status.textContent = error.status === 429 ? error.message : "Your comment could not be saved. Please try again.";
     } finally {
       button.disabled = false;
     }
@@ -352,6 +352,7 @@ async function start() {
 }
 
 async function load() {
+  if (content.dataset.prerendered) content.dataset.refreshPending = "";
   content.setAttribute("aria-busy", "true");
   document.querySelector("#refresh-status")?.remove();
   try {
@@ -377,6 +378,7 @@ async function load() {
     } else showFailure(content, navigator.onLine ? "The journal could not load. Check your connection and try again." :
       "This page hasn’t been saved on this device. Reconnect to open it.", load);
   } finally {
+    delete content.dataset.refreshPending;
     content.setAttribute("aria-busy", "false");
   }
 }

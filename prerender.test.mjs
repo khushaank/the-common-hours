@@ -41,7 +41,12 @@ test("static pages contain readable content, public links, safe formatting, and 
     const canonical = html.match(/rel="canonical" href="([^"]+)"/)[1];
     canonicals.push(canonical);
     assert.match(html, /aria-busy="false" data-prerendered="true"/);
-    assert.doesNotMatch(html, /Loading (?:journal|photos|image)…/);
+    const published = html.match(/<div class="published-copy">([\s\S]*?)<\/div>\s*<p class="loading/)[1];
+    assert.doesNotMatch(published, /Loading (?:journal|photos|image)…/);
+    assert.match(html, /data-refresh-pending=""/);
+    assert.match(html, /data-skeleton="/);
+    const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+    assert.equal(new Set(ids).size, ids.length, name + " has duplicate IDs");
     assert.match(pages.get("sitemap.xml"), new RegExp(canonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.equal(new Set(canonicals).size, canonicals.length);
@@ -61,6 +66,7 @@ test("a failed live refresh preserves the published copy and exposes retry", asy
     showFailure: (element, message, action) => { assert.equal(element, status); assert.match(message, /still read this published copy/); retry = action; },
   });
   assert.equal(content.dataset.prerendered, "true");
+  assert.equal(content.dataset.refreshPending, undefined);
   assert.equal(status.id, "refresh-status");
   assert.equal(busy, "false");
   assert.equal(typeof retry, "function");
@@ -183,7 +189,8 @@ test("empty archives render an empty state without a loading placeholder", () =>
   const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() });
   assert.match(pages.get("photos.html"), /There are no photos in the archive yet/);
   assert.match(pages.get("archive.html"), /No entries here yet/);
-  assert.doesNotMatch(pages.get("photos.html"), /Loading photos/);
+  const published = pages.get("photos.html").match(/<div class="published-copy">([\s\S]*?)<\/div>\s*<p class="loading/)[1];
+  assert.doesNotMatch(published, /Loading photos/);
 });
 
 test("new routes and legacy query links resolve to the same entries and filters", () => {

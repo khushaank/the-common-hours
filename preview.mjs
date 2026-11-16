@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
+import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, securityHeaders, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
 import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerender.mjs";
 
@@ -29,6 +29,7 @@ try {
 }
 
 const server = createServer(async (request, response) => {
+  for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
   try {
     const path = new URL(request.url, "http://localhost").pathname;
     const file = path === "/" ? "index.html" : path.slice(1);
@@ -53,7 +54,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (file === "index.html") data = withConnectSource(data.toString("utf8"), config);
-    response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + (file.endsWith(".bin") ? "" : "; charset=utf-8"), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY" });
+    response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + (file.endsWith(".bin") ? "" : "; charset=utf-8"), "Cache-Control": "no-store" });
     response.end(data);
   } catch (error) {
     response.writeHead(error.code === "ENOENT" ? 404 : 503);

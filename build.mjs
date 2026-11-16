@@ -1,5 +1,5 @@
 import { copyFile, lstat, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
-import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, sharedFiles, withConnectSource } from "./site-config.mjs";
+import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, securityHeaders, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
 import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerender.mjs";
 import { createHash } from "node:crypto";
@@ -51,7 +51,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const revision = release.digest("hex").slice(0, 16);
   const versioned = new Set([...browserAssets, "config.js"]);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
-  if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); }
+  if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); }
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
@@ -103,6 +103,8 @@ try {
   await buildApp("blog", "./dist", blogFiles, config, deskPath, featured, snapshot);
   await buildApp("admin", "./dist/" + deskPath, adminFiles, config);
   await writeFile(new URL("./dist/feed.xml", import.meta.url), feed);
+  await writeFile(new URL("./dist/_headers", import.meta.url), "/*\n" +
+    Object.entries(securityHeaders).map(([name, value]) => "  " + name + ": " + value).join("\n") + "\n");
   console.log("Built the journal and writing desk in dist/.");
 } catch (error) {
   console.error(error.message);

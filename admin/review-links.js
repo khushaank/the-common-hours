@@ -1,7 +1,7 @@
 import { getProjectOrigin } from "./config.js";
-import { markdownMarker, missingFeature, request } from "./common.js";
+import { missingFeature } from "./common.js";
 
-export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draftStatus) {
+export function setupReviewLinks(rpc, getEntry, run, status, draftStatus) {
   const result = document.querySelector("#review-result");
   const url = document.querySelector("#review-url");
   const copy = document.querySelector("#copy-review");
@@ -9,7 +9,6 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
   const previous = document.querySelector("#previous-review-url");
   const links = new Map();
   const expiryByEntry = new Map();
-  const signed = new Map();
   let queue = Promise.resolve();
   let timer;
   let pending;
@@ -32,24 +31,9 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
       link ? "Draft access expires " + new Date(link.expiry).toLocaleString() : "";
   }
 
-  async function snapshot(fields) {
-    const { mediaReferences } = await import("./rich.js");
+  function snapshot(fields) {
     const { title, excerpt, tag, body, published_on, reader_prompt, photo_essay } = fields;
-    const ids = [...new Set(mediaReferences(markdownMarker + body).filter(item => item.kind === "file").map(item => item.id))];
-    const files = Object.fromEntries(await Promise.all(ids.map(async id => {
-      const known = signed.get(id);
-      if (known && known.until > Date.now()) return [id, known.path];
-      const response = await request("/storage/v1/object/sign/qmargin-b74-attachments/" + id, {
-        method: "POST", token: await sessionToken(), body: { expiresIn: 86460 },
-      });
-      if (!response?.signedURL?.startsWith("/object/sign/qmargin-b74-attachments/" + id + "?")) {
-        throw new Error("Could not prepare a file for review.");
-      }
-      const path = "/storage/v1" + response.signedURL;
-      signed.set(id, { path, until: Date.now() + 3600000 });
-      return [id, path];
-    })));
-    return { title, excerpt, tag, body, published_on, reader_prompt, photo_essay: photo_essay === "true", files };
+    return { title, excerpt, tag, body, published_on, reader_prompt, photo_essay: photo_essay === "true" };
   }
 
   function sync(entry, options = {}) {
@@ -61,9 +45,8 @@ export function setupReviewLinks(rpc, sessionToken, getEntry, run, status, draft
         if (!expiryByEntry.has(key)) expiryByEntry.set(key, await rpc("sync_reviews", { p_slot: entry.slot }));
         if (!(Date.parse(expiryByEntry.get(key)) > Date.now())) return;
       }
-      if (options.p_token) signed.clear();
       const expiry = await rpc("sync_reviews", {
-        p_slot: entry.slot, p_fields: options.p_publish ? null : await snapshot(entry.fields), ...options,
+        p_slot: entry.slot, p_fields: options.p_publish ? null : snapshot(entry.fields), ...options,
       });
       const next = keyFor({ ...entry, slot: options.p_post || entry.slot });
       expiryByEntry.set(next, expiry);

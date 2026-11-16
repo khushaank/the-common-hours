@@ -84,6 +84,8 @@ export async function loadPublicSnapshot(config) {
 
 export function renderPublicPages(template, { posts, photos, images, files, attachments = new Map() }) {
   const pages = new Map(files);
+  const loading = (template.match(/<!-- public-content -->([\s\S]*?)<!-- \/public-content -->/)?.[1] || "")
+    .replace(/\bid="[^"]*"/g, "");
   photos = photos.map(publicPhoto);
   const archiveRoutes = [{ view: "archive" }];
   for (const [key, values] of [["year", posts.map(post => post.published_on.slice(0, 4))], ["month", posts.map(post => post.published_on.slice(0, 7))], ["tag", posts.map(post => post.tag)]]) {
@@ -112,14 +114,10 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
       .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escape(fullTitle)}</title>`)
       .replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escape(description)}">`)
       .replace("</head>", () => `<link rel="canonical" href="${escape(canonical)}"><meta property="og:title" content="${escape(fullTitle)}"><meta property="og:description" content="${escape(description)}"><meta property="og:url" content="${escape(canonical)}"><meta property="og:type" content="${values.post ? "article" : "website"}"></head>`)
-      .replace(/<!-- public-content -->[\s\S]*?<!-- \/public-content -->/, () => content)
+      .replace(/<!-- public-content -->[\s\S]*?<!-- \/public-content -->/, () => '<div class="published-copy">' + content + '</div>' + loading)
       .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}"></template></body>`)
-      .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true"')
+      .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true" data-refresh-pending=""')
       .replace('<aside id="sidebar" aria-label="Blog archive"></aside>', `<aside id="sidebar" aria-label="Blog archive">${sidebar}</aside>`);
-    if (!values.view && !values.post) {
-      html = html.replace('aria-label="Photo of the Week" aria-busy="true"', 'aria-label="Photo of the Week"')
-        .replace('<img width="1200" height="800" alt="" draggable=', '<img src="cover.jpg" width="1200" height="800" alt="A wooden jetty reaches into a mist-covered lake" draggable=');
-    }
     pages.set(file, html);
   }
   const heading = title => `<div class="section-head"><h1>${escape(title)}</h1></div>`;

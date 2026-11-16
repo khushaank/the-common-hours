@@ -167,7 +167,7 @@ const slot = () => current || "new";
 const backupKey = () => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + slot();
 const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
 const cloudPath = () => "working_drafts?slot=eq." + slot();
-const reviews = setupReviewLinks(adminRpc, sessionToken, () => ({ owner: draftOwner, slot: slot(), fields: entryFields(), dirty: dirty() }), run, status, showDraftStatus);
+const reviews = setupReviewLinks(adminRpc, () => ({ owner: draftOwner, slot: slot(), fields: entryFields(), dirty: dirty() }), run, status, showDraftStatus);
 
 function showDraftStatus(message) {
   if (draftStatus.textContent !== message) draftStatus.textContent = message;

@@ -2,7 +2,7 @@ import { publishableKey, getProjectOrigin } from "./config.js";
 
 export class RequestError extends Error {
   constructor(status, code) {
-    super("The request could not be completed.");
+    super(status === 429 ? "Too many submissions. Please try again later." : "The request could not be completed.");
     this.status = status;
     this.code = code;
   }

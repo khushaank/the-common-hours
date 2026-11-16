@@ -14,6 +14,7 @@ if (location.search) {
 import("./journal.js").catch(() => {
   const content = document.querySelector("#content");
   if (!content) return;
+  delete content.dataset.refreshPending;
   content.setAttribute("aria-busy", "false");
   const message = document.createElement("p");
   message.setAttribute("role", "alert");

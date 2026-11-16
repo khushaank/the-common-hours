@@ -115,12 +115,8 @@ export async function renderReview(content) {
     (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
   renderText(content.querySelector("#entry-body"), draft.body || "", read, {
     markdown: true,
-    loadAttachment: async id => {
-      const path = draft.files?.[id];
-      if (typeof path !== "string" || !path.startsWith("/storage/v1/object/sign/qmargin-b74-attachments/" + id + "?")) {
-        throw new Error("Attachment unavailable.");
-      }
-      return request(path, { download: true });
-    },
+    loadAttachment: id => request("/functions/v1/review-attachment", {
+      method: "POST", body: { token, id }, download: true, timeout: 120000,
+    }),
   });
 }

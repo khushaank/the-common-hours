@@ -12,6 +12,14 @@ export const adminFiles = [
 ];
 export const sharedFiles = ["common.js", "text.js", "photo-text.js", "page-url.js", "archive.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
   "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt"];
+export const securityHeaders = {
+  "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'none'; object-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "Strict-Transport-Security": "max-age=31536000",
+};
 export const assetSource = (app, file) => {
   const folder = sharedFiles.includes(file) ? "shared" : /\.(?:woff2|txt)$/.test(file) || file === "favicon.svg" ? "blog" : app;
   return new URL("./" + folder + "/" + file, import.meta.url);

@@ -32,7 +32,7 @@ export function renderLegal(content, view, demo) {
       form.reset();
       status.textContent = "Your request was sent to the editor.";
     } catch (error) {
-      status.textContent = missingFeature(error) ? "The contact form is temporarily unavailable." : "Your request could not be sent. Please try again.";
+      status.textContent = error.status === 429 ? error.message : missingFeature(error) ? "The contact form is temporarily unavailable." : "Your request could not be sent. Please try again.";
     } finally {
       button.disabled = false;
     }

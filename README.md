@@ -2,6 +2,10 @@
 
 An independent journal by Ellis Vale.
 
+For the security fixes and the Supabase SQL/deployment steps, see
+[`SECURITY.md`](SECURITY.md). These changes require database and Edge Function
+deployment before publishing the updated editor and reader.
+
 [Read the journal](https://commonhours.qd.je/)
 
 To enable file attachments and weekly photos on an existing site, run

@@ -32,6 +32,7 @@ body > main { flex: 1; }
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: .2em; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+:focus:not(:focus-visible), #content:focus { outline: none; }
 [hidden] { display: none !important; }
 img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 .wrap { width: min(1040px, calc(100% - 2 * clamp(20px, 5.5vw, 40px))); margin-inline: auto; }
@@ -61,13 +62,17 @@ img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 #search-results a:focus-visible { outline-offset: -2px; }
 
 .week-photo { margin: 34px 0 41px; }
-html:not(.home-page) .week-photo { display: none; }
+html:not(.home-page) .week-photo, html:not([data-journal-page]) .week-photo { display: none; }
 .skeleton { background: var(--soft); border-radius: 5px; animation: skeleton-pulse 1.45s ease-in-out infinite alternate; }
 .skeleton-heading { width: min(55%, 380px); height: 32px; margin: 16px 0; }
 .skeleton-line { width: min(94%, 640px); height: 13px; margin: 10px 0; }
 .skeleton-line.short { width: 59%; margin-bottom: 26px; }
 .content-skeleton { min-height: 245px; }
 .route-skeleton { display: none; }
+.published-copy { display: contents; }
+html[data-journal-page] #content[data-refresh-pending] > .published-copy { display: none; }
+#content[data-prerendered]:not([data-refresh-pending]) > :is(.route-skeleton, .loading) { display: none; }
+html[data-journal-page] .layout:has(#content[data-refresh-pending]) > #sidebar { visibility: hidden; }
 html[data-journal-page="journal"] [data-skeleton="journal"],
 html[data-journal-page="article"] [data-skeleton="article"],
 html[data-journal-page="archive"] [data-skeleton="archive"],
@@ -109,6 +114,7 @@ html[data-journal-page="photo"] [data-skeleton="photo"] { display: block; }
 .photo-filters label { color: var(--muted); font-size: 13px; min-width: 0; }
 .photo-filters select { width: 100%; min-height: 44px; font: 14px var(--sans); color: var(--ink); background: #fffefa; padding: 7px; border: 1px solid #a5ac9d; border-radius: 4px; }
 .photo-filter-meta { display: flex; align-items: center; gap: 11px; min-height: 44px; color: var(--muted); font-size: 13px; }
+.photo-filter-meta > span { min-width: 100px; font-variant-numeric: tabular-nums; }
 .photo-filter-meta button { padding: 7px 12px; }
 .photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; list-style: none; margin: 0; padding: 0; }
 .photo-grid > * { min-width: 0; background: #fffefa; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
