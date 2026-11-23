@@ -28,8 +28,9 @@ async function optional(task) {
 async function getImage(get, photo, options) {
   if (photo.id === cover.id) return { src: "cover.jpg", width: 1200, height: 800 };
   const snapshot = featuredSnapshot();
-  if (snapshot?.first?.id === photo.id && snapshot.first.media_id === photo.media_id) {
-    return { src: "featured.webp?v=" + snapshot.version, width: snapshot.width, height: snapshot.height };
+  if (snapshot?.first?.id === photo.id && snapshot.first.media_id === photo.media_id &&
+      typeof snapshot.version === "string" && /^[0-9a-f]{16}$/.test(snapshot.version)) {
+    return { src: "featured.webp?v=" + encodeURIComponent(snapshot.version), width: snapshot.width, height: snapshot.height };
   }
   const record = await publicData("image:" + photo.media_id, () => readMediaImage(get, photo.media_id, options), 0);
   const src = imageSource(record);
@@ -38,7 +39,8 @@ async function getImage(get, photo, options) {
 }
 
 function featuredSnapshot() {
-  return JSON.parse(document.querySelector("#featured-snapshot")?.dataset.value || "null");
+  try { return JSON.parse(document.querySelector("#featured-snapshot")?.dataset.value || "null"); }
+  catch { return null; }
 }
 
 async function featurePhotos(get) {

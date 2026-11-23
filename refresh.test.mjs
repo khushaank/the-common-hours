@@ -74,13 +74,17 @@ test("cover is used only after a successful empty result, never a request error"
 test("photo media is refreshed before display, and deleted media is not replaced with a cover", async () => {
   const source = photosSource.slice(photosSource.indexOf("async function getImage"), photosSource.indexOf("\nasync function featurePhotos"));
   let record = { src: "current.jpg", width: 800, height: 600 };
+  let snapshot = { first: { id: "photo", media_id: "media" }, version: "not-a-content-hash", width: 800, height: 600 };
   const getImage = runInNewContext(source + "\ngetImage", {
-    cover: { id: "cover" }, document: { querySelector: () => null },
+    cover: { id: "cover" }, document: { querySelector: () => ({ dataset: { value: JSON.stringify(snapshot) } }) },
     publicData: async (key, fetch, age) => { assert.equal(age, 0); return fetch(); },
     readMediaImage: async () => record, imageSource: image => image?.src,
   });
   const photo = { id: "photo", media_id: "media" };
   assert.equal((await getImage(null, photo)).src, "current.jpg");
+  snapshot.version = "0123456789abcdef";
+  assert.equal((await getImage(null, photo)).src, "featured.webp?v=0123456789abcdef");
+  snapshot = null;
   record = undefined;
   await assert.rejects(getImage(null, photo), /Photo unavailable/);
 });

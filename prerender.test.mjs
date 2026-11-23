@@ -11,6 +11,7 @@ import { archiveEntries, archivePageSize, renderArchive } from "./shared/archive
 import { photoText, publicPhoto } from "./shared/photo-text.js";
 
 const template = await readFile(new URL("./blog/index.html", import.meta.url), "utf8");
+const initialRouteScript = template.match(/<script>(.*?)<\/script>/is)[1];
 const imageId = "12345678-1234-1234-1234-123456789abc";
 const post = { id: "one", slug: "first-entry", title: '$& <a "title">', excerpt: '$& An "excerpt"', tag: "Notes", published_on: "2026-11-16", body: markdownMarker + '**Hello**\n\n![An image](media:' + imageId + ' "A caption")\n\n<script>alert(1)</script>\n\n[Old entry](?post=first-entry)', start_here: true, photo_essay: true, collection: "Places", collection_intro: "A collection" };
 const photo = { id: imageId, media_id: imageId, title: '$& "A photograph"', alt: "An image", description: "The description", week: "1900-01-01", created_at: "2026-11-16T00:00:00Z" };
@@ -233,7 +234,7 @@ test("RSS uses readable HTML links without changing existing subscription identi
 });
 
 test("the initial route script matches its CSP hash and handles direct and legacy links", () => {
-  const script = template.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = initialRouteScript;
   assert.ok(template.includes("sha256-" + createHash("sha256").update(script).digest("base64")));
   for (const [pathname, search, expected] of [["/privacy.html", "", "policy-page"], ["/entry-first-entry.html", "", "article-page"], ["/", "?post=first-entry", "article-page"], ["/photos.html", "?year=2026", "wide-page"], ["/", "", "home-page"]]) {
     const classes = new Set();
@@ -243,7 +244,7 @@ test("the initial route script matches its CSP hash and handles direct and legac
 });
 
 test("legacy section URLs redirect to canonical pages while retaining filters and contact anchors", () => {
-  const script = template.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = initialRouteScript;
   for (const view of ["archive", "topics", "photos", "start", "privacy", "terms", "collections", "photo-essays", "review", "https://bad.example"]) {
     const url = new URL("https://commonhours.qd.je/?view=" + encodeURIComponent(view) + "&year=2026#contact");
     let redirected;
