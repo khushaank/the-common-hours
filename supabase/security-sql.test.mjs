@@ -1,13 +1,10 @@
-// Optional local PostgreSQL engine: see SECURITY.md. Never connects to Supabase.
+// In-memory PostgreSQL fixture. Never connects to Supabase.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 import { test } from "node:test";
+import { PGlite } from "@electric-sql/pglite";
 
-test("security migrations enforce RLS, profile privileges, submission budgets, and review expiry", {
-  skip: !process.env.PGLITE_MODULE,
-}, async () => {
-  const { PGlite } = await import(pathToFileURL(process.env.PGLITE_MODULE));
+test("security migrations enforce RLS, profile privileges, submission budgets, and review expiry", async () => {
   const db = new PGlite();
   const owner = "11111111-1111-1111-1111-111111111111";
   const other = "22222222-2222-2222-2222-222222222222";
@@ -19,9 +16,10 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
   const run = file => readFile(new URL(file, import.meta.url), "utf8").then(sql => db.exec(sql));
   const verify = async () => (await run("verify-security.sql")).find(result => result.rows[0]?.security_verification)?.rows[0].security_verification;
   const value = async sql => Object.values((await db.query(sql)).rows[0])[0];
-  const as = async (role, uid = "") => {
+  const as = async (role, uid = "", aal = "aal2") => {
     await db.exec("reset role");
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [uid]);
+    await db.query("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ role, sub: uid, aal })]);
     await db.exec("set role " + role);
   };
   const denied = (sql, code = "42501") => assert.rejects(db.exec(sql), error => error.code === code);
@@ -32,7 +30,8 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
       create table auth.users (id uuid primary key);
       create function auth.uid() returns uuid language sql stable as
         $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-      create function auth.jwt() returns jsonb language sql stable as $$ select '{}'::jsonb $$;
+      create function auth.jwt() returns jsonb language sql stable as $$
+        select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
       grant usage on schema auth, storage to anon, authenticated, service_role;
       create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
       create table storage.objects (id uuid primary key, bucket_id text, name text);
@@ -202,6 +201,21 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
       insert into public.qmargin_b74_weekly_photos (id, week, media_id, title, alt)
       values ('${image}', '2026-11-16', '${image}', 'Leaves', 'Green leaves');
     `);
+    await run("secure-published-media.sql");
+    await as("anon");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 1);
+    await as("postgres");
+    await db.exec(`update public.qmargin_b74_weekly_photos set featured = false where id = '${image}'`);
+    await as("anon");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_weekly_photos where id = '${image}'`), 0);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 0);
+    await as("postgres");
+    await db.exec(`update public.qmargin_b74_posts set paired_photo = '${image}' where id = '${file}'`);
+    await as("anon");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 1);
+    await as("postgres");
+    await db.exec(`update public.qmargin_b74_posts set paired_photo = null where id = '${file}';
+      update public.qmargin_b74_weekly_photos set featured = true where id = '${image}'`);
     await as("authenticated", owner);
     await denied("insert into public.qmargin_b74_references values ('harvey', 'Harvey', 'https://example.test/')");
     assert.equal(await value("select count(*) from public.qmargin_b74_references"), 0);
@@ -297,5 +311,21 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     assert.equal(await value("select count(*) from public.qmargin_b74_privacy_requests where email like '%@example.com'"), 0);
     assert.equal(await value("select count(*) from public.qmargin_b74_privacy_requests where email = 'real@example.org'"), 1);
     assert.equal(await value("select count(*) from qmargin_b74_private.sample_inbox_backup"), 1);
+
+    await run("require-desk-mfa.sql");
+    await run("require-desk-mfa.sql");
+    await as("authenticated", admin);
+    await db.exec(`insert into public.qmargin_b74_working_drafts (user_id, slot, fields)
+      values ('${admin}', '${orphan}', '{"body":"Private MFA check"}')`);
+    await as("authenticated", admin, "aal1");
+    assert.equal(await value("select count(*) from public.qmargin_b74_admins"), 0);
+    assert.equal(await value("select count(*) from public.qmargin_b74_working_drafts"), 0);
+    assert.ok(await value("select count(*) from public.qmargin_b74_posts where published") > 0);
+    await denied(`select public.qmargin_b74_create_draft_preview('${orphan}', '${draftPreview}')`);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), false);
+    await as("authenticated", admin, "aal2");
+    assert.equal(await value("select count(*) from public.qmargin_b74_admins"), 1);
+    assert.equal(await value("select count(*) from public.qmargin_b74_working_drafts"), 1);
+    assert.ok(await value(`select public.qmargin_b74_create_draft_preview('${orphan}', '${draftPreview}') is not null`));
   } finally { await db.close(); }
 });

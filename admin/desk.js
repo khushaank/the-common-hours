@@ -10,6 +10,7 @@ if (window.top !== window.self) {
 }
 
 const login = document.querySelector("#login");
+const mfa = document.querySelector("#mfa");
 const editor = document.querySelector("#editor");
 const desk = document.querySelector("#desk");
 const status = document.querySelector("#status");
@@ -92,6 +93,7 @@ const editorTools = setupEditorTools(editor, api, {
 const photoTools = setupPhotoTools(api, editorTools.openImageLibrary);
 let originalBody = "";
 let session;
+let factorId;
 let refresh;
 let current;
 let posts = [];
@@ -767,11 +769,72 @@ async function openDesk() {
   storeSession();
   login.reset();
   login.hidden = true;
+  mfa.hidden = true;
   desk.hidden = false;
   document.body.classList.add("desk-open");
   deskMenu.hidden = false;
   openSection(lastDraft && lastDraft.slot === requested ? "compose" : section);
 }
+
+function verifiedSession(token) {
+  try {
+    const payload = token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/");
+    return JSON.parse(atob(payload)).aal === "aal2";
+  } catch { return false; }
+}
+
+async function openVerifiedDesk() {
+  const token = await sessionToken();
+  if (verifiedSession(token)) return openDesk();
+  const user = await request("/auth/v1/user", { token });
+  const factor = (user.user ?? user).factors?.find(item => item.factor_type === "totp" && item.status === "verified" && mediaId.test(item.id));
+  if (!factor) throw new Error("This account needs a verified authenticator to open the writing desk.");
+  factorId = factor.id;
+  login.hidden = true;
+  mfa.hidden = false;
+  mfa.elements.namedItem("code").focus();
+}
+
+async function verifyAuthenticator(code) {
+  const token = await sessionToken();
+  const path = "/auth/v1/factors/" + factorId;
+  const challenge = await request(path + "/challenge", { method: "POST", token, body: {} });
+  try {
+    const verified = await request(path + "/verify", {
+      method: "POST", token, body: { challenge_id: challenge.id, code },
+    });
+    if (!verifiedSession(verified.access_token)) throw new Error("The authenticator could not verify this session.");
+    setSession(verified);
+  } catch (error) {
+    if ([400, 401, 403, 422].includes(error.status)) throw new Error("That code could not be verified. Enter the current code from your authenticator.");
+    throw error;
+  }
+}
+
+function resetLogin() {
+  session = draftOwner = factorId = undefined;
+  storeSession();
+  mfa.reset();
+  mfa.hidden = true;
+  login.hidden = false;
+}
+
+document.querySelector("#cancel-mfa").addEventListener("click", () => {
+  if (busy) return;
+  resetLogin();
+  login.elements.namedItem("email").focus();
+});
+mfa.addEventListener("submit", event => {
+  event.preventDefault();
+  if (!session || !factorId || busy) return;
+  const input = mfa.elements.namedItem("code");
+  const code = input.value;
+  input.value = "";
+  void run(event.submitter, async () => {
+    if (!verifiedSession(await sessionToken())) await verifyAuthenticator(code);
+    await openDesk();
+  });
+});
 
 try {
   if (!window.isSecureContext) throw new Error("Use the HTTPS address to sign in.");
@@ -787,15 +850,10 @@ try {
     void run(signIn, async () => {
       status.textContent = "Restoring your session…";
       try {
-        await openDesk();
+        await openVerifiedDesk();
         status.textContent = "";
       } catch (error) {
-        if ([401, 403].includes(error.status)) {
-          session = undefined;
-          storeSession();
-        }
-        session = draftOwner = undefined;
-        login.hidden = false;
+        resetLogin();
         throw error;
       }
     });
@@ -819,9 +877,9 @@ login.addEventListener("submit", event => {
       if (error.status === 429) throw new Error("Too many attempts. Wait a moment and try again.");
       throw error;
     }
-    try { await openDesk(); }
+    try { await openVerifiedDesk(); }
     catch (error) {
-      session = draftOwner = undefined;
+      resetLogin();
       throw error;
     }
   });

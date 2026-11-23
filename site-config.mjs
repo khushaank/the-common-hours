@@ -34,17 +34,19 @@ export const assetSource = (app, file) => {
   return new URL("./" + folder + "/" + file, import.meta.url);
 };
 
-export function readSiteConfig({ required = false } = {}) {
+export function readSiteConfig({ required = false, preview = false } = {}) {
   try {
     loadEnvFile(new URL(".env", import.meta.url));
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
 
-  const url = process.env.SUPABASE_URL?.trim() || "";
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY?.trim() || "";
+  const urlName = preview ? "PREVIEW_SUPABASE_URL" : "SUPABASE_URL";
+  const keyName = preview ? "PREVIEW_SUPABASE_PUBLISHABLE_KEY" : "SUPABASE_PUBLISHABLE_KEY";
+  const url = process.env[urlName]?.trim() || "";
+  const key = process.env[keyName]?.trim() || "";
   if (!required && !url && !key) return { origin: "", key: "" };
-  if (!url || !key) throw new Error("Set both SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.");
+  if (!url || !key) throw new Error("Set both " + urlName + " and " + keyName + ".");
 
   let project;
   try {
@@ -86,6 +88,7 @@ export function browserConfig({ origin, key }) {
 }
 
 export function withConnectSource(html, { origin }) {
-  return html.replace("connect-src 'self' https://*.supabase.co", "connect-src 'self'" + (origin ? " " + origin : ""))
-    .replace("<!-- public-api-connection -->", origin ? '<link rel="preconnect" href="' + origin + '" crossorigin>' : "");
+  return html.replace(/connect-src 'self'[^;"]*/, "connect-src 'self'" + (origin ? " " + origin : ""))
+    .replace(/<!-- public-api-connection -->|<link rel="preconnect" href="[^"]+" crossorigin>/,
+      origin ? '<link rel="preconnect" href="' + origin + '" crossorigin>' : "");
 }

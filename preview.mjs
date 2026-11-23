@@ -22,7 +22,7 @@ const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: 
 let config;
 let publicPages;
 try {
-  config = readSiteConfig();
+  config = readSiteConfig({ preview: !process.argv.includes("--live") });
 } catch (error) {
   console.error(error.message);
   process.exit(1);
@@ -43,16 +43,17 @@ const server = createServer(async (request, response) => {
         return renderPublicPages(withConnectSource(html, config), snapshot);
       }).catch(error => { publicPages = null; throw error; });
     }
-    let data = built ? await readFile(new URL("./dist/" + file, import.meta.url)) :
+    let data = file === "config.js" ? browserConfig(config) :
+      built ? await readFile(new URL("./dist/" + file, import.meta.url)) :
       app === "blog" && (file === "index.html" || generatedFile.test(file)) ? (await publicPages).get(file) :
       file === "feed.xml" ? await renderFeed(config) :
-      file === "config.js" ? browserConfig(config) : await readFile(assetSource(app, file));
+      await readFile(assetSource(app, file));
     if (data === undefined) {
       response.writeHead(404);
       response.end("Page not found");
       return;
     }
-    if (file === "index.html") data = withConnectSource(data.toString("utf8"), config);
+    if (file.endsWith(".html")) data = withConnectSource(data.toString("utf8"), config);
     response.writeHead(200, { "Content-Type": types[file.split(".").pop()] + (file.endsWith(".bin") ? "" : "; charset=utf-8"), "Cache-Control": "no-store" });
     response.end(data);
   } catch (error) {

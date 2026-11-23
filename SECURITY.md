@@ -1,13 +1,21 @@
 # Applying the security fixes
 
-## Desk checks — 16 November 2026
+## Writing Desk and preview
 
 [`supabase/verify-desk-security.sql`](supabase/verify-desk-security.sql) passed
 against the journal database. It checks journal RLS, visitor and non-admin access,
 private drafts/inbox/analytics, attachment-helper permissions, and the private
-cleanup backup when present. The renderer tests reject executable URLs and check
-that HTML and attribute payloads stay escaped. The desk refuses to initialize in
-a frame. Review-link creation and its background draft-sharing calls were removed.
+cleanup backup when present. The renderer tests verify escaping, and the desk
+refuses to initialize in a frame. A signed-in draft owner can generate a private
+preview link. Public readers need the token to open the snapshot or its files.
+
+After publishing the MFA-capable Writing Desk, apply
+[`supabase/require-desk-mfa.sql`](supabase/require-desk-mfa.sql). Each desk
+administrator needs a verified authenticator app factor before applying it.
+Supabase denies privileged requests unless the session has completed MFA.
+[`supabase/secure-published-media.sql`](supabase/secure-published-media.sql)
+limits weekly photos to entries in the slideshow and photos paired with a
+published entry. Rebuild the public site after applying it to remove stale static copies.
 
 The live host did not return CSP, X-Frame-Options, X-Content-Type-Options,
 Referrer-Policy, or HSTS response headers during inspection. The HTML retains
@@ -199,21 +207,15 @@ References: [PostgreSQL row security](https://www.postgresql.org/docs/current/dd
 ## Local checks
 
 `node --test` runs rendering, endpoint authorization, and preview-header tests.
-`node build.mjs --offline-feed` checks the build without contacting Supabase; it
-creates a local empty snapshot and must not be used for a production publication.
+`node build.mjs --offline-feed` creates a disconnected, empty build for local use.
+The preview server defaults to a disconnected backend even when production
+settings are present. Set `PREVIEW_SUPABASE_URL` and
+`PREVIEW_SUPABASE_PUBLISHABLE_KEY` to connect a separate test project.
 
-The optional SQL regression test runs the actual migrations against an in-memory
+The SQL regression test runs the actual migrations against an in-memory
 PostgreSQL instance with synthetic legacy policies, accounts, and journal data.
 It checks repeat application, visitor RLS, safe profile fields, escalation attempts,
-admin operations, budget exhaustion/reset, and expired/unreferenced review files.
-To run without adding a project dependency:
-
-```powershell
-$sqlTestDir = Join-Path $env:TEMP 'ch-security-sql-test'
-npm.cmd install --prefix $sqlTestDir --no-audit --no-fund --ignore-scripts @electric-sql/pglite@0.3.14
-$env:PGLITE_MODULE = Join-Path $sqlTestDir 'node_modules/@electric-sql/pglite/dist/index.js'
-node --test
-```
+MFA, media visibility, budget exhaustion/reset, and expired/unreferenced review files.
 
 This is a local fixture test, not a verification of production grants, Storage,
 Edge Function deployment, or the older app's integration.

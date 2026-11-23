@@ -26,9 +26,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Install the image build dependency
+      - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
-      - name: Check public page rendering
+      - name: Check for high-severity dependency advisories
+        run: npm audit --audit-level=high
+      - name: Test rendering and database access controls
         run: node --test
       - name: Build the journal and writing desk
         env:

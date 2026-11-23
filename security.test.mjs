@@ -56,8 +56,11 @@ test("downloads stream bytes, recheck access, and disclose no storage URL or cre
   }
 });
 
-test("preview sends security headers on assets and missing pages", async t => {
-  const child = spawn(process.execPath, ["preview.mjs", "admin", "0"], { cwd: import.meta.dirname, stdio: ["ignore", "pipe", "pipe"] });
+test("preview sends security headers and defaults to a disconnected sandbox", async t => {
+  const child = spawn(process.execPath, ["preview.mjs", "admin", "0"], { cwd: import.meta.dirname,
+    env: { ...process.env, SUPABASE_URL: "https://production.example", SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
+      PREVIEW_SUPABASE_URL: "", PREVIEW_SUPABASE_PUBLISHABLE_KEY: "" },
+    stdio: ["ignore", "pipe", "pipe"] });
   t.after(async () => { child.kill(); if (child.exitCode === null) await once(child, "exit"); });
   const address = await new Promise((resolve, reject) => {
     child.once("error", reject);
@@ -70,6 +73,9 @@ test("preview sends security headers on assets and missing pages", async t => {
     for (const [name, value] of Object.entries(securityHeaders)) assert.equal(response.headers.get(name), value);
     await response.arrayBuffer();
   }
+  const config = await fetch(new URL("config.js", address)).then(response => response.text());
+  assert.match(config, /export const url = ""/);
+  assert.doesNotMatch(config, /production\.example|sb_publishable_fixture/);
 });
 
 test("desk shares draft reviews through the review RPC without signed Storage URLs", async () => {

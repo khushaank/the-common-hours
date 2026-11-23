@@ -51,6 +51,9 @@ to the homepage. Live document requests revalidate the browser’s HTTP cache.
 
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
+Local previews use no backend by default. To test sign-in and writes, set
+`PREVIEW_SUPABASE_URL` and `PREVIEW_SUPABASE_PUBLISHABLE_KEY` for your separate
+test project. `--live` explicitly connects the preview to the production setup.
 
 The Writing Desk opens on **Dashboard** by default. Section links such as
 `#media` reopen that section when refreshed. **All entries** includes your saved
