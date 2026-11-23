@@ -8,6 +8,7 @@ export const blogFiles = [
 ];
 export const adminFiles = [
   "index.html", "favicon.svg", "style.css", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
+  "visual-editor.js", "pdf-thumbnail.js", "turndown.js", "pdf-engine.js", "pdf-worker.js", "LICENSE-turndown.txt", "LICENSE-pdfjs.txt",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const sharedFiles = ["common.js", "text.js", "photo-text.js", "page-url.js", "archive.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
@@ -21,6 +22,14 @@ export const securityHeaders = {
   "Strict-Transport-Security": "max-age=31536000",
 };
 export const assetSource = (app, file) => {
+  const packages = {
+    "turndown.js": "turndown/lib/turndown.browser.es.js",
+    "pdf-engine.js": "pdfjs-dist/build/pdf.min.mjs",
+    "pdf-worker.js": "pdfjs-dist/build/pdf.worker.min.mjs",
+    "LICENSE-turndown.txt": "turndown/LICENSE",
+    "LICENSE-pdfjs.txt": "pdfjs-dist/LICENSE",
+  };
+  if (app === "admin" && packages[file]) return new URL("./node_modules/" + packages[file], import.meta.url);
   const folder = sharedFiles.includes(file) ? "shared" : /\.(?:woff2|txt)$/.test(file) || file === "favicon.svg" ? "blog" : app;
   return new URL("./" + folder + "/" + file, import.meta.url);
 };

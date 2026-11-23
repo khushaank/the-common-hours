@@ -50,7 +50,7 @@ export async function loadCatalog(api, listFiles) {
     const filename = details?.title || original || "Untitled file";
     const ext = (original || filename).split(".").at(-1).toLowerCase();
     const type = ext === "pdf" ? "pdf" : /^(docx?|odt|rtf|txt|md|xlsx?|ods|csv|pptx?|odp)$/.test(ext) ? "document" : "file";
-    return { kind: "file", id: file.name, type, title: filename, original, description: details?.description || "", size: file.metadata?.size };
+    return { kind: "file", id: file.name, type, extension: ext, title: filename, original, description: details?.description || "", size: file.metadata?.size };
   });
   return [...images, ...attachments].sort((a, b) => (a.title || a.alt || "\uffff").localeCompare(b.title || b.alt || "\uffff"));
 }

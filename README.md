@@ -27,8 +27,9 @@ their slugs change. It starts with the slugs currently stored in the database.
 
 Apply [`supabase/upgrade-desk-workflow.sql`](supabase/upgrade-desk-workflow.sql)
 after the journal and security upgrades. It enables References, longer tag lists,
-automatic series numbers, and deletion in Entries and Media. The share button
-copies a public entry link or creates a draft review link that expires in 24 hours.
+automatic series numbers, and deletion in Entries and Media. Apply
+[`supabase/upgrade-private-drafts.sql`](supabase/upgrade-private-drafts.sql)
+next to preserve comments when entries are removed and enable private preview links.
 
 **Publish journal** also generates HTML for the journal, archive, photo details, public
 entries, and policies, plus `sitemap.xml`. These pages can be read without
@@ -51,10 +52,12 @@ to the homepage. Live document requests revalidate the browser’s HTTP cache.
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
 
-The Writing Desk opens on **Dashboard**. **Entries** lists every entry; selecting
-one opens its editor. Select **Publish settings** to set tags, series, and the
-entry’s place on **Start here**. Leave the excerpt blank to generate it from the
-body when publishing. **Comments** shows
+The Writing Desk opens on **Dashboard**. **All entries** includes your saved
+drafts. **Save draft** on a published entry creates a private copy with a
+`/draft` suffix in the desk. Select **Generate preview link** to give someone
+with the link access to that saved copy for up to 24 hours. The editor opens in
+editable **Preview** mode. Open **Publish settings** from the three-dot menu.
+Leave the excerpt blank to generate it from the body when publishing. **Comments** shows
 all comments, with Published and Pending filters; privacy requests stay in Inbox.
 
 Dashboard uses the existing daily traffic totals and each entry’s publication
@@ -85,6 +88,8 @@ If the SQL Editor reported that `sample_cleanup_20261116` already exists, verify
 the earlier cleanup and run only [`supabase/reset-sample-traffic.sql`](supabase/reset-sample-traffic.sql)
 to back up and clear the remaining counters once. The counters have no sample
 flag, so this clears all views and visits recorded before the first reset.
+[`supabase/remove-sample-inbox.sql`](supabase/remove-sample-inbox.sql) backs up and
+deletes requests submitted from the reserved `example.com` test domain.
 Browser-only development previews contain no sample articles.
 
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

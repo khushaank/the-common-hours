@@ -75,7 +75,7 @@ test("preview sends security headers on assets and missing pages", async t => {
 test("desk shares draft reviews through the review RPC without signed Storage URLs", async () => {
   const editor = await readFile(new URL("./admin/desk.js", import.meta.url), "utf8");
   assert.doesNotMatch(editor, /setupReviewLinks|review-links\.js|expiresIn|signedURL|object\/sign/);
-  assert.match(editor, /adminRpc\("sync_reviews"/);
+  assert.match(editor, /adminRpc\("create_draft_preview"/);
   assert.match(editor, /url\.hash = token/);
   const reader = await readFile(new URL("./blog/reading.js", import.meta.url), "utf8");
   assert.match(reader, /\/functions\/v1\/review-attachment/);

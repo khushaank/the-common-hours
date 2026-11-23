@@ -61,6 +61,7 @@ begin
     );
 
   delete from public.qmargin_b74_traffic where page in (select 'post/' || id::text from unnest(sample_posts) id);
+  delete from public.qmargin_b74_comments where post_id = any(sample_posts);
   delete from public.qmargin_b74_posts where id = any(sample_posts);
   delete from public.qmargin_b74_weekly_photos where id = any(sample_photos);
 

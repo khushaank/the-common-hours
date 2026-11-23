@@ -4,6 +4,12 @@ import { isSupportedImage, promptImageAlt } from "./editor-tools.js";
 
 const types = { image: "Image", pdf: "PDF", document: "Document", file: "File" };
 const pageSize = 18;
+const fileBadge = extension => {
+  if (/^(pptx?|odp)$/.test(extension)) return ["PPT", "slides"];
+  if (/^(xlsx?|ods|csv)$/.test(extension)) return ["XLS", "sheet"];
+  if (/^(docx?|odt|rtf)$/.test(extension)) return ["DOC", "document"];
+  return [/^[a-z\d]{1,4}$/.test(extension) ? extension.toUpperCase() : "FILE", extension === "pdf" ? "pdf" : "file"];
+};
 
 export function setupMediaEditor(api, storage) {
   const search = document.querySelector("#media-search");
@@ -27,6 +33,7 @@ export function setupMediaEditor(api, storage) {
   let revision = 0;
   let observer;
   const previews = new Map();
+  const covers = new Map();
 
   async function showImage(image, id) {
     if (!previews.has(id)) previews.set(id, storage.image(id).then(imageSource));
@@ -34,6 +41,20 @@ export function setupMediaEditor(api, storage) {
       const src = await previews.get(id);
       if (image.dataset.id === id && image.isConnected && src) image.src = src;
     } catch { previews.delete(id); }
+  }
+
+  async function showCover(frame, id) {
+    if (!covers.has(id)) {
+      covers.set(id, import("./pdf-thumbnail.js")
+        .then(async ({ pdfThumbnail }) => pdfThumbnail(await storage.download(id)))
+        .catch(() => undefined));
+    }
+    const src = await covers.get(id);
+    if (!src || !frame.isConnected) return;
+    const image = document.createElement("img");
+    image.alt = "";
+    image.src = src;
+    frame.replaceChildren(image);
   }
 
   function render() {
@@ -49,7 +70,9 @@ export function setupMediaEditor(api, storage) {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           observer.unobserve(entry.target);
-          void showImage(entry.target, entry.target.dataset.id);
+          const { id, type } = entry.target.dataset;
+          if (type === "pdf") void showCover(entry.target, id);
+          else void showImage(entry.target, id);
         }
       });
     }
@@ -60,16 +83,32 @@ export function setupMediaEditor(api, storage) {
       button.type = "button";
       name.textContent = asset.title || asset.alt || "Untitled image";
       type.textContent = types[asset.type];
+      const frame = document.createElement("span");
+      frame.className = "media-thumbnail";
+      frame.setAttribute("aria-hidden", "true");
       if (asset.kind === "image") {
         const image = document.createElement("img");
         image.alt = "";
         image.dataset.id = asset.id;
         image.decoding = "async";
-        button.append(image);
+        frame.append(image);
         if (observer) observer.observe(image);
         else void showImage(image, asset.id);
+      } else {
+        const [label, style] = fileBadge(asset.extension);
+        const badge = document.createElement("span");
+        badge.className = "media-file-badge";
+        badge.dataset.format = style;
+        badge.textContent = label;
+        frame.append(badge);
+        if (asset.type === "pdf") {
+          frame.dataset.id = asset.id;
+          frame.dataset.type = "pdf";
+          if (observer) observer.observe(frame);
+          else void showCover(frame, asset.id);
+        }
       }
-      button.append(name, type);
+      button.append(frame, name, type);
       button.addEventListener("click", () => edit(asset));
       grid.append(button);
     }
@@ -172,6 +211,7 @@ export function setupMediaEditor(api, storage) {
       await storage.remove(asset);
       catalog = catalog.filter(item => item !== asset);
       previews.delete(asset.id);
+      covers.delete(asset.id);
       dialog.close();
       render();
       status.textContent = "Media deleted.";
@@ -192,6 +232,7 @@ export function setupMediaEditor(api, storage) {
       observer?.disconnect();
       catalog = [];
       previews.clear();
+      covers.clear();
       grid.replaceChildren();
       if (dialog.open) dialog.close();
     },

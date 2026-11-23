@@ -19,6 +19,7 @@ const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
 const entryDetails = document.querySelector("#entry-details");
 const editorTitle = document.querySelector("#editor-title");
+const titleHeading = document.querySelector("#entry-heading");
 const titleInput = editor.elements.namedItem("title");
 const search = document.querySelector("#find-entry");
 const entryFilter = document.querySelector("#entry-filter");
@@ -58,26 +59,26 @@ function showSettings(open) {
   settingsButton.setAttribute("aria-expanded", String(open));
   if (open) entryDetails.focus();
 }
-settingsButton.addEventListener("click", () => showSettings(entryDetails.hidden));
-editTitle.addEventListener("click", () => {
-  titleInput.readOnly = false;
-  titleInput.tabIndex = 0;
-  titleInput.focus();
-});
-titleInput.addEventListener("blur", () => {
-  titleInput.readOnly = true;
-  titleInput.tabIndex = -1;
-});
+function editHeading(editing) {
+  titleInput.hidden = !editing;
+  titleHeading.parentElement.hidden = editing;
+  if (editing) { updateEditorTitle(); titleInput.focus(); }
+}
+editTitle.addEventListener("click", () => editHeading(true));
+titleInput.addEventListener("blur", () => editHeading(false));
 titleInput.addEventListener("keydown", event => {
   if (event.isComposing || !["Enter", "Escape"].includes(event.key)) return;
   event.preventDefault();
+  editHeading(false);
   editTitle.focus();
 });
 entryActions.addEventListener("click", event => {
   if (!event.target.closest("button")) return;
   if (entryActions.matches(":popover-open")) entryActions.hidePopover();
-  if (event.target.closest("#preview-mode")) document.querySelector("#entry-preview").focus();
-  else editor.elements.namedItem("body").focus();
+  if (event.target.closest("#edit-entry-settings")) {
+    showSettings(entryDetails.hidden);
+    if (entryDetails.hidden) document.querySelector("#entry-actions-button").focus();
+  } else editorTools.focus();
 });
 const featureFields = ["reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay"];
 const featurePanel = document.querySelector("#entry-features");
@@ -94,6 +95,8 @@ let session;
 let refresh;
 let current;
 let posts = [];
+let drafts = [];
+let activeDraft;
 let references = [];
 let baseline;
 let busy = false;
@@ -102,13 +105,11 @@ let media;
 let activePost;
 let draftOwner;
 let backupStored = false;
-let cloudDraft = false;
 let editorialFields = true;
 let entriesRevision = 0;
 let commentsRevision = 0;
 let referencesRevision = 0;
 let entryListScroll = 0;
-let savedDraftSnapshot;
 
 const sessionKey = () => "common-hours:desk-session:" + getProjectOrigin();
 
@@ -223,7 +224,17 @@ const dirty = () => snapshot() !== baseline;
 const slot = () => current || "new";
 const backupKey = (id = slot()) => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + id;
 const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
-const cloudPath = () => "working_drafts?slot=eq." + slot();
+const draftPath = id => "working_drafts?slot=eq." + id;
+const slugFromTitle = title => title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
+
+function draftEntry(row) {
+  const source = posts.find(post => post.id === (row.fields.source_post || row.slot));
+  const title = row.fields.title?.trim() || "Untitled";
+  const slug = source?.slug || slugFromTitle(row.fields.slug || title) || "untitled";
+  return { ...row, id: "draft:" + row.slot, source, title, slug, tag: row.fields.tag || "",
+    published: false, published_on: row.saved_at.slice(0, 10) };
+}
 
 function showDraftStatus(message) {
   if (draftStatus.textContent !== message) draftStatus.textContent = message;
@@ -231,13 +242,15 @@ function showDraftStatus(message) {
 
 function updatePublishActions() {
   const changed = dirty();
-  const needsSave = changed && snapshot() !== savedDraftSnapshot;
-  draftButton.hidden = Boolean(activePost?.published) && !changed;
+  const needsSave = changed || Boolean(activePost);
   draftButton.disabled = busy || !needsSave;
-  draftButton.textContent = needsSave ? "Save draft" : activePost || savedDraftSnapshot ? "Draft saved" : "No changes";
-  publishButton.textContent = activePost?.published ? "Update published entry" : "Publish";
+  draftButton.textContent = needsSave ? "Save draft" : activeDraft ? "Draft saved" : "No changes";
+  publishButton.textContent = activePost?.published || activeDraft?.source?.published ? "Update published entry" : "Publish";
   publishButton.hidden = Boolean(activePost?.published) && !changed;
-  shareButton.hidden = !activePost && !cloudDraft;
+  shareButton.hidden = !activePost && !activeDraft;
+  const label = activePost?.published ? "Share entry" : "Generate preview link";
+  shareButton.title = label;
+  shareButton.setAttribute("aria-label", label);
 }
 
 function readBackup() {
@@ -254,7 +267,7 @@ function saveBackup() {
   if (!dirty()) {
     removeBackup();
     backupStored = false;
-    showDraftStatus(cloudDraft ? "A saved draft is available." : "");
+    showDraftStatus("");
   } else {
     try {
       localStorage.setItem(backupKey(), JSON.stringify({
@@ -268,14 +281,10 @@ function saveBackup() {
   updateExitWarning();
 }
 
-async function recoverDraft() {
-  const local = readBackup();
-  let cloud;
-  try { [cloud] = await api(cloudPath() + "&select=fields,saved_at", { timeout: 3500 }); }
-  catch { /* A device backup can still be restored offline. */ }
-  cloudDraft = Boolean(cloud);
-  const chosen = local && (!cloud || local.saved_at >= cloud.saved_at) ? local : cloud;
+function recoverDraft() {
+  const chosen = readBackup();
   if (!chosen) return;
+  if (activeDraft && chosen.saved_at < activeDraft.saved_at) { removeBackup(); return; }
   for (const [name, value] of Object.entries(chosen.fields || {})) {
     const field = editor.elements.namedItem(name);
     if (!field || name === "series_order" || typeof value !== "string") continue;
@@ -289,19 +298,26 @@ async function recoverDraft() {
   partField.value = nextPart(seriesField.value);
   if (!dirty()) {
     removeBackup();
-    cloudDraft = false;
     return;
   }
   editorTools.refresh();
   updateEditorTitle();
-  savedDraftSnapshot = chosen === cloud ? snapshot() : undefined;
   saveBackup();
-  showDraftStatus(chosen === local ? "Draft recovered from this device." : "Saved draft restored.");
+  showDraftStatus("Changes recovered from this device.");
 }
 
-async function deleteCloudDraft() {
-  try { await api(cloudPath(), { method: "DELETE" }); }
-  catch (error) { if (!missingFeature(error)) throw error; }
+async function storeDraft(fields, source, id = source?.id || crypto.randomUUID()) {
+  const [saved] = await api("working_drafts?on_conflict=user_id,slot", {
+    method: "POST", prefer: "resolution=merge-duplicates,return=representation",
+    body: { user_id: draftOwner, slot: id, saved_at: new Date().toISOString(), fields: {
+      ...fields, title: fields.title?.trim() || "Untitled", ...(source && { source_post: source.id }),
+    } },
+  });
+  if (!saved) throw new Error("The draft could not be saved.");
+  // Updates to an existing row also persist the server-visible revision time.
+  drafts = [saved, ...drafts.filter(draft => draft.slot !== saved.slot)];
+  entriesRevision++;
+  return draftEntry(saved);
 }
 
 const canLeaveDraft = () => !dirty() || backupStored || confirm("This browser could not back up your changes. Leave this entry?");
@@ -339,10 +355,13 @@ function renderPostList() {
   const scrollTop = postList.scrollTop;
   postList.replaceChildren();
   const term = search.value.trim().toLowerCase();
-  const filtered = posts.filter(post =>
+  const draftEntries = drafts.map(draftEntry);
+  const linkedDrafts = new Set(draftEntries.map(draft => draft.source?.id));
+  const entries = [...draftEntries, ...posts.filter(post => post.published || !linkedDrafts.has(post.id))];
+  const filtered = entries.filter(post =>
     (entryFilter.value === "all" || post.published === (entryFilter.value === "published")) &&
     (!term || post.title.toLowerCase().includes(term) || post.tag.toLowerCase().includes(term)));
-  document.querySelector("#entry-count").textContent = (filtered.length !== posts.length ? filtered.length + " of " : "") + posts.length + (posts.length === 1 ? " entry" : " entries");
+  document.querySelector("#entry-count").textContent = (filtered.length !== entries.length ? filtered.length + " of " : "") + entries.length + (entries.length === 1 ? " entry" : " entries");
   if (!filtered.length) {
     const item = document.createElement("li");
     item.textContent = term || entryFilter.value !== "all" ? "No matching entries." : "No entries yet.";
@@ -358,12 +377,13 @@ function renderPostList() {
     button.className = "entry-open";
     const state = document.createElement("small");
     button.textContent = post.title;
-    state.textContent = (post.published ? "Published" : "Draft") + " · " + post.published_on;
+    state.textContent = (post.published ? "Published" : "Draft") + " · " + post.published_on +
+      (post.slot && post.source ? " · " + post.slug + "/draft" : "");
     state.dataset.published = String(post.published);
     button.append(state);
     if (post.id === current) button.setAttribute("aria-current", "true");
     button.addEventListener("click", () => editEntry(post, button));
-    const share = entryIcon("Share", post, "M12 15V3m-4 4 4-4 4 4M7 10H5v11h14V10h-2");
+    const share = entryIcon(post.published ? "Share" : "Generate preview link for", post, "M12 15V3m-4 4 4-4 4 4M7 10H5v11h14V10h-2");
     share.addEventListener("click", () => shareEntry(post, share));
     const remove = entryIcon("Delete", post, "M4 7h16m-10 0V4h4v3M7 7l1 13h8l1-13m-6-9v4m2-4v4");
     remove.addEventListener("click", () => deleteEntry(post, remove));
@@ -384,12 +404,14 @@ function entryIcon(action, post, path) {
 }
 
 async function deleteEntry(post, button) {
-  if (!confirm('Delete “' + post.title + '” and its comments permanently?')) return;
+  if (!confirm('Permanently delete “' + post.title + '”?' + (post.published ? " Its comments will stay in the desk." : ""))) return;
   await run(button, async () => {
-    const [removed] = await api("posts?id=eq." + post.id, { method: "DELETE", prefer: "return=representation" });
+    const [removed] = await api(post.slot ? draftPath(post.slot) : "posts?id=eq." + post.id,
+      { method: "DELETE", prefer: "return=representation" });
     if (!removed) throw new Error("The entry could not be deleted.");
     try { localStorage.removeItem(backupKey(post.id)); } catch { /* Browser storage is optional. */ }
-    posts = posts.filter(entry => entry.id !== post.id);
+    if (post.slot) drafts = drafts.filter(draft => draft.slot !== post.slot);
+    else posts = posts.filter(entry => entry.id !== post.id);
     entriesRevision++;
     if (current === post.id) openEditor();
     else renderPostList();
@@ -406,10 +428,9 @@ document.querySelector("#copy-share").addEventListener("click", async () => {
     document.querySelector("#share-status").textContent = "Link copied.";
   } catch { shareLink.select(); }
 });
-shareButton.addEventListener("click", () => shareEntry(activePost, shareButton));
+shareButton.addEventListener("click", () => shareEntry(activeDraft || activePost, shareButton));
 
 function shareEntry(post, button) {
-  if (!post?.published && !confirm("Create a draft review link? Anyone with the link can read this copy until it expires.")) return;
   return run(button, async () => {
     const url = new URL("../", location.href);
     const notice = document.querySelector("#share-notice");
@@ -417,19 +438,19 @@ function shareEntry(post, button) {
       url.searchParams.set("post", post.slug);
       notice.textContent = "Anyone can open the published entry.";
     } else {
-      const fields = !post || post.id === current ? entryFields() : (await api("posts?id=eq." + post.id))[0];
-      if (!fields?.body.trim()) throw new Error("Write something before sharing this draft.");
-      const { title, tag, excerpt, body, published_on, reader_prompt, photo_essay } = fields;
+      // Legacy unpublished entries are converted to private working drafts on first share.
+      if (!post.slot) {
+        const [legacy] = await api("posts?id=eq." + post.id);
+        if (!legacy) throw new Error("The draft is unavailable.");
+        post = await storeDraft({ ...legacy, body: legacy.body.replace(markdownMarker, "") }, legacy);
+        renderPostList();
+      }
       const token = [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, "0")).join("");
-      const expiry = await adminRpc("sync_reviews", {
-        p_slot: post?.id || "new", p_post: post?.id || null, p_token: token,
-        p_fields: { title, tag, excerpt: excerpt || await entryExcerpt(body, title),
-          body: body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body,
-          published_on, reader_prompt, photo_essay: photo_essay === true || photo_essay === "true" },
-      });
+      const expiry = await adminRpc("create_draft_preview", { p_slot: post.slot, p_token: token });
       url.searchParams.set("view", "review");
       url.hash = token;
-      notice.textContent = "Draft review link expires " + new Date(expiry).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }) + ".";
+      notice.textContent = "Anyone with the link can read this saved copy until " +
+        new Date(expiry).toLocaleString(undefined, { timeZone: "Asia/Kolkata" }) + ".";
     }
     shareLink.value = url.href;
     document.querySelector("#share-status").textContent = "";
@@ -442,10 +463,13 @@ function editEntry(post, button) {
   if (busy || !canLeaveDraft()) return;
   run(button, async () => {
     if (post.id !== current) {
-      const [record] = await api("posts?id=eq." + post.id);
-      if (!record) throw new Error("This entry is unavailable.");
-      openEditor(record);
-      await recoverDraft();
+      if (post.slot) openEditor(undefined, post);
+      else {
+        const [record] = await api("posts?id=eq." + post.id);
+        if (!record) throw new Error("This entry is unavailable.");
+        openEditor(record);
+      }
+      recoverDraft();
     }
     showSection("compose");
   }).then(() => { if (!busy && current === post.id) editTitle.focus({ preventScroll: true }); });
@@ -566,7 +590,8 @@ function setSeries(value) {
 
 function nextPart(series) {
   if (!series) return "";
-  if (activePost?.published && activePost.series === series && activePost.series_order != null) return String(activePost.series_order);
+  const source = activeDraft?.source || activePost;
+  if (source?.published && source.series === series && source.series_order != null) return String(source.series_order);
   return String(posts.filter(post => post.published && post.id !== current && post.series?.toLowerCase() === series.toLowerCase())
     .reduce((highest, post) => Math.max(highest, post.series_order || 0), 0) + 1);
 }
@@ -584,53 +609,58 @@ document.querySelector("#add-series").addEventListener("click", () => {
 });
 
 function updateEditorTitle() {
-  titleInput.style.height = "auto";
-  titleInput.style.height = titleInput.scrollHeight + "px";
-  document.querySelector("#editor-breadcrumb").textContent = titleInput.value.trim() || (activePost ? "Untitled entry" : "New entry");
+  if (!titleInput.hidden) {
+    titleInput.style.height = "auto";
+    titleInput.style.height = titleInput.scrollHeight + "px";
+  }
+  const title = titleInput.value.trim() || "Untitled";
+  titleHeading.textContent = title;
+  document.querySelector("#editor-breadcrumb").textContent = title;
   const date = editor.elements.namedItem("published_on").value;
   document.querySelector("#editor-date").textContent = date ? " · " + new Date(date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 }
 new ResizeObserver(updateEditorTitle).observe(editorTitle.parentElement);
 
-function openEditor(post) {
+function openEditor(post, draft) {
   clearPublishErrors();
   showSettings(false);
-  if (post?.id !== current) {
-    featurePanel.open = false;
-    editorTools.write();
-  }
+  featurePanel.open = false;
+  activeDraft = draft;
   activePost = post;
-  current = post?.id;
+  current = draft?.id || post?.id;
   if (draftOwner) {
     try { localStorage.setItem(lastEntryKey(), slot()); } catch { /* Entry switching also works without storage. */ }
   }
   editor.reset();
   closeTags();
   tagInput.value = "";
-  titleInput.readOnly = true;
-  titleInput.tabIndex = -1;
-  originalBody = post?.body || "";
+  editHeading(false);
+  const record = draft?.fields || post;
+  originalBody = draft ? markdownMarker + (record.body || "") : post?.body || "";
   for (const key of ["title", "slug", "tag", "excerpt", "published_on", "reader_prompt", "collection", "collection_intro"]) {
-    editor.elements.namedItem(key).value = post?.[key] ?? "";
+    editor.elements.namedItem(key).value = record?.[key] ?? "";
   }
   renderTagChips();
-  setSeries(post?.series);
+  setSeries(record?.series);
   partField.value = nextPart(seriesField.value);
-  editor.elements.namedItem("start_here").checked = Boolean(post?.start_here);
-  editor.elements.namedItem("photo_essay").checked = Boolean(post?.photo_essay);
-  selectPairedPhoto(post?.paired_photo);
+  for (const name of ["start_here", "photo_essay"]) {
+    editor.elements.namedItem(name).checked = [true, "true"].includes(record?.[name]);
+  }
+  selectPairedPhoto(record?.paired_photo);
   editor.elements.namedItem("body").value = originalBody.startsWith(markdownMarker)
     ? originalBody.slice(markdownMarker.length) : originalBody;
-  if (!post) editor.elements.namedItem("published_on").value = journalToday();
+  if (!record) editor.elements.namedItem("published_on").value = journalToday();
   updateEditorTitle();
   document.querySelector("#editor-state").textContent = post?.published ? "Published" : "Draft";
   document.querySelector("#editor-state").dataset.published = String(Boolean(post?.published));
+  document.querySelector("#draft-address").textContent = draft ? " · " + draft.slug + "/draft" : "";
   baseline = snapshot();
-  savedDraftSnapshot = undefined;
-  backupStored = cloudDraft = false;
+  backupStored = false;
   updatePublishActions();
   showDraftStatus("");
-  editorTools.refresh();
+  editorTools.refresh(!post || originalBody.startsWith(markdownMarker));
+  editorTools.preview();
+  if (!document.querySelector("#compose-panel").hidden) updateDeskAddress("compose");
   updateExitWarning();
   renderPostList();
 }
@@ -647,8 +677,12 @@ async function loadPosts() {
     loaded = await allRows(api, "posts?select=" + fields + "&order=published_on.desc,id.desc");
     supportsEditorial = false;
   }
+  let savedDrafts;
+  try { savedDrafts = await allRows(api, "working_drafts?select=slot,fields,saved_at&order=saved_at.desc,slot.asc"); }
+  catch (error) { if (!missingFeature(error)) throw error; savedDrafts = []; }
   if (revision !== entriesRevision) return;
   posts = loaded;
+  drafts = savedDrafts;
   editorialFields = supportsEditorial;
   setSeries(seriesField.value);
   partField.value = nextPart(seriesField.value);
@@ -664,7 +698,7 @@ document.addEventListener("visibilitychange", () => {
 async function loadComments() {
   const revision = ++commentsRevision;
   const filter = document.querySelector("#comment-filter").value;
-  const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id&order=approved.asc,created_at.desc,id.desc" +
+  const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id,deleted_entry_title&order=approved.asc,created_at.desc,id.desc" +
     (filter === "all" ? "" : "&approved=eq." + (filter === "published")));
   if (revision !== commentsRevision) return;
   comments.replaceChildren();
@@ -676,7 +710,8 @@ async function loadComments() {
     const name = document.createElement("strong");
     name.textContent = row.display_name;
     const context = document.createElement("small");
-    context.textContent = (row.approved ? "Published" : "Pending") + " · " + (titles.get(row.post_id) || "Entry");
+    context.textContent = row.post_id ? (row.approved ? "Published" : "Pending") + " · " + (titles.get(row.post_id) || "Entry")
+      : "Deleted entry · " + (row.deleted_entry_title || "Untitled");
     const body = document.createElement("p");
     body.textContent = row.body;
     const actions = document.createElement("div");
@@ -701,7 +736,8 @@ async function loadComments() {
         status.textContent = "Comment deleted.";
       });
     });
-    actions.append(moderate, remove);
+    if (row.post_id) actions.append(moderate);
+    actions.append(remove);
     article.append(name, context, body, actions);
     comments.append(article);
   }
@@ -717,14 +753,17 @@ async function openDesk() {
   draftOwner = allowed[0].user_id;
   void loadReferences();
   await loadPosts();
+  const requested = new URLSearchParams(location.search).get("draft");
+  let lastDraft = drafts.find(draft => draft.slot === requested);
   let lastEntry;
   try {
     const remembered = localStorage.getItem(lastEntryKey());
-    if (posts.some(post => post.id === remembered)) [lastEntry] = await api("posts?id=eq." + remembered);
+    lastDraft ||= drafts.find(draft => "draft:" + draft.slot === remembered);
+    if (!lastDraft && posts.some(post => post.id === remembered)) [lastEntry] = await api("posts?id=eq." + remembered);
   } catch { /* A remembered entry is optional. */ }
-  openEditor(lastEntry);
-  await recoverDraft();
-  showSection("stats");
+  openEditor(lastEntry, lastDraft && draftEntry(lastDraft));
+  recoverDraft();
+  showSection(lastDraft?.slot === requested ? "compose" : "stats");
   storeSession();
   login.reset();
   login.hidden = true;
@@ -790,11 +829,11 @@ login.addEventListener("submit", event => {
 
 newPost.addEventListener("click", () => {
   if (busy || !canLeaveDraft()) return;
-  run(newPost, async () => {
+  run(newPost, () => {
     openEditor();
-    await recoverDraft();
+    recoverDraft();
     showSection("compose");
-  }).then(() => { if (!busy && !current) editTitle.focus({ preventScroll: true }); });
+  }).then(() => { if (!busy && !current) editorTools.focus(); });
 });
 
 refreshComments.addEventListener("click", () => run(refreshComments, async () => {
@@ -821,7 +860,7 @@ function clearPublishErrors() {
 function showPublishErrors(errors) {
   status.textContent = "Check the highlighted fields.";
   const fields = [...errors].map(([name, text]) => {
-    const field = name === "tag" ? tagInput : editor.elements.namedItem(name);
+    const field = name === "tag" ? tagInput : name === "body" ? editorTools.bodyControl() : editor.elements.namedItem(name);
     const message = document.createElement("span");
     message.id = "publish-error-" + name;
     message.className = "field-error";
@@ -837,7 +876,6 @@ function showPublishErrors(errors) {
   });
   if (fields.some(field => entryDetails.contains(field))) showSettings(true);
   if (fields.some(field => featurePanel.contains(field))) featurePanel.open = true;
-  if (fields.includes(editor.elements.namedItem("body"))) editorTools.write();
   if (fields[0] === titleInput) editTitle.click();
   else fields[0].focus();
   fields[0].scrollIntoView({ block: "nearest" });
@@ -868,45 +906,35 @@ editor.addEventListener("submit", event => {
   if (busy || !event.submitter || event.submitter.disabled) return;
   clearPublishErrors();
   const fields = entryFields();
+  if (event.submitter.value === "draft") {
+    const source = activeDraft?.source || activePost;
+    const existing = !activeDraft && source && drafts.find(draft => draft.slot === source.id);
+    if (existing && dirty() && !confirm("Replace your saved draft with these edits?")) return;
+    void run(event.submitter, async () => {
+      const saved = existing && !dirty() ? draftEntry(existing) : await storeDraft(fields, source, activeDraft?.slot);
+      removeBackup();
+      openEditor(undefined, saved);
+      status.textContent = "Draft saved.";
+    });
+    return;
+  }
   const record = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
-  const publishing = event.submitter.value === "publish";
   const knownTags = new Map(entryTags(posts.map(post => post.tag).join(",")).map(tag => [tag.toLowerCase(), tag]));
   record.tag = entryTags(record.tag).map(tag => knownTags.get(tag.toLowerCase()) || tag).join(", ");
-  record.slug ||= record.title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
+  record.slug ||= activeDraft?.source?.slug || slugFromTitle(record.title);
   const errors = validateEntry(record);
-  if (publishing && errors.size) {
+  if (errors.size) {
     showPublishErrors(errors);
     return;
   }
   let fieldError;
   void run(event.submitter, async () => {
-    if (!publishing && (activePost?.published || errors.size)) {
-      saveBackup();
-      try {
-        await api("working_drafts?on_conflict=user_id,slot", {
-          method: "POST", body: { user_id: draftOwner, slot: slot(), fields, saved_at: new Date().toISOString() },
-          prefer: "resolution=merge-duplicates,return=minimal",
-        });
-      } catch (error) {
-        if (!missingFeature(error) || !backupStored) throw error;
-        status.textContent = "Draft saved on this device. Apply the editor upgrade for cloud drafts.";
-        return;
-      }
-      cloudDraft = true;
-      backupStored = true;
-      savedDraftSnapshot = snapshot();
-      updateExitWarning();
-      showDraftStatus("Draft saved.");
-      status.textContent = (activePost?.published ? "Draft saved. Your published entry is still live." : "Draft saved.");
-      return;
-    }
-    if (publishing && !record.excerpt) {
+    if (!record.excerpt) {
       record.excerpt = await entryExcerpt(record.body, record.title, record.body !== originalBody || originalBody.startsWith(markdownMarker));
     }
     record.paired_photo ||= null;
     record.photo_essay = record.photo_essay === "true";
-    if (publishing && record.photo_essay) {
+    if (record.photo_essay) {
       const { mediaReferences } = await import("./rich.js");
       const images = mediaReferences(markdownMarker + record.body).filter(item => item.kind === "image");
       if (new Set(images.map(image => image.id)).size < 2) {
@@ -924,9 +952,10 @@ editor.addEventListener("submit", event => {
       delete record.start_here;
     }
     if (record.body !== originalBody || originalBody.startsWith(markdownMarker)) record.body = markdownMarker + record.body;
-    record.published = publishing;
-    const path = current ? "posts?id=eq." + current : "posts";
-    const options = { method: current ? "PATCH" : "POST", body: record, prefer: "return=representation" };
+    record.published = true;
+    const target = activeDraft?.source || activePost;
+    const path = target ? "posts?id=eq." + target.id : "posts";
+    const options = { method: target ? "PATCH" : "POST", body: record, prefer: "return=representation" };
     let saved;
     try {
       try { [saved] = await api(path, options); }
@@ -942,20 +971,21 @@ editor.addEventListener("submit", event => {
       return;
     }
     if (!saved) throw new Error("The entry could not be saved.");
-    const savedSlot = slot();
     entriesRevision++;
     removeBackup();
-    const cleared = await deleteCloudDraft().then(() => true, () => false);
+    let cleared = true;
+    if (activeDraft) {
+      try {
+        await api(draftPath(activeDraft.slot), { method: "DELETE" });
+        drafts = drafts.filter(draft => draft.slot !== activeDraft.slot);
+      } catch { cleared = false; }
+    }
     const { id, slug, title, tag, published, published_on, series, series_order } = saved;
     const summary = { id, slug, title, tag, published, published_on, series, series_order };
     posts = [summary, ...posts.filter(post => post.id !== id)].sort((a, b) =>
       b.published_on.localeCompare(a.published_on) || b.id.localeCompare(a.id));
     openEditor(saved);
-    if (publishing || savedSlot === "new") {
-      await adminRpc("sync_reviews", { p_slot: savedSlot, p_post: id, p_publish: publishing }).catch(() => {});
-    }
-    status.textContent = (saved.published ? "Entry published." : "Draft saved.") +
-      (cleared ? "" : " The previous cloud draft could not be cleared.");
+    status.textContent = "Entry published." + (cleared ? "" : " The draft copy is still in Entries.");
   }).then(() => { if (fieldError) showPublishErrors(new Map([fieldError])); });
 });
 
@@ -1043,8 +1073,19 @@ titleInput.addEventListener("input", updateEditorTitle);
 editor.elements.namedItem("published_on").addEventListener("input", updateEditorTitle);
 editor.addEventListener("input", event => {
   clearPublishError(event.target);
+  if (event.target === editor.elements.namedItem("body")) clearPublishError(editorTools.bodyControl());
   saveBackup();
 });
+
+function updateDeskAddress(section) {
+  const url = new URL(location.href);
+  url.searchParams.delete("draft");
+  url.searchParams.delete("post");
+  if (section === "compose" && activeDraft) {
+    url.search = "?draft=" + encodeURIComponent(activeDraft.slot) + "&post=" + encodeURIComponent(activeDraft.slug) + "/draft";
+  }
+  if (url.href !== location.href) history.replaceState(null, "", url);
+}
 
 function showSection(section) {
   if (!document.querySelector("#entries-panel").hidden) entryListScroll = window.scrollY;
@@ -1054,6 +1095,7 @@ function showSection(section) {
     const selected = button.dataset.section === section || section === "compose" && button.dataset.section === "entries";
     button.setAttribute("aria-pressed", String(selected));
   }
+  updateDeskAddress(section);
   window.scrollTo(0, section === "entries" ? entryListScroll : 0);
 }
 

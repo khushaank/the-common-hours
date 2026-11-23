@@ -145,7 +145,7 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>
       [reference.id, (reference.title || "Attachment").replace(/[\x00-\x1f\x7f/\\]/g, "").slice(0, 200)]));
     let body = post.body.startsWith(markdownMarker) ? renderMarkup(post.body) : post.body.split(/\n\s*\n/).map(text => `<p>${escape(text)}</p>`).join("");
-    body = body.replace(/<span class="media-slot"[^>]*data-image="([^"]+)" data-alt="([^"]*)">Loading image…<\/span>/g, (_, id, alt) =>
+    body = body.replace(/<span class="media-slot"[^>]*data-image="([^"]+)" data-alt="([^"]*)"><\/span>/g, (_, id, alt) =>
       images.has(id) ? `<span class="media-slot">${picture(id, images.get(id).alt).replace('alt=""', () => `alt="${alt}"`)}</span>` : `<span>${alt || "Image unavailable"}</span>`)
       .replace(/<a\b[^>]*\bdata-attachment="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, (_, id, label) => {
         if (!attachments.has(id)) return label + " (attachment unavailable)";

@@ -182,7 +182,8 @@ aside:empty { display: none; }
 .prose table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 15px; }
 .prose td, .prose th { border: 1px solid var(--line); padding: 6px 11px; }
 .prose .media-slot { display: block; min-height: 60px; }
-.prose .media-slot[aria-busy="true"] { border-radius: 4px; background: var(--soft); }
+.prose .media-slot[aria-busy="true"] { border-radius: 4px; width: min(100%, 43rem); aspect-ratio: 3 / 2; background: var(--soft); animation: skeleton-pulse 1.45s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .prose .media-slot[aria-busy="true"] { animation: none; } }
 .prose img { display: block; width: auto; height: auto; max-height: 75vh; object-fit: contain; border-radius: 3px; }
 .video { margin-block: 22px; }
 .video iframe, .video video { width: 100%; display: block; aspect-ratio: 16/9; border: 0; background: var(--soft); }

@@ -1,4 +1,6 @@
 import { attachmentLimit, missingFeature, readMediaImage, videoFrom } from "./common.js";
+import { renderText } from "./rich.js";
+import { createVisualEditor, visualMarkdown } from "./visual-editor.js";
 
 
 const MAX_INPUT = 15 * 1024 * 1024;
@@ -125,18 +127,36 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   let library;
   let previewRevision = 0;
   let previousBody;
+  let displayMarkdown = true;
   let editorRevision = 0;
   let uploadRange;
   const previewImages = new Map();
+  const image = id => {
+    if (!previewImages.has(id)) previewImages.set(id, loadImage(api, id).catch(error => {
+      previewImages.delete(id);
+      throw error;
+    }));
+    return previewImages.get(id);
+  };
+  const visual = createVisualEditor(previewBody, image);
+  const bodyControl = () => previewPanel.hidden ? body : previewBody;
+  const focus = () => bodyControl().focus();
 
   function checkSpace(length, start, end) {
-    if (body.value.length - (end - start) + length > body.maxLength) {
+    const replaced = typeof start === "number" ? end - start : start.toString().length;
+    if (body.value.length - replaced + length > body.maxLength) {
       throw new Error("This entry has reached its length limit.");
     }
   }
 
   function replace(text, start, end, selection) {
     checkSpace(text.length, start, end);
+    if (typeof start !== "number") {
+      if (previewPanel.hidden || !previewBody.contains(start.commonAncestorContainer)) throw new Error("Choose where to insert this in the preview.");
+      document.querySelector("#insert-dialog[open], #entry-link-dialog[open], #library-dialog[open]")?.close();
+      visual.insert(text, start);
+      return;
+    }
     body.setRangeText(text, start, end, "end");
     body.focus();
     if (selection) body.setSelectionRange(start + selection[0], start + selection[1]);
@@ -167,9 +187,11 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   }
 
   function updateMenu() {
-    const end = body.selectionStart;
-    const match = /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(body.value.slice(0, end));
-    if (body.selectionEnd !== end || !match) { closeMenu(); return; }
+    const range = previewPanel.hidden ? null : visual.range();
+    const end = range ? range.startOffset : body.selectionStart;
+    const before = range ? range.startContainer.nodeValue?.slice(0, end) || "" : body.value.slice(0, end);
+    const match = /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(before);
+    if ((range ? !range.collapsed : body.selectionEnd !== end) || !match) { closeMenu(); return; }
     const [, trigger, value] = match;
     const query = value.toLowerCase();
     if (trigger === "@") {
@@ -182,7 +204,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     } else {
       matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
     }
-    command = { start: end - query.length - 1, end };
+    if (range) {
+      range.setStart(range.startContainer, end - query.length - 1);
+      command = { start: range };
+    } else command = { start: end - query.length - 1, end };
     active = 0;
     renderMenu();
   }
@@ -208,6 +233,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   }
 
   blockFormat.addEventListener("change", () => {
+    if (!previewPanel.hidden) {
+      visual.format("formatBlock", blockFormat.value ? "h" + blockFormat.value : "p");
+      return;
+    }
     const start = body.value.slice(0, body.selectionStart).lastIndexOf("\n") + 1;
     const last = Math.max(body.selectionStart, body.selectionEnd - 1);
     const newline = body.value.indexOf("\n", last);
@@ -238,7 +267,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     if (type === "library") {
       openImageLibrary(({ id, alt }) => {
         replace("\n\n![" + markdownLabel(alt) + "](media:" + id + ")\n\n", start, end);
-      }, () => body.focus(), message => { status.textContent = message; });
+      }, focus, message => { status.textContent = message; });
       return;
     }
     if (type === "entry") {
@@ -311,16 +340,49 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
 
   entrySearch.addEventListener("input", renderEntryLinks);
   document.querySelector("#entry-link-close").addEventListener("click", () => entryDialog.close());
-  entryDialog.addEventListener("close", () => body.focus());
+  entryDialog.addEventListener("close", focus);
 
-  body.addEventListener("input", () => { refresh(); updateMenu(); });
+  body.addEventListener("input", () => { refresh(); if (previewPanel.hidden) updateMenu(); });
+  previewBody.addEventListener("input", () => {
+    const value = visualMarkdown(previewBody);
+    if (value.length > body.maxLength) {
+      status.textContent = "This entry has reached its length limit.";
+      previousBody = undefined;
+      void renderPreview();
+      return;
+    }
+    if (value !== body.value) {
+      previousBody = body.value = value;
+      displayMarkdown = true;
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    updateMenu();
+  });
+  previewBody.addEventListener("click", updateMenu);
+  previewBody.addEventListener("blur", event => {
+    if (!menu.contains(event.relatedTarget)) closeMenu();
+  });
   body.addEventListener("click", () => { updateMenu(); updateBlockFormat(); });
   body.addEventListener("blur", event => {
     if (!menu.contains(event.relatedTarget)) closeMenu();
   });
   menu.addEventListener("focusout", event => {
-    if (event.relatedTarget !== body && !menu.contains(event.relatedTarget)) closeMenu();
+    if (event.relatedTarget !== bodyControl() && !menu.contains(event.relatedTarget)) closeMenu();
   });
+  function commandKey(event) {
+    if (menu.hidden || event.isComposing) return;
+    if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      active = (active + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+      renderMenu();
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      choose(matches[active]);
+    }
+  }
+  previewBody.addEventListener("keydown", commandKey);
   body.addEventListener("keydown", event => {
     if (event.isComposing) return;
     if (menu.hidden) {
@@ -346,16 +408,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       }
       return;
     }
-    if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      active = (active + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
-      renderMenu();
-    }
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      choose(matches[active]);
-    }
+    commandKey(event);
   });
   menu.addEventListener("mousedown", event => event.preventDefault());
   menu.addEventListener("click", event => {
@@ -367,12 +420,20 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   formatTools.addEventListener("click", event => {
     const button = event.target.closest("[data-format], #more-formats");
     if (!button) return;
-    command = { start: body.selectionStart, end: body.selectionEnd };
+    const type = button.dataset?.format;
+    const visualCommands = { bold: "bold", italic: "italic", quote: "formatBlock", list: "insertUnorderedList",
+      numbered: "insertOrderedList", divider: "insertHorizontalRule" };
+    if (!previewPanel.hidden && visualCommands[type]) {
+      visual.format(visualCommands[type], type === "quote" ? "blockquote" : undefined);
+      return;
+    }
+    command = previewPanel.hidden ? { start: body.selectionStart, end: body.selectionEnd } : { start: visual.range() };
     if (button.id === "more-formats") {
       uploadRange = { ...command, revision: editorRevision, value: body.value };
       closeMenu();
       entryFile.click();
-    } else choose(toolbarFormats.find(([key]) => key === button.dataset.format), body.value.slice(command.start, command.end));
+    } else choose(toolbarFormats.find(([key]) => key === type),
+      previewPanel.hidden ? body.value.slice(command.start, command.end) : command.start.toString());
   });
   entryFile.addEventListener("change", async () => {
     const [file] = entryFile.files;
@@ -411,7 +472,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   });
 
   cancel.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => body.focus());
+  dialog.addEventListener("close", focus);
   dialog.addEventListener("cancel", event => { if (cancel.disabled) event.preventDefault(); });
   insert.elements.namedItem("file").addEventListener("change", () => { attachmentId = undefined; });
   insert.addEventListener("submit", async event => {
@@ -476,22 +537,15 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     prompt.hidden = !prompt.textContent;
     const value = body.value;
     try {
-      const { renderText } = await import("./rich.js");
-      const excerpt = fields.namedItem("excerpt").value || await entryExcerpt(value, fields.namedItem("title").value);
+      if (value !== previousBody) {
+        previousBody = value;
+        renderText(previewBody, value, image, { markdown: displayMarkdown, editable: true });
+      }
+      const excerpt = fields.namedItem("excerpt").value || (value && await entryExcerpt(value, fields.namedItem("title").value, displayMarkdown));
       if (revision !== previewRevision || previewPanel.hidden) return;
       document.querySelector("#preview-excerpt").textContent = excerpt;
-      if (value === previousBody) return;
-      previousBody = value;
-      renderText(previewBody, value || "Start writing to preview your entry.", id => {
-        if (!previewImages.has(id)) previewImages.set(id, loadImage(api, id).catch(error => {
-          previewImages.delete(id);
-          throw error;
-        }));
-        return previewImages.get(id);
-      },
-        { markdown: true, loadAttachment: attachments.download, preview: true });
     } catch {
-      if (revision === previewRevision) previewBody.textContent = "Preview could not load. Try again.";
+      if (revision === previewRevision) status.textContent = "Preview could not load. Open Markdown to continue.";
     }
   }
 
@@ -501,25 +555,28 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     previewPanel.hidden = !show;
     writeMode.setAttribute("aria-pressed", String(!show));
     previewMode.setAttribute("aria-pressed", String(show));
-    formatTools.hidden = show;
+    if (!show) displayMarkdown = true;
     if (show) void renderPreview();
     else previewRevision++;
   }
 
-  writeMode.addEventListener("click", () => { setPreview(false); body.focus(); });
+  writeMode.addEventListener("click", () => setPreview(false));
   previewMode.addEventListener("click", () => setPreview(true));
   editor.addEventListener("input", () => { if (!previewPanel.hidden) void renderPreview(); });
 
   return {
-    refresh() {
+    refresh(markdown = true) {
       editorRevision++;
+      displayMarkdown = markdown;
       refresh();
       previewImages.clear();
       previousBody = undefined;
       previewBody.replaceChildren();
       if (!previewPanel.hidden) void renderPreview();
     },
-    write: () => setPreview(false),
+    preview: () => setPreview(true),
+    bodyControl,
+    focus,
     openImageLibrary,
   };
 }

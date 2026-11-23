@@ -39,7 +39,7 @@ function editorTools(value, start = 0, end = value.length, getReferences) {
   query("#entry-preview").hidden = true;
   const setup = runInNewContext(source.slice(source.indexOf("const markdownLabel")).replaceAll("export ", "") + "\nsetupEditorTools", {
     document: { querySelector: query, createElement: element }, Event, URL,
-    allowedImages: new Set(), readMediaImage() {},
+    allowedImages: new Set(), readMediaImage() {}, createVisualEditor: () => ({}), renderText() {},
   });
   const tools = setup(editor, () => {}, {}, () => [], getReferences);
   const format = key => query(".format-tools").dispatchEvent({ type: "click", target: { closest: () => ({ dataset: { format: key } }) } });
@@ -117,10 +117,10 @@ test("toolbar honors the body limit, passes selected link text, and opens the fi
   assert.equal(picked, true);
   menu.query("#preview-mode").dispatchEvent(new Event("click"));
   assert.equal(menu.query("#write-panel").hidden, true);
-  assert.equal(menu.query(".format-tools").hidden, true);
+  assert.equal(menu.query(".format-tools").hidden, false);
   assert.equal(menu.query("#write-mode").hidden, false);
   assert.equal(menu.query("#preview-mode").hidden, false);
-  menu.tools.write();
+  menu.query("#write-mode").dispatchEvent(new Event("click"));
   assert.equal(menu.query("#write-panel").hidden, false);
   assert.equal(menu.query(".format-tools").hidden, false);
   assert.equal(menu.query("#preview-mode").hidden, false);
@@ -144,13 +144,15 @@ test("entry status filter combines with title and tag search without changing th
     { id: "two", title: "Elephant", tag: "Quiet pages", published: false, published_on: "2026-11-12" },
     { id: "three", title: "Footbridge", tag: "Walking", published: true, published_on: "2026-11-11" },
   ];
+  const draft = { id: "draft:one", slot: "one", source: posts[0], title: "Untitled", slug: "market", tag: "Quiet pages", published: false, published_on: "2026-11-16" };
   const render = runInNewContext(deskSource.slice(deskSource.indexOf("function renderPostList()"), deskSource.indexOf("\nasync function deleteEntry")) + "\nrenderPostList", {
-    postList: list, search, entryFilter: filter, posts, current: "one",
+    postList: list, search, entryFilter: filter, posts, drafts: [draft], draftEntry: row => row, current: "one",
     document: { querySelector: () => count, createElement: element },
   });
   list.scrollTop = 240;
   render();
-  assert.equal(list.children.length, 3);
+  assert.equal(list.children.length, 4);
+  assert.equal(list.children[0].children[1].textContent, "Untitled");
   assert.equal(list.scrollTop, 240);
   filter.value = "published";
   search.value = "QUIET";
@@ -158,14 +160,14 @@ test("entry status filter combines with title and tag search without changing th
   assert.equal(list.children.length, 1);
   assert.equal(list.children[0].children[0].textContent, "1.");
   assert.equal(list.children[0].children[1].textContent, "Market");
-  assert.equal(count.textContent, "1 of 3 entries");
+  assert.equal(count.textContent, "1 of 4 entries");
   filter.value = "draft";
   render();
-  assert.equal(list.children[0].children[1].textContent, "Elephant");
+  assert.deepEqual(Array.from(list.children, row => row.children[1].textContent), ["Untitled", "Elephant"]);
   search.value = "Missing";
   render();
   assert.equal(list.children[0].textContent, "No matching entries.");
-  assert.equal(count.textContent, "0 of 3 entries");
+  assert.equal(count.textContent, "0 of 4 entries");
   assert.deepEqual(posts.map(post => post.id), ["one", "two", "three"]);
 });
 
@@ -198,36 +200,40 @@ test("layout keeps publishing settings opt-in and exposes one draft action", asy
   }
   assert.match(html, /<section[^>]+id="entry-details"[^>]+hidden>/);
   assert.equal(html.match(/value="draft" formnovalidate/g).length, 1);
-  assert.match(html, /id="entry-actions"[^>]*>[\s\S]*?id="write-mode"[\s\S]*?id="preview-mode"/);
-  assert.match(html, /<textarea[^>]+id="editor-title"[^>]+readonly/);
+  assert.match(html, /id="entry-actions"[^>]*>[\s\S]*?id="preview-mode" aria-pressed="true"[\s\S]*?id="edit-entry-settings"/);
+  assert.match(html, /id="entry-heading">Untitled<\/span><button[^>]+id="edit-entry-title"/);
+  assert.match(html, /<textarea[^>]+id="editor-title"[^>]+hidden/);
+  assert.match(html, /id="preview-body" contenteditable="true"/);
   for (const id of ["entries-panel", "compose-panel", "stats-panel", "comments-panel"]) assert.ok(html.includes('id="' + id + '" data-desk-panel'));
   for (const id of ["collapse-rail", "desk-logout"]) {
     const button = html.match(new RegExp('<button[^>]+id="' + id + '"[^>]*>[\\s\\S]*?</button>'))[0];
-    assert.doesNotMatch(button, /nav-label/);
+    if (id === "desk-logout") assert.match(button, /nav-label/);
     assert.match(button, /aria-label=/);
   }
 });
 
-test("the draft action is enabled only for unsaved changes and Publish is independent", () => {
+test("a published entry can be copied to a draft and a saved draft is private by default", () => {
   const draftButton = element();
   const publishButton = element();
-  const context = { activePost: { published: true }, dirty: () => false, snapshot: () => "changed", savedDraftSnapshot: undefined,
-    draftButton, publishButton, shareButton: element(), busy: false, cloudDraft: false };
+  const context = { activePost: { published: true }, activeDraft: undefined, dirty: () => false,
+    draftButton, publishButton, shareButton: element(), busy: false };
   const update = runInNewContext(deskSource.slice(deskSource.indexOf("function updatePublishActions("), deskSource.indexOf("function readBackup(")) + "\nupdatePublishActions", context);
   update();
   assert.equal(publishButton.hidden, true);
-  assert.equal(draftButton.hidden, true);
+  assert.equal(draftButton.disabled, false);
   context.dirty = () => true;
   update();
   assert.equal(publishButton.textContent, "Update published entry");
   assert.equal(draftButton.disabled, false);
   assert.equal(draftButton.textContent, "Save draft");
-  context.savedDraftSnapshot = "changed";
+  context.activePost = undefined;
+  context.activeDraft = { source: { published: true } };
+  context.dirty = () => false;
   update();
   assert.equal(draftButton.disabled, true);
   assert.equal(draftButton.textContent, "Draft saved");
   assert.equal(publishButton.hidden, false);
-  context.activePost = undefined;
+  context.activeDraft = undefined;
   update();
   assert.equal(publishButton.textContent, "Publish");
 });
@@ -246,7 +252,7 @@ test("Dashboard, Entries, and the editor are separate screens with the correct n
   const nav = ["stats", "entries", "comments"].map(name => ({ dataset: { section: name }, setAttribute(key, value) { this[key] = value; } }));
   let writing;
   const show = runInNewContext(deskSource.slice(deskSource.indexOf("function showSection("), deskSource.indexOf("async function loadPrivacyRequests")) + "\nshowSection", {
-    sections: nav, entryListScroll: 0, window: { scrollY: 240, scrollTo() {} }, document: { querySelector: () => panels[1], querySelectorAll: () => panels, body: { classList: { toggle(name, value) { writing = value; } } } },
+    sections: nav, entryListScroll: 0, updateDeskAddress() {}, window: { scrollY: 240, scrollTo() {} }, document: { querySelector: () => panels[1], querySelectorAll: () => panels, body: { classList: { toggle(name, value) { writing = value; } } } },
   });
   for (const screen of ["stats", "entries", "compose", "entries", "comments"]) {
     show(screen);

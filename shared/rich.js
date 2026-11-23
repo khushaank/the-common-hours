@@ -12,7 +12,7 @@ md.renderer.rules.image = (tokens, index, options, env, self) => {
   const token = tokens[index];
   const alt = self.renderInlineAsText(token.children, options, env);
   const id = assetId(token.attrGet("src") || "", "media:");
-  return id ? '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '">Loading image…</span>' :
+  return id ? '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '"></span>' :
     escape(alt || "Image unavailable");
 };
 
@@ -138,9 +138,24 @@ export function mediaReferences(body) {
   return references;
 }
 
-export const renderMarkup = body => md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body);
+export const renderMarkup = (body, environment) => md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body, environment);
 
-export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false } = {}) {
+export function loadImageSlot(slot, loadImage) {
+  return Promise.resolve().then(() => loadImage(slot.dataset.image)).then(image => {
+    const src = imageSource(image);
+    if (!src) throw new Error();
+    const picture = new Image(image.width, image.height);
+    picture.alt = image.alt || slot.dataset.alt;
+    if (picture.alt) picture.title = picture.alt;
+    picture.decoding = "async";
+    picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
+    picture.src = src;
+    slot.replaceChildren(picture);
+  }).catch(() => { slot.textContent = slot.dataset.alt || "Image unavailable"; })
+    .finally(() => slot.removeAttribute("aria-busy"));
+}
+
+export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false, editable = false } = {}) {
   if (!markdown) {
     target.replaceChildren(...body.split(/\n\s*\n/).filter(Boolean).map(text => {
       const p = document.createElement("p");
@@ -151,10 +166,14 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
   }
 
   target.innerHTML = renderMarkup(body);
+  if (editable) {
+    for (const item of target.querySelectorAll(".media-slot, .video, .footnote-ref, .footnotes")) item.contentEditable = "false";
+  }
   for (const poster of target.querySelectorAll(".video-poster")) {
     poster.addEventListener("error", () => poster.remove(), { once: true });
   }
   for (const play of target.querySelectorAll("[data-player]")) {
+    if (editable) { play.disabled = true; continue; }
     play.addEventListener("click", () => {
       const frame = document.createElement("iframe");
       frame.title = play.getAttribute("aria-label").replace(/^Play /, "");
@@ -179,18 +198,7 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
     requested.add(slot);
     const id = slot.dataset.image;
     if (!images.has(id)) images.set(id, Promise.resolve().then(() => loadImage(id)));
-    images.get(id).then(image => {
-      const src = imageSource(image);
-      if (!src) throw new Error();
-      const picture = new Image(image.width, image.height);
-      picture.alt = image.alt || slot.dataset.alt;
-      if (picture.alt) picture.title = picture.alt;
-      picture.decoding = "async";
-      picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
-      picture.src = src;
-      slot.replaceChildren(picture);
-    }).catch(() => { slot.textContent = slot.dataset.alt || "Image unavailable"; })
-      .finally(() => slot.removeAttribute("aria-busy"));
+    void loadImageSlot(slot, () => images.get(id));
   }
   const slots = target.querySelectorAll("[data-image]");
   if (slots.length && typeof IntersectionObserver === "function") {
@@ -215,6 +223,7 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
   } else for (const slot of slots) reveal(slot);
 
   for (const link of target.querySelectorAll("[data-attachment]")) {
+    if (editable) continue;
     const file = "attachment-" + link.dataset.attachment + ".bin";
     if (!preview && document.querySelector("#public-pages")?.dataset.files.split(" ").includes(file)) {
       link.href = file;

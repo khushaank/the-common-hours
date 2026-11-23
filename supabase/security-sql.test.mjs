@@ -255,5 +255,47 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     assert.equal(verification.rows[0].remaining_sample_entries, 0);
     assert.equal(verification.rows[0].remaining_sample_photos, 0);
     assert.equal(verification.rows[0].visitors_can_read_backup, false);
+
+    await run("upgrade-private-drafts.sql");
+    await run("upgrade-private-drafts.sql");
+    const draftPreview = "b".repeat(64);
+    const orphan = "77777777-7777-7777-7777-777777777777";
+    await db.exec(`
+      insert into public.qmargin_b74_posts (id, title, slug, tag, excerpt, body, published)
+      values ('${orphan}', 'Kept context', 'kept-context', 'Notes', 'Excerpt', 'Original', true);
+      update qmargin_b74_private.submission_limits set started_at = now() - interval '2 hours';
+      insert into public.qmargin_b74_comments (post_id, display_name, body, approved)
+      values ('${orphan}', 'Reader', 'Keep this comment', true);
+      insert into public.qmargin_b74_privacy_requests (email, message)
+      values ('sample@example.com', 'Test request'), ('real@example.org', 'Other request');
+      insert into public.qmargin_b74_admins values ('${other}');
+    `);
+    await as("authenticated", admin);
+    await db.exec(`insert into public.qmargin_b74_working_drafts (user_id, slot, fields)
+      values ('${admin}', '${orphan}', '{"title":"Untitled","body":"Private draft body"}')`);
+    await as("authenticated", other);
+    assert.equal(await value("select count(*) from public.qmargin_b74_working_drafts"), 0);
+    await denied(`select public.qmargin_b74_create_draft_preview('${orphan}', '${draftPreview}')`);
+    await as("anon");
+    await denied("select * from public.qmargin_b74_working_drafts");
+    assert.equal(await value(`select public.qmargin_b74_read_review('${draftPreview}')`), null);
+    await as("authenticated", admin);
+    assert.ok(await value(`select public.qmargin_b74_create_draft_preview('${orphan}', '${draftPreview}') is not null`));
+    await db.exec(`delete from public.qmargin_b74_posts where id = '${orphan}'`);
+    assert.equal(await value("select deleted_entry_title from public.qmargin_b74_comments where body = 'Keep this comment'"), "Kept context");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_working_drafts where slot = '${orphan}'`), 1);
+    await as("anon");
+    assert.equal(await value("select count(*) from public.qmargin_b74_comments where body = 'Keep this comment'"), 0);
+    assert.equal(await value(`select public.qmargin_b74_read_review('${draftPreview}') ->> 'body'`), "Private draft body");
+    await as("authenticated", admin);
+    await db.exec(`delete from public.qmargin_b74_working_drafts where slot = '${orphan}'`);
+    await as("anon");
+    assert.equal(await value(`select public.qmargin_b74_read_review('${draftPreview}')`), null);
+    await as("postgres");
+    await run("remove-sample-inbox.sql");
+    await run("remove-sample-inbox.sql");
+    assert.equal(await value("select count(*) from public.qmargin_b74_privacy_requests where email like '%@example.com'"), 0);
+    assert.equal(await value("select count(*) from public.qmargin_b74_privacy_requests where email = 'real@example.org'"), 1);
+    assert.equal(await value("select count(*) from qmargin_b74_private.sample_inbox_backup"), 1);
   } finally { await db.close(); }
 });
