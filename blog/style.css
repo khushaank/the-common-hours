@@ -112,17 +112,16 @@ html[data-journal-page="photo"] [data-skeleton="photo"] { display: block; }
 .photo-ready img { visibility: visible; }
 .series-navigation { margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--line); }
 .series-navigation p { margin: 9px 0; }
-.reader-prompt, .collection-intro { white-space: pre-line; }
+.reader-prompt { white-space: pre-line; }
 .reader-prompt { margin: 0; padding: 12px 16px; background: var(--soft); border-radius: 4px; }
-.entry-collection { margin-top: 24px; color: var(--muted); }
-.captioned-photo { margin: 24px 0; }
-.captioned-photo figcaption { margin-top: 6px; color: var(--muted); font-size: 14px; }
+.journal-note .note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.journal-note .meta a { color: var(--accent); text-underline-offset: .2em; }
+.entry.journal-note .note-text { color: var(--ink); font: 400 clamp(18px, 2vw, 22px)/1.55 var(--sans); }
 #entry-body > p[id] { scroll-margin-top: 25px; }
 #entry-body > p:target { background: var(--soft); }
 .photo-detail h1 { margin: 10px 0; font-size: clamp(38px, 6vw, 66px); }
 .photo-detail-image { width: min(100%, 780px); margin: 20px 0; border-radius: 5px; }
 .photo-detail-image img { object-fit: contain; }
-.photo-description { max-width: 70ch; white-space: pre-wrap; overflow-wrap: anywhere; }
 .photo-unavailable { display: grid; place-items: center; min-height: 80px; background: var(--soft); color: var(--muted); }
 @media (hover: none), (prefers-reduced-motion: reduce) { .slide-label { opacity: 1; transition: none; } }
 

@@ -56,6 +56,17 @@ test("downloads stream bytes, recheck access, and disclose no storage URL or cre
   }
 });
 
+test("a failed authorization recheck cancels the upstream file stream", async () => {
+  for (const authorization of [Response.json(false), new Response(null, { status: 503 })]) {
+    let cancelled = false;
+    const stream = new ReadableStream({ cancel() { cancelled = true; } });
+    const replies = [Response.json(true), new Response(stream), authorization];
+    const response = await reviewAttachment(download({ token, id }), env, async () => replies.shift());
+    assert.equal(response.status, authorization.ok ? 404 : 503);
+    assert.equal(cancelled, true);
+  }
+});
+
 test("preview sends security headers and defaults to a disconnected sandbox", async t => {
   const child = spawn(process.execPath, ["preview.mjs", "admin", "0"], { cwd: import.meta.dirname,
     env: { ...process.env, SUPABASE_URL: "https://production.example", SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",

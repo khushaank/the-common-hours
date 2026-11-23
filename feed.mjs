@@ -9,7 +9,9 @@ export async function renderFeed(config) {
   if (config.origin) {
     const endpoint = config.origin +
       "/rest/v1/qmargin_b74_posts?select=slug,title,tag,excerpt,published_on&published=eq.true&order=published_on.desc,id.desc&limit=30";
-    const response = await fetch(endpoint, { headers: { apikey: config.key }, signal: AbortSignal.timeout(12000) });
+    const response = await fetch(endpoint, {
+      headers: { apikey: config.key }, signal: AbortSignal.timeout(12000), redirect: "error",
+    });
     if (!response.ok) throw new Error("Could not refresh RSS from the journal database (" + response.status + ").");
     entries = await response.json();
   }

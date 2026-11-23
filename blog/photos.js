@@ -1,4 +1,3 @@
-import { pageHref } from "./page-url.js";
 import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage, weekOf } from "./common.js";
 import { publicData } from "./public-cache.js";
 import { publicPhoto } from "./photo-text.js";
@@ -9,7 +8,6 @@ const cover = {
   id: "cover", title: "From the journal",
   alt: "A wooden jetty reaches into a mist-covered lake",
 };
-const photoLink = id => pageHref({ view: "photo", photo: id });
 const dateLabel = (date, options) => new Date(date + "T00:00:00Z").toLocaleDateString("en", { timeZone: "UTC", ...options });
 
 function legacyPhoto(photo) {
@@ -183,11 +181,9 @@ function photoDate(photo) {
 
 async function showImage(get, picture, photo) {
   const frame = picture.parentElement;
-  picture.title = photo.alt;
   try {
     const data = await getImage(get, photo);
     picture.alt = photo.alt || data.alt || "";
-    picture.title = picture.alt;
     picture.width = data.width;
     picture.height = data.height;
     picture.src = data.src;
@@ -213,29 +209,13 @@ async function showImage(get, picture, photo) {
 
 async function loadArchivePhoto(get, id) {
   if (mediaId.test(id || "")) {
-    const [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id)), 0);
+    const [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + "&id=eq." + id)), 0);
     return photo && publicPhoto(photo);
   }
   if (/^month-\d{4}-(0[1-9]|1[0-2])$/.test(id || "")) {
     const [photo] = await publicData("photo-detail:" + id, () => optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01")), 0);
     if (photo) return legacyPhoto(photo);
   }
-}
-
-export async function renderPairedPhoto(body, get, id) {
-  const photo = await loadArchivePhoto(get, id);
-  if (!photo || !body.isConnected) return;
-  body.insertAdjacentHTML("beforeend", '<figure class="captioned-photo paired-photo">' +
-    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async"></div>' +
-    '<figcaption><a href="' + photoLink(photo.id) + '">Paired photo · ' + escape(photo.title) + '</a></figcaption></figure>');
-  await showImage(get, body.querySelector(".paired-photo img"), photo);
-}
-
-async function pairedEntries(get, id) {
-  try {
-    return await publicData("photo-entries:" + id, () => allRows(get,
-      "posts?select=slug,title&published=eq.true&paired_photo=eq." + id + "&order=published_on.desc,id.desc"));
-  } catch { return []; }
 }
 
 export async function renderPhotoView(content, get, demo, id) {
@@ -251,12 +231,6 @@ export async function renderPhotoView(content, get, demo, id) {
   const date = photoDate(photo);
   content.innerHTML = backLink + '<article class="photo-detail"><h1>' + escape(photo.title) + '</h1>' +
     (date ? '<p class="meta">' + escape(date) + '</p>' : '') +
-    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high"></div>' +
-    (photo.description ? '<p class="photo-description">' + escape(photo.description) + '</p>' : '') + '</article>';
+    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high"></div></article>';
   void showImage(get, content.querySelector(".photo-detail img"), photo);
-  if (photo !== cover) {
-    const posts = await pairedEntries(get, id);
-    if (posts.length) content.querySelector(".photo-detail").insertAdjacentHTML("beforeend", '<section class="series-navigation"><h2>Paired entries</h2><ul>' +
-      posts.map(post => '<li><a href="' + pageHref({ post: post.slug }) + '">' + escape(post.title) + '</a></li>').join("") + '</ul></section>');
-  }
 }

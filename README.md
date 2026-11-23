@@ -59,21 +59,23 @@ The Writing Desk opens on **Dashboard** by default. Section links such as
 `#media` reopen that section when refreshed. **All entries** includes your saved
 drafts. **Save draft** on a published entry creates a private copy with a
 `/draft` suffix in the desk. Select **Generate preview link** to give someone
-with the link access to that saved copy for up to 24 hours. The editor opens in
-editable **Preview** mode. Open **Publish settings** from the three-dot menu.
+with the link access to that saved copy for up to 24 hours. Use **↑** and **↓**
+to move through Entries and **Enter** to open the highlighted item. Refresh
+restores the selected row or the open editor. The editor opens in editable
+**Preview** mode. Use the toggle beside the title to switch to **Markdown** and
+the gear to open **Publish settings**.
 Leave the excerpt blank to generate it from the body when publishing. **Comments** shows
 all comments, with Published and Pending filters; privacy requests stay in Inbox.
 
 Dashboard uses the existing daily traffic totals and each entry’s publication
 date. No new database migration is required for this layout.
 
-Run [`supabase/add-journal-features.sql`](supabase/add-journal-features.sql) to enable
-reader prompts, photo pairings, themed collections, and photo essays. Set them under
-**Entries → Publish settings → Reader prompt, photo essay, and collection**.
-Use the same collection name on each entry and add the introduction to one entry.
-To publish a photo essay, add at least two different images to the entry body in the
-order you want them to appear. Use `/image` to upload with a caption or open the
-image library from the toolbar to reuse an image.
+**New note** opens a short, title-free composer. Notes support up to 500
+characters, can be saved as drafts, and appear alongside entries in the journal.
+Apply [`supabase/upgrade-notes-and-photos.sql`](supabase/upgrade-notes-and-photos.sql)
+after the existing security and desk upgrades before deploying this version.
+The upgrade enables publishing notes and retires the old editorial photo fields.
+The **Reader prompt** field is still available in **Publish settings**.
 
 In **Writing Desk → Photos**, upload or choose an image from **Media** to add it to
 **Photo of the Week**. Removing it from the week keeps the file in **Media**.

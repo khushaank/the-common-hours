@@ -2,19 +2,18 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, renderArchive } from "./archive.js";
-import { startIntroduction, startEmpty, photoEssayEmpty, exploreJournal } from "./reading-copy.js";
+import { archiveTitle, noteCard, renderArchive } from "./archive.js";
+import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { entryTags } from "./text.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = pageParams();
-const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review", "collections", "photo-essays"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
 const series = params.get("series")?.slice(0, 100);
-const collection = view === "collections" ? params.get("collection")?.slice(0, 100) : null;
 const demo = !url && !publishableKey;
 const pageSize = 5;
 
@@ -27,16 +26,15 @@ const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo";
-if (view === "collections" || view === "photo-essays") document.documentElement.classList.add("wide-page");
 if (!isLegal && view !== "review") {
-  const currentNav = ["archive", "collections"].includes(view) || month ? "archive" :
+  const currentNav = view === "archive" || month ? "archive" :
     view === "start" ? "start" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
 const canonical = document.querySelector('link[rel="canonical"]') || document.createElement("link");
 canonical.rel = "canonical";
 const canonicalParams = new URLSearchParams();
-for (const key of ["view", "post", "month", "tag", "page", "photo", "series", "q", "year", "collection"]) {
+for (const key of ["view", "post", "month", "tag", "page", "photo", "series", "q", "year"]) {
   const value = key === "view" ? view : params.get(key);
   if (value) canonicalParams.set(key, value);
 }
@@ -55,12 +53,9 @@ async function loadPublicPosts() {
 async function fetchPublicPosts() {
   const fields = "id,slug,title,tag,excerpt,published_on";
   const filter = "&published=eq.true&order=published_on.desc,id.desc";
-  try { return await allRows(get, "posts?select=" + fields + ",series,series_order,start_here,paired_photo,collection,collection_intro,photo_essay" + filter); }
-  catch (error) { if (!missingColumn(error)) throw error; }
-  try { return await allRows(get, "posts?select=" + fields + ",series,series_order,start_here" + filter); }
-  catch (error) {
-    if (!missingColumn(error)) throw error;
-    return allRows(get, "posts?select=" + fields + filter);
+  for (const extra of [",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""]) {
+    try { return await allRows(get, "posts?select=" + fields + extra + filter); }
+    catch (error) { if (!extra || !missingColumn(error)) throw error; }
   }
 }
 
@@ -148,7 +143,7 @@ function renderList(posts) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
     .filter(number => number === 1 || number === totalPages || Math.abs(page - number) <= 1);
   content.innerHTML = `<div class="section-head"><${heading}>${escape(title)}</${heading}><span class="section-note">${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}</span></div>
-    ${entries.map(post => `<article class="entry">${metadata(post)}
+    ${entries.map(post => post.is_note ? noteCard(post, dateLabel) : `<article class="entry">${metadata(post)}
       <${entryHeading} class="entry-title"><a href="${postLink(post)}"><span class="headline">${escape(post.title)}</span><span class="arrow" aria-hidden="true">↗</span></a></${entryHeading}>
       <p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>"}
     ${totalPages > 1 ? `<nav class="pagination" aria-label="Journal pages">
@@ -176,9 +171,8 @@ async function renderPost(posts, index, firstBody) {
   document.title = post.title + " — The Common Hours";
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
-  content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article">
-    ${post.photo_essay ? '<p class="meta"><a href="photo-essays.html">Photo essay</a></p>' : ''}
-    <h1>${escape(post.title)}</h1>${metadata(post, true)}
+  content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article${post.is_note ? " journal-note" : ""}">
+    <h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     <nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>
     <section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div>
@@ -189,14 +183,16 @@ async function renderPost(posts, index, firstBody) {
     <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy.html">Privacy</a>'}</p>
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form></section>`;
   const bodyElement = document.querySelector("#entry-body");
-  if (renderer) {
+  if (post.is_note) {
+    bodyElement.innerHTML = `<p class="note-text">${escape(post.body)}</p>`;
+  } else if (renderer) {
     renderer.renderText(bodyElement, post.body, id => publicData("image:" + id, () => readMediaImage(get, id)), { loadAttachment: fetchAttachment, preparePrint: true });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
   } else {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
-  if (renderer || !hasFormatting) {
+  if (!post.is_note && (renderer || !hasFormatting)) {
     const walker = document.createTreeWalker(bodyElement, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, node => {
       if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
       return node.matches(".media-slot, .attachment, .attachment-status, .video, .footnote-backref") ?
@@ -216,11 +212,6 @@ async function renderPost(posts, index, firstBody) {
   const { restoreArticleAnchors, seriesNavigation } = await import("./reading.js");
   restoreArticleAnchors(bodyElement);
   bodyElement.closest("article").insertAdjacentHTML("afterend", seriesNavigation(posts, post));
-  if (post.collection) bodyElement.insertAdjacentHTML("afterend", `<p class="entry-collection"><a href="${link({ view: "collections", collection: post.collection })}">From the collection · ${escape(post.collection)}</a></p>`);
-  if (post.paired_photo) {
-    const { renderPairedPhoto } = await import("./photos.js");
-    void renderPairedPhoto(bodyElement, get, post.paired_photo).catch(() => {});
-  }
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
   const button = form.querySelector("button");
@@ -303,16 +294,6 @@ async function start() {
   }
   const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
-  if (view === "collections" || view === "photo-essays") {
-    const { renderCollections, renderReadingList } = await import("./reading.js");
-    if (view === "collections") renderCollections(content, posts, collection);
-    else {
-      const essays = posts.filter(post => post.photo_essay);
-      renderReadingList(content, "Photo essays", essays, photoEssayEmpty);
-      if (!essays.length) content.insertAdjacentHTML("beforeend", exploreJournal);
-    }
-    return;
-  }
   if (view === "start" || series) {
     const { renderReadingList, seriesEntries } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));

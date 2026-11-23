@@ -42,17 +42,14 @@ function stored(node, markdown) {
   node.replaceWith(replacement);
 }
 
-function imageMarkup(node, caption) {
+function imageMarkup(node) {
+  const caption = node.dataset.caption;
   const title = caption ? ' "' + caption.replace(/[\\"]/g, "\\$&").replace(/\n+/g, " ") + '"' : "";
   return "![" + label(node.dataset.alt || "") + "](media:" + node.dataset.image + title + ")";
 }
 
 export function visualMarkdown(target) {
   const copy = target.cloneNode(true);
-  for (const figure of copy.querySelectorAll(".captioned-photo")) {
-    const image = figure.querySelector("[data-image]");
-    if (image) stored(figure, "\n\n" + imageMarkup(image, figure.querySelector("figcaption")?.textContent.trim()) + "\n\n");
-  }
   for (const image of copy.querySelectorAll("[data-image]")) stored(image, imageMarkup(image));
   for (const video of copy.querySelectorAll(".video")) {
     const href = video.querySelector(".video-link")?.getAttribute("href");

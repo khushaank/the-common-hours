@@ -12,26 +12,11 @@ md.renderer.rules.image = (tokens, index, options, env, self) => {
   const token = tokens[index];
   const alt = self.renderInlineAsText(token.children, options, env);
   const id = assetId(token.attrGet("src") || "", "media:");
-  return id ? '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '"></span>' :
+  const legacyCaption = env.editable && token.attrGet("title");
+  return id ? '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '"' +
+    (legacyCaption ? ' data-caption="' + escape(legacyCaption) + '"' : "") + '></span>' :
     escape(alt || "Image unavailable");
 };
-
-md.core.ruler.after("inline", "photo_caption", ({ tokens }) => {
-  for (let index = 0; index < tokens.length - 2; index++) {
-    const [open, inline, close] = [tokens[index], tokens[index + 1], tokens[index + 2]];
-    const image = inline.children?.[0];
-    const caption = image?.attrGet("title");
-    if (open.type !== "paragraph_open" || close.type !== "paragraph_close" || inline.children?.length !== 1 ||
-        image?.type !== "image" || !caption || !assetId(image.attrGet("src") || "", "media:")) continue;
-    open.tag = close.tag = "figure";
-    open.attrSet("class", "captioned-photo");
-    close.type = "photo_caption_close";
-    close.meta = { caption };
-  }
-});
-
-md.renderer.rules.photo_caption_close = (tokens, index) =>
-  '<figcaption>' + escape(tokens[index].meta.caption) + '</figcaption></figure>\n';
 
 md.renderer.rules.link_open = (tokens, index, options, env, self) => {
   const token = tokens[index];
@@ -146,7 +131,6 @@ export function loadImageSlot(slot, loadImage) {
     if (!src) throw new Error();
     const picture = new Image(image.width, image.height);
     picture.alt = image.alt || slot.dataset.alt;
-    if (picture.alt) picture.title = picture.alt;
     picture.decoding = "async";
     picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
     picture.src = src;
@@ -165,7 +149,7 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
     return;
   }
 
-  target.innerHTML = renderMarkup(body);
+  target.innerHTML = renderMarkup(body, { editable });
   if (editable) {
     for (const item of target.querySelectorAll(".media-slot, .video, .footnote-ref, .footnotes")) item.contentEditable = "false";
   }

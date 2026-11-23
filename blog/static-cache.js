@@ -34,6 +34,11 @@ self.addEventListener("fetch", event => {
       return response;
     });
     event.waitUntil(online.then(async response => {
+      if (response.status === 404 || response.status === 410) {
+        const cache = await caches.open(pageCache);
+        await cache.delete(request, { ignoreSearch: true });
+        return;
+      }
       if (!response.ok) return;
       const copy = response.clone();
       const cache = await caches.open(pageCache);

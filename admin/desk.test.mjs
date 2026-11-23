@@ -142,12 +142,12 @@ test("entry status filter combines with title and tag search without changing th
   const posts = [
     { id: "one", title: "Market", tag: "Quiet pages", published: true, published_on: "2026-11-13" },
     { id: "two", title: "Elephant", tag: "Quiet pages", published: false, published_on: "2026-11-12" },
-    { id: "three", title: "Footbridge", tag: "Walking", published: true, published_on: "2026-11-11" },
+    { id: "three", title: "Footbridge", tag: "Walking", is_note: true, published: true, published_on: "2026-11-11" },
   ];
   const draft = { id: "draft:one", slot: "one", source: posts[0], title: "Untitled", slug: "market", tag: "Quiet pages", published: false, published_on: "2026-11-16" };
   const render = runInNewContext(deskSource.slice(deskSource.indexOf("function renderPostList()"), deskSource.indexOf("\nasync function deleteEntry")) + "\nrenderPostList", {
-    postList: list, search, entryFilter: filter, posts, drafts: [draft], draftEntry: row => row, current: "one",
-    document: { querySelector: () => count, createElement: element },
+    postList: list, search, entryFilter: filter, posts, drafts: [draft], draftEntry: row => row, selectedEntry: "one",
+    document: { querySelector: () => count, createElement: element, addEventListener() {} },
   });
   list.scrollTop = 240;
   render();
@@ -160,10 +160,15 @@ test("entry status filter combines with title and tag search without changing th
   assert.equal(list.children.length, 1);
   assert.equal(list.children[0].children[0].textContent, "1.");
   assert.equal(list.children[0].children[1].textContent, "Market");
+  assert.equal(list.children[0].children[1].tabIndex, 0);
   assert.equal(count.textContent, "1 of 4 entries");
   filter.value = "draft";
   render();
   assert.deepEqual(Array.from(list.children, row => row.children[1].textContent), ["Untitled", "Elephant"]);
+  filter.value = "notes";
+  search.value = "";
+  render();
+  assert.equal(list.children[0].children[1].textContent, "Footbridge");
   search.value = "Missing";
   render();
   assert.equal(list.children[0].textContent, "No matching entries.");
@@ -192,15 +197,16 @@ test("sidebar collapse switches to icons and offers expansion", () => {
 
 test("layout keeps publishing settings opt-in and exposes one draft action", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  for (const name of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order", "start_here", "reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay", "body"]) {
+  for (const name of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order", "start_here", "reader_prompt", "body"]) {
     assert.ok(html.includes('name="' + name + '"'), name);
   }
-  for (const id of ["write-mode", "preview-mode", "entry-actions", "insert-dialog", "entry-link-dialog", "library-dialog", "media-dialog"]) {
+  for (const id of ["write-mode", "preview-mode", "edit-entry-settings", "close-entry-settings", "new-note", "insert-dialog", "entry-link-dialog", "library-dialog", "media-dialog"]) {
     assert.ok(html.includes('id="' + id + '"'), id);
   }
   assert.match(html, /<section[^>]+id="entry-details"[^>]+hidden>/);
   assert.equal(html.match(/value="draft" formnovalidate/g).length, 1);
-  assert.match(html, /id="entry-actions"[^>]*>[\s\S]*?id="preview-mode" aria-pressed="true"[\s\S]*?id="edit-entry-settings"/);
+  assert.match(html, /class="editor-mode[^"]*"[^>]*>[\s\S]*?id="preview-mode" aria-pressed="true"[\s\S]*?id="edit-entry-settings"/);
+  assert.doesNotMatch(html, /name="(?:paired_photo|photo_essay|collection|collection_intro)"|id="entry-actions"/);
   assert.match(html, /id="entry-heading">Untitled<\/span><button[^>]+id="edit-entry-title"/);
   assert.match(html, /<textarea[^>]+id="editor-title"[^>]+hidden/);
   assert.match(html, /id="preview-body" contenteditable="true"/);
@@ -216,7 +222,7 @@ test("a published entry can be copied to a draft and a saved draft is private by
   const draftButton = element();
   const publishButton = element();
   const context = { activePost: { published: true }, activeDraft: undefined, dirty: () => false,
-    draftButton, publishButton, shareButton: element(), busy: false };
+    draftButton, publishButton, shareButton: element(), busy: false, isNote: false };
   const update = runInNewContext(deskSource.slice(deskSource.indexOf("function updatePublishActions("), deskSource.indexOf("function readBackup(")) + "\nupdatePublishActions", context);
   update();
   assert.equal(publishButton.hidden, true);
@@ -242,8 +248,9 @@ test("publish validation reports each invalid field and accepts a blank generate
   const validate = runInNewContext(deskSource.slice(deskSource.indexOf("function validateEntry("), deskSource.indexOf('editor.addEventListener("submit"')) + "\nvalidateEntry", {
     entryTags: value => value.split(",").map(tag => tag.trim()), mediaId: /^valid$/,
   });
-  const invalid = { title: "", body: "", tag: "", published_on: "", slug: "bad slug", collection_intro: "Introduction", collection: "" };
-  assert.deepEqual([...validate(invalid).keys()], ["title", "body", "tag", "published_on", "slug", "collection"]);
+  const invalid = { title: "", body: "", tag: "", published_on: "", slug: "bad slug" };
+  assert.deepEqual([...validate(invalid).keys()], ["title", "body", "tag", "published_on", "slug"]);
+  assert.equal(validate({ ...invalid, is_note: true, body: "x".repeat(501) }).get("body"), "Use 500 characters or fewer for the note.");
   assert.equal(validate({ title: "A title", body: "Body", tag: "Notes, AI", published_on: "2026-11-23", slug: "a-title", excerpt: "" }).size, 0);
 });
 
@@ -271,7 +278,7 @@ test("section links retain their screen on refresh and preserve private draft ad
     replaceState(_, __, url) { navigations.push("replace"); location.href = url.href; },
   };
   const routes = runInNewContext(deskSource.slice(deskSource.indexOf("function sectionHash("), deskSource.indexOf("function showSection(")) +
-    "\n({ deskSection, requestedDraft, updateDeskAddress })", { sections, location, history, URL, URLSearchParams,
+    "\n({ deskSection, composeAddress, updateDeskAddress })", { sections, location, history, URL, URLSearchParams,
       activeDraft: { slot: "draft-id", slug: "my-post" } });
   assert.equal(routes.deskSection(), "stats");
   routes.updateDeskAddress("stats");
@@ -282,11 +289,12 @@ test("section links retain their screen on refresh and preserve private draft ad
     assert.equal(routes.deskSection(), section);
   }
   routes.updateDeskAddress("compose");
-  assert.match(location.href, /\?draft=draft-id&post=my-post\/draft#entries$/);
-  assert.equal(routes.requestedDraft(routes.deskSection()), "draft-id");
+  assert.equal(location.searchParams.get("post"), "my-post/draft");
+  assert.equal(location.hash, "#entries");
+  assert.equal(routes.composeAddress(routes.deskSection()).draft, "draft-id");
   routes.updateDeskAddress("media", true);
   assert.equal(location.search, "");
-  assert.equal(routes.requestedDraft("media"), null);
+  assert.equal(routes.composeAddress("media").draft, undefined);
   assert.deepEqual(navigations, ["replace", "push", "push", "push", "replace", "push"]);
 });
 
@@ -296,7 +304,7 @@ test("reopening the selected entry shows its editor without resetting unsaved co
   let requests = 0;
   let focused = false;
   const edit = runInNewContext(deskSource.slice(deskSource.indexOf("function editEntry("), deskSource.indexOf("const tags =")) + "\neditEntry", {
-    busy: false, current: "one", canLeaveDraft: () => true,
+    busy: false, current: "one", isNote: false, canLeaveDraft: () => true, rememberEntry() {}, renderPostList() {},
     run(button, action) { pending = Promise.resolve().then(action); return pending; },
     api() { requests++; throw new Error("The selected entry must stay in memory"); },
     showSection(value) { screen = value; }, editTitle: { focus() { focused = true; } },

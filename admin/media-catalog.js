@@ -19,7 +19,7 @@ export async function loadCatalog(api, listFiles) {
     readImages(api),
     allRows(api, "posts?select=body&order=published_on.desc,id.desc"),
     optionalRows(api, "working_drafts?select=fields&order=saved_at.desc"),
-    optionalRows(api, "weekly_photos?select=media_id,title,alt,description&order=week.desc,created_at.desc,id"),
+    optionalRows(api, "weekly_photos?select=media_id,title,alt&order=week.desc,created_at.desc,id"),
     optionalRows(api, "photos?select=media_id,alt,caption&order=month.desc"),
     optionalRows(api, "asset_details?select=kind,asset_id,title,description,original_name&order=kind,asset_id"),
     listFiles ? listFiles() : [],
@@ -41,7 +41,7 @@ export async function loadCatalog(api, listFiles) {
     const photo = photos.get(id);
     return {
       kind: "image", id, type: "image", alt: alt || photo?.alt || titles.get("image" + id)?.alt || "",
-      title: details?.title ?? photo?.title ?? "", description: details?.description ?? photo?.description ?? "",
+      title: details?.title ?? photo?.title ?? "", description: details?.description ?? "",
     };
   });
   const attachments = files.filter(file => mediaId.test(file.name)).map(file => {

@@ -2,7 +2,7 @@ import { allRows, imageSource, journalToday, missingFeature, weekOf } from "./co
 import { loadImage, uploadImage } from "./editor-tools.js";
 import { photoText } from "./photo-text.js";
 
-const fields = "id,week,media_id,title,alt,description,featured";
+const fields = "id,week,media_id,title,alt,featured";
 
 async function refreshPublicPhotos() {
   if (!("caches" in window)) return;
@@ -49,6 +49,8 @@ export function setupPhotoTools(api, openLibrary) {
       const src = imageSource(await loadImage(api, photo.media_id));
       if (!isCurrent() || !src) return;
       target.src = src;
+      await target.decode();
+      if (!isCurrent()) return;
       target.alt = photo.alt;
       target.hidden = false;
     } catch { /* The editor remains available when a preview cannot load. */ }
@@ -64,10 +66,10 @@ export function setupPhotoTools(api, openLibrary) {
     status.textContent = "";
     upload.hidden = files.disabled = Boolean(photo);
     editPanel.hidden = !photo;
-    for (const name of ["title", "alt", "description"]) {
+    for (const name of ["title", "alt"]) {
       const field = form.elements.namedItem(name);
       field.value = photo?.[name] || "";
-      field.required = Boolean(photo) && (name === "title" || name === "alt");
+      field.required = Boolean(photo);
     }
     save.textContent = photo ? "Save photo" : "Add to week";
     save.disabled = !ready || !photo;
@@ -219,7 +221,6 @@ export function setupPhotoTools(api, openLibrary) {
       if (current) {
         const record = {
           title: formData.get("title").trim(), alt: formData.get("alt").trim(),
-          description: formData.get("description").trim(),
         };
         if (!record.title || !record.alt) throw new Error("Enter a title and alt text.");
         if (!photoText(record.title) || !photoText(record.alt)) throw new Error("Use descriptive titles and alt text, without filenames or URLs.");

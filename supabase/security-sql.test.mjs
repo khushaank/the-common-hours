@@ -343,5 +343,33 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     assert.equal(await value("select count(*) from public.qmargin_b74_admins"), 1);
     assert.equal(await value("select count(*) from public.qmargin_b74_working_drafts"), 1);
     assert.ok(await value(`select public.qmargin_b74_create_draft_preview('${orphan}', '${draftPreview}') is not null`));
+
+    await as("postgres");
+    await db.exec(`
+      insert into public.qmargin_b74_media (id, encoded, width, height, alt) values ('${image}', 'AAAA', 1, 1, 'Leaves');
+      insert into public.qmargin_b74_weekly_photos (id, week, media_id, title, alt, featured)
+      values ('${image}', '2026-11-16', '${image}', 'Leaves', 'Green leaves', false);
+      update public.qmargin_b74_posts set paired_photo = '${image}' where slug = 'series-next';
+    `);
+    await run("upgrade-notes-and-photos.sql");
+    await run("upgrade-notes-and-photos.sql");
+    assert.equal(await value("select paired_photo from public.qmargin_b74_posts where slug = 'series-next'"), image);
+    await as("authenticated", admin);
+    await db.exec(`insert into public.qmargin_b74_posts (slug, title, tag, excerpt, body, published, is_note)
+      values ('short-note', 'First thought', 'Notes', 'First thought', 'First thought', true, true)`);
+    await denied("update public.qmargin_b74_posts set body = repeat('x', 501) where slug = 'short-note'", "23514");
+    await denied("update public.qmargin_b74_posts set photo_essay = true where slug = 'short-note'");
+    const noteToken = "0".repeat(64);
+    await db.exec(`update public.qmargin_b74_working_drafts set fields = '{"is_note":"true","body":"Short note"}'
+      where slot = '${orphan}'`);
+    assert.ok(await value(`select public.qmargin_b74_create_draft_preview('${orphan}', '${noteToken}') is not null`));
+    await as("anon");
+    assert.equal(await value("select is_note from public.qmargin_b74_posts where slug = 'short-note'"), true);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_weekly_photos where id = '${image}'`), 0);
+    const notePreview = await value(`select public.qmargin_b74_read_review('${noteToken}', null)`);
+    assert.equal(notePreview.is_note, true);
+    assert.equal(notePreview.body, "Short note");
+    await as("authenticated", admin);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), true);
   } finally { await db.close(); }
 });

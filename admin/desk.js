@@ -1,5 +1,5 @@
 import { getProjectOrigin } from "./config.js";
-import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, mediaId, missingColumn, missingFeature, readMediaImage, removeAttachment, request, showFailure, table, uploadAttachment, weekOf } from "./common.js";
+import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, mediaId, missingColumn, missingFeature, readMediaImage, removeAttachment, request, showFailure, table, uploadAttachment } from "./common.js";
 import { entryTags } from "./text.js";
 import { entryExcerpt, isSupportedImage, setupEditorTools, uploadImage } from "./editor-tools.js";
 import { setupPhotoTools } from "./photo-tools.js";
@@ -24,6 +24,7 @@ const postList = document.querySelector("#posts");
 const comments = document.querySelector("#comments");
 const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
+const newNote = document.querySelector("#new-note");
 const entryDetails = document.querySelector("#entry-details");
 const editorTitle = document.querySelector("#editor-title");
 const titleHeading = document.querySelector("#entry-heading");
@@ -53,9 +54,9 @@ collapseRail.addEventListener("click", () => {
 document.querySelector("#back-entries").addEventListener("click", () => {
   if (busy) return;
   showSection("entries");
-  document.querySelector("#entries-panel h1").focus({ preventScroll: true });
+  const selected = selectedEntryButton();
+  (selected || document.querySelector("#entries-panel h1")).focus({ preventScroll: true });
 });
-const entryActions = document.querySelector("#entry-actions");
 const settingsButton = document.querySelector("#edit-entry-settings");
 const draftButton = editor.querySelector('[value="draft"]');
 const publishButton = editor.querySelector('[value="publish"]');
@@ -79,18 +80,27 @@ titleInput.addEventListener("keydown", event => {
   editHeading(false);
   editTitle.focus();
 });
-entryActions.addEventListener("click", event => {
-  if (!event.target.closest("button")) return;
-  if (entryActions.matches(":popover-open")) entryActions.hidePopover();
-  if (event.target.closest("#edit-entry-settings")) {
-    showSettings(entryDetails.hidden);
-    if (entryDetails.hidden) document.querySelector("#entry-actions-button").focus();
-  } else editorTools.focus();
+settingsButton.addEventListener("click", () => showSettings(entryDetails.hidden));
+function closeSettings() {
+  showSettings(false);
+  settingsButton.focus();
+}
+document.querySelector("#close-entry-settings").addEventListener("click", closeSettings);
+entryDetails.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !event.defaultPrevented) closeSettings();
 });
-const featureFields = ["reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay"];
-const featurePanel = document.querySelector("#entry-features");
-const photoPicker = editor.elements.namedItem("paired_photo");
-const pairingStatus = document.querySelector("#pairing-status");
+for (const help of document.querySelectorAll(".field-help")) {
+  const resetHelp = () => help.removeAttribute("data-dismissed");
+  help.addEventListener("pointerenter", resetHelp);
+  help.addEventListener("focusin", resetHelp);
+}
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  const help = document.querySelector(".field-help:not([data-dismissed]):is(:hover, :focus-within)");
+  if (!help) return;
+  help.setAttribute("data-dismissed", "");
+  event.preventDefault();
+}, true);
 const editorTools = setupEditorTools(editor, api, {
   upload: uploadFile,
   uploadMedia,
@@ -102,6 +112,8 @@ let session;
 let factorId;
 let refresh;
 let current;
+let selectedEntry;
+let isNote = false;
 let posts = [];
 let drafts = [];
 let activeDraft;
@@ -196,51 +208,29 @@ function entryFields() {
   const fields = Object.fromEntries(new FormData(editor));
   fields.tag = entryTags([fields.tag, tagInput.value].filter(Boolean).join(",")).join(", ");
   fields.start_here = String(editor.elements.namedItem("start_here").checked);
-  fields.photo_essay = String(editor.elements.namedItem("photo_essay").checked);
+  if (isNote) fields.is_note = "true";
   return fields;
 }
-
-function selectPairedPhoto(id) {
-  if (id && ![...photoPicker.options].some(option => option.value === id)) {
-    photoPicker.add(new Option("Previously selected photo", id));
-  }
-  photoPicker.value = id || "";
-}
-
-featurePanel.addEventListener("toggle", async () => {
-  if (!featurePanel.open || !session) return;
-  pairingStatus.textContent = "Loading weekly photos…";
-  try {
-    const [photos, monthly] = await Promise.all([
-      allRows(api, "weekly_photos?select=id,title&and=(week.lte." + weekOf() + ",week.neq.1900-01-01)&featured=eq.true&order=created_at.desc,id.desc"),
-      allRows(api, "photos?select=month,caption&month=lte." + journalToday().slice(0, 7) + "-01&order=month.desc"),
-    ]);
-    const selected = photoPicker.value;
-    photoPicker.replaceChildren(new Option("No paired photo", ""), ...photos.map(photo => new Option(photo.title, photo.id)),
-      ...monthly.map(photo => new Option(photo.caption || photo.month.slice(0, 7), "month-" + photo.month.slice(0, 7))));
-    selectPairedPhoto(selected);
-    pairingStatus.textContent = photos.length || monthly.length ? "" : "Add a Photo of the Week to pair it with an entry.";
-  } catch {
-    pairingStatus.textContent = "Weekly photos could not load. Reopen this section to try again.";
-  }
-});
 const snapshot = () => {
   const { series_order, ...fields } = entryFields();
   return JSON.stringify(fields);
 };
 const dirty = () => snapshot() !== baseline;
-const slot = () => current || "new";
+const slot = () => current || (isNote ? "new-note" : "new");
 const backupKey = (id = slot()) => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + id;
 const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
+const selectedEntryKey = () => lastEntryKey() + ":selection";
 const draftPath = id => "working_drafts?slot=eq." + id;
 const slugFromTitle = title => title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
+const noteTitle = body => [...(body?.trim().split(/\r?\n/, 1)[0] || "Untitled note")].slice(0, 180).join("");
 
 function draftEntry(row) {
   const source = posts.find(post => post.id === (row.fields.source_post || row.slot));
-  const title = row.fields.title?.trim() || "Untitled";
+  const is_note = [true, "true"].includes(row.fields.is_note) || Boolean(source?.is_note);
+  const title = is_note ? noteTitle(row.fields.body) : row.fields.title?.trim() || "Untitled";
   const slug = source?.slug || slugFromTitle(row.fields.slug || title) || "untitled";
-  return { ...row, id: "draft:" + row.slot, source, title, slug, tag: row.fields.tag || "",
+  return { ...row, id: "draft:" + row.slot, source, title, slug, is_note, tag: row.fields.tag || "",
     published: false, published_on: row.saved_at.slice(0, 10) };
 }
 
@@ -253,10 +243,11 @@ function updatePublishActions() {
   const needsSave = changed || Boolean(activePost);
   draftButton.disabled = busy || !needsSave;
   draftButton.textContent = needsSave ? "Save draft" : activeDraft ? "Draft saved" : "No changes";
-  publishButton.textContent = activePost?.published || activeDraft?.source?.published ? "Update published entry" : "Publish";
+  publishButton.textContent = activePost?.published || activeDraft?.source?.published
+    ? (isNote ? "Update published note" : "Update published entry") : "Publish";
   publishButton.hidden = Boolean(activePost?.published) && !changed;
   shareButton.hidden = !activePost && !activeDraft;
-  const label = activePost?.published ? "Share entry" : "Generate preview link";
+  const label = activePost?.published ? (isNote ? "Share note" : "Share entry") : "Generate preview link";
   shareButton.title = label;
   shareButton.setAttribute("aria-label", label);
 }
@@ -297,13 +288,12 @@ function recoverDraft() {
     const field = editor.elements.namedItem(name);
     if (!field || name === "series_order" || typeof value !== "string") continue;
     if (name === "series") setSeries(value);
-    else if (field === photoPicker) selectPairedPhoto(value);
     else if (field.type === "checkbox") field.checked = value === "true";
     else field.value = value;
   }
   tagInput.value = "";
   renderTagChips();
-  partField.value = nextPart(seriesField.value);
+  updatePart();
   if (!dirty()) {
     removeBackup();
     return;
@@ -344,7 +334,7 @@ async function run(button, action) {
   if (busy) return;
   busy = true;
   editor.inert = true;
-  button.disabled = true;
+  if (button) button.disabled = true;
   status.textContent = "Working…";
   try {
     await action();
@@ -354,21 +344,23 @@ async function run(button, action) {
   } finally {
     busy = false;
     editor.inert = false;
-    button.disabled = false;
+    if (button) button.disabled = false;
     updatePublishActions();
   }
 }
 
 function renderPostList() {
   const scrollTop = postList.scrollTop;
+  const restoreFocus = document.activeElement?.closest(".entry-open")?.dataset.entryId;
   postList.replaceChildren();
   const term = search.value.trim().toLowerCase();
   const draftEntries = drafts.map(draftEntry);
   const linkedDrafts = new Set(draftEntries.map(draft => draft.source?.id));
   const entries = [...draftEntries, ...posts.filter(post => post.published || !linkedDrafts.has(post.id))];
   const filtered = entries.filter(post =>
-    (entryFilter.value === "all" || post.published === (entryFilter.value === "published")) &&
+    (entryFilter.value === "all" || (entryFilter.value === "notes" ? post.is_note : post.published === (entryFilter.value === "published"))) &&
     (!term || post.title.toLowerCase().includes(term) || post.tag.toLowerCase().includes(term)));
+  const tabStop = filtered.find(post => post.id === selectedEntry)?.id || filtered[0]?.id;
   document.querySelector("#entry-count").textContent = (filtered.length !== entries.length ? filtered.length + " of " : "") + entries.length + (entries.length === 1 ? " entry" : " entries");
   if (!filtered.length) {
     const item = document.createElement("li");
@@ -383,13 +375,15 @@ function renderPostList() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "entry-open";
+    button.dataset.entryId = post.id;
+    button.tabIndex = post.id === tabStop ? 0 : -1;
     const state = document.createElement("small");
     button.textContent = post.title;
-    state.textContent = (post.published ? "Published" : "Draft") + " · " + post.published_on +
+    state.textContent = (post.is_note ? "Note · " : "") + (post.published ? "Published" : "Draft") + " · " + post.published_on +
       (post.slot && post.source ? " · " + post.slug + "/draft" : "");
     state.dataset.published = String(post.published);
     button.append(state);
-    if (post.id === current) button.setAttribute("aria-current", "true");
+    if (post.id === selectedEntry) button.setAttribute("aria-current", "true");
     button.addEventListener("click", () => editEntry(post, button));
     const share = entryIcon(post.published ? "Share" : "Generate preview link for", post, "M12 15V3m-4 4 4-4 4 4M7 10H5v11h14V10h-2");
     share.addEventListener("click", () => shareEntry(post, share));
@@ -399,7 +393,41 @@ function renderPostList() {
     postList.append(li);
   }
   postList.scrollTop = scrollTop;
+  if (restoreFocus) selectedEntryButton()?.focus({ preventScroll: true });
 }
+
+function selectedEntryButton() {
+  return postList.querySelector(".entry-open[aria-current]") || postList.querySelector(".entry-open");
+}
+
+function rememberEntry(id) {
+  selectedEntry = id;
+  if (!draftOwner) return;
+  try { localStorage.setItem(selectedEntryKey(), id || ""); } catch { /* Selection also works without storage. */ }
+}
+
+document.addEventListener("keydown", event => {
+  if (document.querySelector("#entries-panel").hidden || event.defaultPrevented || event.altKey || event.ctrlKey ||
+      event.metaKey || event.shiftKey || !["ArrowDown", "ArrowUp"].includes(event.key)) return;
+  const target = event.target;
+  if (document.querySelector("dialog[open]") ||
+      !target.matches(".entry-open, #refresh-entries") && target.closest("input, select, textarea, button, a, [contenteditable]")) return;
+  const rows = [...postList.querySelectorAll(".entry-open")];
+  if (!rows.length) return;
+  event.preventDefault();
+  const index = rows.indexOf(target.matches(".entry-open") ? target : postList.querySelector(".entry-open[aria-current]"));
+  const next = index === -1 ? (event.key === "ArrowDown" ? 0 : rows.length - 1) :
+    Math.max(0, Math.min(rows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)));
+  const button = rows[next];
+  rememberEntry(button.dataset.entryId);
+  for (const row of rows) {
+    if (row === button) row.setAttribute("aria-current", "true");
+    else row.removeAttribute("aria-current");
+    row.tabIndex = row === button ? 0 : -1;
+  }
+  button.focus({ preventScroll: true });
+  button.scrollIntoView({ block: "nearest" });
+});
 
 function entryIcon(action, post, path) {
   const button = document.createElement("button");
@@ -420,6 +448,7 @@ async function deleteEntry(post, button) {
     try { localStorage.removeItem(backupKey(post.id)); } catch { /* Browser storage is optional. */ }
     if (post.slot) drafts = drafts.filter(draft => draft.slot !== post.slot);
     else posts = posts.filter(entry => entry.id !== post.id);
+    if (selectedEntry === post.id) rememberEntry(undefined);
     entriesRevision++;
     if (current === post.id) openEditor();
     else renderPostList();
@@ -478,9 +507,16 @@ function editEntry(post, button) {
         openEditor(record);
       }
       recoverDraft();
+    } else {
+      rememberEntry(post.id);
+      renderPostList();
     }
     showSection("compose");
-  }).then(() => { if (!busy && current === post.id) editTitle.focus({ preventScroll: true }); });
+  }).then(() => {
+    if (busy || current !== post.id) return;
+    if (isNote) editorTools.focus();
+    else editTitle.focus({ preventScroll: true });
+  });
 }
 
 const tags = document.querySelector("#tags");
@@ -590,10 +626,17 @@ tagInput.addEventListener("keydown", event => {
 
 const seriesField = editor.elements.namedItem("series");
 const partField = editor.elements.namedItem("series_order");
+const partLabel = document.querySelector("#series-part");
+let seriesSelection = "";
 function setSeries(value) {
-  const names = [...new Set(posts.map(post => post.series).filter(Boolean).concat(value || []))].sort((a, b) => a.localeCompare(b));
-  seriesField.replaceChildren(new Option("No series", ""), ...names.map(name => new Option(name)));
-  seriesField.value = value || "";
+  const names = [...new Set([...posts.map(post => post.series), ...drafts.map(draft => draft.fields.series), value].filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  const create = new Option("Create", "");
+  create.dataset.create = "true";
+  seriesField.replaceChildren(create, new Option("No series", ""), ...names.map(name => new Option(name)));
+  seriesSelection = value || "";
+  seriesField.selectedIndex = seriesSelection ? names.indexOf(seriesSelection) + 2 : 1;
+  updatePart();
 }
 
 function nextPart(series) {
@@ -604,16 +647,25 @@ function nextPart(series) {
     .reduce((highest, post) => Math.max(highest, post.series_order || 0), 0) + 1);
 }
 
-seriesField.addEventListener("input", () => { partField.value = nextPart(seriesField.value); });
-document.querySelector("#add-series").addEventListener("click", () => {
-  const name = prompt("Name the series")?.trim();
-  if (!name) return;
-  if (name.length > 100) { status.textContent = "Use 100 characters or fewer for the series name."; return; }
-  const existing = [...seriesField.options].find(option => option.value.toLowerCase() === name.toLowerCase());
-  setSeries(existing?.value || name);
+function updatePart() {
+  partLabel.hidden = !seriesField.value;
   partField.value = nextPart(seriesField.value);
-  editor.dispatchEvent(new Event("input", { bubbles: true }));
-  seriesField.focus();
+}
+
+seriesField.addEventListener("input", () => {
+  if (seriesField.selectedOptions[0]?.dataset.create) {
+    const name = prompt("Name the series")?.trim();
+    if (!name || [...name].length > 100) {
+      if (name) status.textContent = "Use 100 characters or fewer for the series name.";
+      setSeries(seriesSelection);
+      return;
+    }
+    const existing = [...seriesField.options].find(option => option.value.toLowerCase() === name.toLowerCase());
+    setSeries(existing?.value || name);
+  } else {
+    seriesSelection = seriesField.value;
+    updatePart();
+  }
 });
 
 function updateEditorTitle() {
@@ -621,7 +673,7 @@ function updateEditorTitle() {
     titleInput.style.height = "auto";
     titleInput.style.height = titleInput.scrollHeight + "px";
   }
-  const title = titleInput.value.trim() || "Untitled";
+  const title = isNote ? "Note" : titleInput.value.trim() || "Untitled";
   titleHeading.textContent = title;
   document.querySelector("#editor-breadcrumb").textContent = title;
   const date = editor.elements.namedItem("published_on").value;
@@ -629,45 +681,43 @@ function updateEditorTitle() {
 }
 new ResizeObserver(updateEditorTitle).observe(editorTitle.parentElement);
 
-function openEditor(post, draft) {
+function openEditor(post, draft, note = false) {
   clearPublishErrors();
   showSettings(false);
-  featurePanel.open = false;
   activeDraft = draft;
   activePost = post;
   current = draft?.id || post?.id;
+  isNote = Boolean(draft?.is_note || post?.is_note || note);
   if (draftOwner) {
     try { localStorage.setItem(lastEntryKey(), slot()); } catch { /* Entry switching also works without storage. */ }
+    if (current) rememberEntry(current);
   }
   editor.reset();
   closeTags();
   tagInput.value = "";
   editHeading(false);
   const record = draft?.fields || post;
-  originalBody = draft ? markdownMarker + (record.body || "") : post?.body || "";
-  for (const key of ["title", "slug", "tag", "excerpt", "published_on", "reader_prompt", "collection", "collection_intro"]) {
+  originalBody = draft ? (isNote ? "" : markdownMarker) + (record.body || "") : post?.body || "";
+  for (const key of ["title", "slug", "tag", "excerpt", "published_on", "reader_prompt"]) {
     editor.elements.namedItem(key).value = record?.[key] ?? "";
   }
+  if (isNote && !record?.slug) editor.elements.namedItem("slug").value = "note-" + crypto.randomUUID();
   renderTagChips();
   setSeries(record?.series);
-  partField.value = nextPart(seriesField.value);
-  for (const name of ["start_here", "photo_essay"]) {
-    editor.elements.namedItem(name).checked = [true, "true"].includes(record?.[name]);
-  }
-  selectPairedPhoto(record?.paired_photo);
-  editor.elements.namedItem("body").value = originalBody.startsWith(markdownMarker)
+  editor.elements.namedItem("start_here").checked = [true, "true"].includes(record?.start_here);
+  editor.elements.namedItem("body").value = !isNote && originalBody.startsWith(markdownMarker)
     ? originalBody.slice(markdownMarker.length) : originalBody;
-  if (!record) editor.elements.namedItem("published_on").value = journalToday();
+  if (!editor.elements.namedItem("published_on").value) editor.elements.namedItem("published_on").value = journalToday();
   updateEditorTitle();
   document.querySelector("#editor-state").textContent = post?.published ? "Published" : "Draft";
   document.querySelector("#editor-state").dataset.published = String(Boolean(post?.published));
-  document.querySelector("#draft-address").textContent = draft ? " · " + draft.slug + "/draft" : "";
+  document.querySelector("#draft-address").textContent = draft && !isNote ? " · " + draft.slug + "/draft" : "";
   baseline = snapshot();
   backupStored = false;
   updatePublishActions();
   showDraftStatus("");
   editorTools.refresh(!post || originalBody.startsWith(markdownMarker));
-  editorTools.preview();
+  editorTools.setNote(isNote);
   if (!document.querySelector("#compose-panel").hidden) updateDeskAddress("compose");
   updateExitWarning();
   renderPostList();
@@ -678,12 +728,15 @@ async function loadPosts() {
   const fields = "id,slug,title,published,tag,published_on";
   let loaded;
   let supportsEditorial = true;
-  try {
-    loaded = await allRows(api, "posts?select=" + fields + ",series,series_order,start_here&order=published_on.desc,id.desc");
-  } catch (error) {
-    if (!missingColumn(error)) throw error;
-    loaded = await allRows(api, "posts?select=" + fields + "&order=published_on.desc,id.desc");
-    supportsEditorial = false;
+  const order = "&order=published_on.desc,id.desc";
+  for (const extra of [",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""]) {
+    try {
+      loaded = await allRows(api, "posts?select=" + fields + extra + order);
+      supportsEditorial = extra.includes(",series");
+      break;
+    } catch (error) {
+      if (!extra || !missingColumn(error)) throw error;
+    }
   }
   let savedDrafts;
   try { savedDrafts = await allRows(api, "working_drafts?select=slot,fields,saved_at&order=saved_at.desc,slot.asc"); }
@@ -693,11 +746,15 @@ async function loadPosts() {
   drafts = savedDrafts;
   editorialFields = supportsEditorial;
   setSeries(seriesField.value);
-  partField.value = nextPart(seriesField.value);
   renderPostList();
 }
 
-document.querySelector("#refresh-entries").addEventListener("click", event => run(event.currentTarget, loadPosts));
+document.querySelector("#refresh-entries").addEventListener("click", event => run(event.currentTarget, async () => {
+  await loadPosts();
+  const button = selectedEntryButton();
+  button?.focus({ preventScroll: true });
+  button?.scrollIntoView({ block: "nearest" });
+}));
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && session && !busy) void loadPosts().catch(() => {});
@@ -762,15 +819,27 @@ async function openDesk() {
   void loadReferences();
   await loadPosts();
   const section = deskSection();
-  const requested = requestedDraft(section);
-  let lastDraft = drafts.find(draft => draft.slot === requested);
+  const address = composeAddress(section);
+  const explicit = Boolean(address.draft || address.post || address.compose);
+  let lastDraft = drafts.find(draft => draft.slot === address.draft);
   let lastEntry;
+  let rememberedSelection;
+  let remembered;
   try {
-    const remembered = localStorage.getItem(lastEntryKey());
-    lastDraft ||= drafts.find(draft => "draft:" + draft.slot === remembered);
-    if (!lastDraft && posts.some(post => post.id === remembered)) [lastEntry] = await api("posts?id=eq." + remembered);
+    remembered = localStorage.getItem(lastEntryKey());
+    rememberedSelection = localStorage.getItem(selectedEntryKey());
   } catch { /* A remembered entry is optional. */ }
-  openEditor(lastEntry, lastDraft && draftEntry(lastDraft));
+  if (!explicit) lastDraft = drafts.find(draft => "draft:" + draft.slot === remembered);
+  const postId = address.post || (!explicit && remembered);
+  if (!lastDraft && posts.some(post => post.id === postId)) {
+    try { [lastEntry] = await api("posts?id=eq." + postId); }
+    catch { status.textContent = "The last entry could not load."; }
+  }
+  openEditor(lastEntry, lastDraft && draftEntry(lastDraft), address.compose === "note" || (!explicit && remembered === "new-note"));
+  if (!explicit && rememberedSelection !== null && rememberedSelection !== undefined) {
+    rememberEntry(rememberedSelection);
+    renderPostList();
+  }
   recoverDraft();
   storeSession();
   login.reset();
@@ -779,7 +848,9 @@ async function openDesk() {
   desk.hidden = false;
   document.body.classList.add("desk-open");
   deskMenu.hidden = false;
-  openSection(lastDraft && lastDraft.slot === requested ? "compose" : section);
+  const restoreComposition = (lastDraft && address.draft) || (lastEntry && address.post) || address.compose;
+  openSection(restoreComposition ? "compose" : section);
+  if (!restoreComposition && section === "entries" && selectedEntry) selectedEntryButton()?.scrollIntoView({ block: "nearest" });
 }
 
 function verifiedSession(token) {
@@ -932,14 +1003,16 @@ login.addEventListener("submit", event => {
   });
 });
 
-newPost.addEventListener("click", () => {
+function newComposition(button, note) {
   if (busy || !canLeaveDraft()) return;
-  run(newPost, () => {
-    openEditor();
+  run(button, () => {
+    openEditor(undefined, undefined, note);
     recoverDraft();
     showSection("compose");
   }).then(() => { if (!busy && !current) editorTools.focus(); });
-});
+}
+newPost.addEventListener("click", () => newComposition(newPost, false));
+newNote.addEventListener("click", () => newComposition(newNote, true));
 
 refreshComments.addEventListener("click", () => run(refreshComments, async () => {
   await loadComments();
@@ -973,14 +1046,13 @@ function showPublishErrors(errors) {
     field.setAttribute("aria-invalid", "true");
     field.setAttribute("aria-describedby", message.id);
     publishErrors.set(field, message);
-    if (name === "body") document.querySelector(".editor-toolbar").append(message);
+    if (name === "body") field.before(message);
     else if (field === titleInput) document.querySelector(".entry-state").after(message);
     else if (field === seriesField) field.parentElement.after(message);
     else field.after(message);
     return field;
   });
   if (fields.some(field => entryDetails.contains(field))) showSettings(true);
-  if (fields.some(field => featurePanel.contains(field))) featurePanel.open = true;
   if (fields[0] === titleInput) editTitle.click();
   else fields[0].focus();
   fields[0].scrollIntoView({ block: "nearest" });
@@ -989,7 +1061,8 @@ function showPublishErrors(errors) {
 function validateEntry(record) {
   const errors = new Map();
   if (!record.title) errors.set("title", "Enter a title.");
-  if (!record.body) errors.set("body", "Write something in the entry body.");
+  if (!record.body) errors.set("body", record.is_note ? "Write a note before publishing." : "Write something in the entry body.");
+  else if (record.is_note && [...record.body].length > 500) errors.set("body", "Use 500 characters or fewer for the note.");
   if (!record.tag) errors.set("tag", "Add at least one tag.");
   else if ([...record.tag].length > 400 || entryTags(record.tag).some(tag => [...tag].length > 40)) {
     errors.set("tag", "Use up to 40 characters per tag and 400 characters across all tags.");
@@ -997,10 +1070,6 @@ function validateEntry(record) {
   if (!record.published_on) errors.set("published_on", "Choose a publication date.");
   if ((record.slug || record.title) && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(record.slug)) {
     errors.set("slug", "Enter a URL slug using lowercase letters, numbers, and hyphens.");
-  }
-  if (record.collection_intro && !record.collection) errors.set("collection", "Name the collection before adding its introduction.");
-  if (record.paired_photo && !mediaId.test(record.paired_photo) && !/^month-\d{4}-(0[1-9]|1[0-2])$/.test(record.paired_photo)) {
-    errors.set("paired_photo", "Choose a Photo of the Week.");
   }
   if (record.series_order && Number(record.series_order) > 9999) errors.set("series", "This series has reached 9,999 parts.");
   return errors;
@@ -1011,6 +1080,11 @@ editor.addEventListener("submit", event => {
   if (busy || !event.submitter || event.submitter.disabled) return;
   clearPublishErrors();
   const fields = entryFields();
+  if (isNote) {
+    fields.title = noteTitle(fields.body);
+    fields.tag ||= "Notes";
+    fields.excerpt = fields.body.trim();
+  }
   if (event.submitter.value === "draft") {
     const source = activeDraft?.source || activePost;
     const existing = !activeDraft && source && drafts.find(draft => draft.slot === source.id);
@@ -1037,16 +1111,7 @@ editor.addEventListener("submit", event => {
     if (!record.excerpt) {
       record.excerpt = await entryExcerpt(record.body, record.title, record.body !== originalBody || originalBody.startsWith(markdownMarker));
     }
-    record.paired_photo ||= null;
-    record.photo_essay = record.photo_essay === "true";
-    if (record.photo_essay) {
-      const { mediaReferences } = await import("./rich.js");
-      const images = mediaReferences(markdownMarker + record.body).filter(item => item.kind === "image");
-      if (new Set(images.map(image => image.id)).size < 2) {
-        fieldError = ["body", "Add at least two different images to publish a photo essay."];
-        return;
-      }
-    }
+    if (record.is_note) record.is_note = true;
     if (editorialFields) {
       record.start_here = record.start_here === "true";
       record.series_order = record.series && record.series_order ? Number(record.series_order) : null;
@@ -1056,7 +1121,7 @@ editor.addEventListener("submit", event => {
       delete record.series_order;
       delete record.start_here;
     }
-    if (record.body !== originalBody || originalBody.startsWith(markdownMarker)) record.body = markdownMarker + record.body;
+    if (!record.is_note && (record.body !== originalBody || originalBody.startsWith(markdownMarker))) record.body = markdownMarker + record.body;
     record.published = true;
     const target = activeDraft?.source || activePost;
     const path = target ? "posts?id=eq." + target.id : "posts";
@@ -1066,9 +1131,13 @@ editor.addEventListener("submit", event => {
       try { [saved] = await api(path, options); }
       catch (error) {
         if (!missingColumn(error)) throw error;
-        if (featureFields.some(field => record[field])) throw new Error("Apply the journal features database upgrade before publishing these settings. Your edits can be saved as a draft.");
-        for (const field of featureFields) delete record[field];
-        [saved] = await api(path, options);
+        if (record.reader_prompt) throw new Error("Apply the journal features database upgrade before publishing a reader prompt. Your edits can be saved as a draft.");
+        delete record.reader_prompt;
+        try { [saved] = await api(path, options); }
+        catch (retryError) {
+          if (!missingColumn(retryError) || !record.is_note) throw retryError;
+          throw new Error("Apply the writing desk Notes upgrade before publishing notes. Your note can be saved as a draft.");
+        }
       }
     } catch (error) {
       if (error.code !== "23505") throw error;
@@ -1085,21 +1154,23 @@ editor.addEventListener("submit", event => {
         drafts = drafts.filter(draft => draft.slot !== activeDraft.slot);
       } catch { cleared = false; }
     }
-    const { id, slug, title, tag, published, published_on, series, series_order } = saved;
-    const summary = { id, slug, title, tag, published, published_on, series, series_order };
+    const { id, slug, title, tag, published, published_on, series, series_order, is_note } = saved;
+    const summary = { id, slug, title, tag, published, published_on, series, series_order, is_note };
     posts = [summary, ...posts.filter(post => post.id !== id)].sort((a, b) =>
       b.published_on.localeCompare(a.published_on) || b.id.localeCompare(a.id));
     openEditor(saved);
-    status.textContent = "Entry published." + (cleared ? "" : " The draft copy is still in Entries.");
+    status.textContent = (is_note ? "Note published." : "Entry published.") + (cleared ? "" : " The draft copy is still in Entries.");
   }).then(() => { if (fieldError) showPublishErrors(new Map([fieldError])); });
 });
 
 const referenceForm = document.querySelector("#reference-form");
 const referenceList = document.querySelector("#reference-list");
 const referenceStatus = document.querySelector("#reference-status");
+const referenceEmpty = document.querySelector("#reference-empty");
 const cancelReference = document.querySelector("#cancel-reference");
 const saveReference = referenceForm.querySelector('[type="submit"]');
 let editingReference;
+document.querySelector("#first-reference").addEventListener("click", () => referenceForm.elements.namedItem("alias").focus());
 
 function editReference(reference) {
   editingReference = reference;
@@ -1119,7 +1190,8 @@ async function loadReferences() {
     const rows = await allRows(api, "references?select=alias,label,url&order=alias");
     if (revision !== referencesRevision) return;
     references = rows;
-    referenceStatus.textContent = references.length ? "" : "No saved references yet.";
+    referenceStatus.textContent = "";
+    referenceEmpty.hidden = references.length > 0;
     referenceList.replaceChildren(...references.map(reference => {
       const item = document.createElement("li");
       const label = document.createElement("strong");
@@ -1145,6 +1217,7 @@ async function loadReferences() {
     }));
   } catch (error) {
     if (revision === referencesRevision) {
+      referenceEmpty.hidden = true;
       referenceStatus.textContent = missingFeature(error) ? "Apply the writing desk workflow SQL to enable References." : "References could not load.";
     }
   }
@@ -1190,16 +1263,26 @@ function deskSection() {
   return sections.find(button => sectionHash(button.dataset.section) === location.hash)?.dataset.section || "stats";
 }
 
-function requestedDraft(section) {
-  return !location.hash || section === "entries" ? new URLSearchParams(location.search).get("draft") : null;
+function composeAddress(section) {
+  if (location.hash && section !== "entries") return {};
+  const params = new URLSearchParams(location.search);
+  const draft = params.get("draft");
+  const post = draft ? null : params.get("post");
+  const mode = params.get("compose");
+  return { draft, post, compose: mode === "note" || mode === "entry" ? mode : null };
 }
 
 function updateDeskAddress(section, navigate = false) {
   const url = new URL(location.href);
   url.searchParams.delete("draft");
   url.searchParams.delete("post");
-  if (section === "compose" && activeDraft) {
-    url.search = "?draft=" + encodeURIComponent(activeDraft.slot) + "&post=" + encodeURIComponent(activeDraft.slug) + "/draft";
+  url.searchParams.delete("compose");
+  if (section === "compose") {
+    if (activeDraft) {
+      url.searchParams.set("draft", activeDraft.slot);
+      url.searchParams.set("post", activeDraft.slug + "/draft");
+    } else if (activePost) url.searchParams.set("post", activePost.id);
+    else url.searchParams.set("compose", isNote ? "note" : "entry");
   }
   url.hash = sectionHash(section);
   if (url.href === location.href) return;
@@ -1314,15 +1397,28 @@ function openSection(section, navigate = false) {
   if (section === "references") void loadReferences();
 }
 
-function restoreDeskSection() {
+async function restoreDeskSection() {
   if (desk.hidden || busy) return;
   const section = deskSection();
-  const draft = drafts.find(row => row.slot === requestedDraft(section));
-  if (draft && activeDraft?.slot !== draft.slot) {
-    openEditor(undefined, draftEntry(draft));
-    recoverDraft();
+  const address = composeAddress(section);
+  const draft = drafts.find(row => row.slot === address.draft);
+  const post = posts.find(row => row.id === address.post);
+  const screen = draft || post || address.compose ? "compose" : section;
+  if (screen === "compose") {
+    if (draft && current === "draft:" + draft.slot || post && current === post.id ||
+        address.compose && !current && isNote === (address.compose === "note")) {
+      showSection(screen);
+      return;
+    }
+    await run(null, async () => {
+      const [record] = post ? await api("posts?id=eq." + post.id) : [];
+      if (post && !record) throw new Error("This entry is unavailable.");
+      openEditor(record, draft && draftEntry(draft), address.compose === "note");
+      recoverDraft();
+      showSection(screen);
+    });
+    return;
   }
-  const screen = draft ? "compose" : section;
   if (document.querySelector("#" + screen + "-panel").hidden) openSection(screen);
   else updateDeskAddress(screen);
 }

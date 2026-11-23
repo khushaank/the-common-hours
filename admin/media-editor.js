@@ -20,6 +20,8 @@ export function setupMediaEditor(api, storage) {
   const dialog = document.querySelector("#media-dialog");
   const form = document.querySelector("#media-form");
   const picture = document.querySelector("#media-preview");
+  const pictureFrame = document.querySelector("#media-preview-frame");
+  const description = document.querySelector("#media-description-label");
   const download = document.querySelector("#media-download");
   const close = document.querySelector("#media-close");
   const remove = document.querySelector("#media-delete");
@@ -36,11 +38,16 @@ export function setupMediaEditor(api, storage) {
   const covers = new Map();
 
   async function showImage(image, id) {
+    const frame = image.parentElement;
     if (!previews.has(id)) previews.set(id, storage.image(id).then(imageSource));
     try {
       const src = await previews.get(id);
-      if (image.dataset.id === id && image.isConnected && src) image.src = src;
+      if (image.dataset.id !== id || !image.isConnected || !src) return;
+      image.src = src;
+      await image.decode();
+      if (image.dataset.id === id) image.hidden = false;
     } catch { previews.delete(id); }
+    finally { if (image.dataset.id === id) frame.removeAttribute("aria-busy"); }
   }
 
   async function showCover(frame, id) {
@@ -61,7 +68,7 @@ export function setupMediaEditor(api, storage) {
     observer?.disconnect();
     const query = search.value.trim().toLowerCase();
     const matches = catalog.filter(asset => (filter.value === "all" || filter.value === asset.type) &&
-      [asset.title, asset.original, asset.alt, asset.description].some(value => value?.toLowerCase().includes(query)));
+      [asset.title, asset.original, asset.alt, asset.kind === "file" ? asset.description : ""].some(value => value?.toLowerCase().includes(query)));
     status.textContent = matches.length ? matches.length + (matches.length === 1 ? " item" : " items") : "No media matches.";
     grid.replaceChildren();
     more.hidden = matches.length <= limit;
@@ -91,6 +98,7 @@ export function setupMediaEditor(api, storage) {
         image.alt = "";
         image.dataset.id = asset.id;
         image.decoding = "async";
+        frame.setAttribute("aria-busy", "true");
         frame.append(image);
         if (observer) observer.observe(image);
         else void showImage(image, asset.id);
@@ -117,7 +125,10 @@ export function setupMediaEditor(api, storage) {
   async function load() {
     const loading = ++revision;
     status.textContent = "Loading media…";
-    grid.replaceChildren();
+    observer?.disconnect();
+    grid.setAttribute("aria-busy", "true");
+    grid.replaceChildren(document.querySelector("#media-skeleton").content.cloneNode(true));
+    search.disabled = filter.disabled = true;
     more.hidden = true;
     try {
       const assets = await loadCatalog(api, storage.list);
@@ -125,7 +136,15 @@ export function setupMediaEditor(api, storage) {
       catalog = assets;
       render();
     } catch {
-      if (loading === revision) showFailure(status, "Media could not load.", load);
+      if (loading === revision) {
+        grid.replaceChildren();
+        showFailure(status, "Media could not load.", load);
+      }
+    } finally {
+      if (loading === revision) {
+        grid.removeAttribute("aria-busy");
+        search.disabled = filter.disabled = false;
+      }
     }
   }
 
@@ -137,9 +156,12 @@ export function setupMediaEditor(api, storage) {
     form.elements.namedItem("title").value = asset.title;
     form.elements.namedItem("alt").value = asset.alt || "";
     form.elements.namedItem("alt").required = isImage;
-    form.elements.namedItem("description").value = asset.description;
+    description.hidden = isImage;
+    form.elements.namedItem("description").value = isImage ? "" : asset.description;
     document.querySelector("#media-alt-label").hidden = !isImage;
-    picture.hidden = !isImage;
+    pictureFrame.hidden = !isImage;
+    picture.hidden = true;
+    if (isImage) pictureFrame.setAttribute("aria-busy", "true");
     picture.removeAttribute("src");
     picture.dataset.id = asset.id;
     picture.alt = asset.alt || "";
@@ -155,7 +177,8 @@ export function setupMediaEditor(api, storage) {
     if (save.disabled) return;
     const fields = new FormData(form);
     const record = {
-      title: fields.get("title").trim(), alt: fields.get("alt").trim(), description: fields.get("description").trim(),
+      title: fields.get("title").trim(), alt: fields.get("alt").trim(),
+      description: selected.kind === "image" ? selected.description : fields.get("description").trim(),
     };
     if (selected.kind === "image" && !record.alt) { message.textContent = "Enter alt text for this image."; return; }
     save.disabled = close.disabled = remove.disabled = true;

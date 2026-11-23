@@ -23,7 +23,7 @@ export function setupImageLibrary(api, loadImage, upload, describe) {
     observer?.disconnect();
     const query = search.value.trim().toLowerCase();
     const matching = images.filter(image =>
-      [image.alt, image.title, image.description].some(text => text?.toLowerCase().includes(query)));
+      [image.alt, image.title].some(text => text?.toLowerCase().includes(query)));
     status.textContent = matching.length ? "" : query ? "No images match your search." : "No images have been uploaded yet.";
     more.hidden = matching.length <= limit;
     grid.replaceChildren();
@@ -43,19 +43,14 @@ export function setupImageLibrary(api, loadImage, upload, describe) {
       button.type = "button";
       picture.alt = "";
       picture.dataset.id = image.id;
-      picture.title = image.alt;
       picture.decoding = "async";
+      picture.setAttribute("aria-busy", "true");
       label.textContent = image.title || image.alt || "Untitled image";
       button.append(picture, label);
       if (image.alt && image.alt !== label.textContent) {
         const description = document.createElement("small");
         description.textContent = image.alt;
         button.append(description);
-      }
-      if (image.description) {
-        const notes = document.createElement("small");
-        notes.textContent = image.description;
-        button.append(notes);
       }
       button.addEventListener("click", () => {
         try { pick(image); dialog.close(); }
@@ -72,8 +67,12 @@ export function setupImageLibrary(api, loadImage, upload, describe) {
     if (!sources.has(id)) sources.set(id, loadImage(id).then(imageSource));
     try {
       const src = await sources.get(id);
-      if (src && picture.isConnected) picture.src = src;
+      if (src && picture.isConnected) {
+        picture.src = src;
+        await picture.decode();
+      }
     } catch { sources.delete(id); }
+    finally { picture.removeAttribute("aria-busy"); }
   }
 
   search.addEventListener("input", () => { limit = pageSize; render(); });
@@ -111,6 +110,7 @@ export function setupImageLibrary(api, loadImage, upload, describe) {
     revision++;
     observer?.disconnect();
     grid.replaceChildren();
+    grid.removeAttribute("aria-busy");
     sources.clear();
     restoreFocus();
   });
@@ -125,6 +125,8 @@ export function setupImageLibrary(api, loadImage, upload, describe) {
     search.disabled = add.disabled = true;
     more.hidden = true;
     status.textContent = "Loading images…";
+    grid.setAttribute("aria-busy", "true");
+    grid.replaceChildren(document.querySelector("#media-skeleton").content.cloneNode(true));
     dialog.showModal();
     try {
       const catalog = await loadCatalog(api);
@@ -133,9 +135,15 @@ export function setupImageLibrary(api, loadImage, upload, describe) {
       search.disabled = false;
       render();
     } catch {
-      if (revision === loading) status.textContent = "The image library could not load. Close it and try again.";
+      if (revision === loading) {
+        grid.replaceChildren();
+        status.textContent = "The image library could not load. Close it and try again.";
+      }
     } finally {
-      if (revision === loading) add.disabled = false;
+      if (revision === loading) {
+        grid.removeAttribute("aria-busy");
+        add.disabled = false;
+      }
     }
   };
 }

@@ -24,21 +24,21 @@ test("static pages contain readable content, public links, safe formatting, and 
   const article = pages.get("entry-first-entry.html");
   assert.match(article, /<title>\$&amp; &lt;a &quot;title&quot;&gt; — The Common Hours<\/title>/);
   assert.match(article, /<strong>Hello<\/strong>/);
-  assert.match(article, /A caption/);
+  assert.doesNotMatch(article, /A caption|Paired photo/);
   assert.match(article, /src="media-12345678-1234-1234-1234-123456789abc.jpg"/);
   assert.match(article, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(article, /<script>alert/);
   assert.match(article, /href="entry-first-entry.html"/);
-  for (const name of ["index", "archive", "start", "photo-essays", "collections", "topics"]) assert.match(pages.get(name + ".html"), /href="entry-first-entry.html"/);
+  for (const name of ["index", "archive", "start", "topics"]) assert.match(pages.get(name + ".html"), /href="entry-first-entry.html"/);
   assert.match(pages.get("privacy.html"), /<h1>Privacy<\/h1>/);
   assert.match(pages.get("privacy.html"), /What the journal collects/);
   assert.match(pages.get("terms.html"), /<h1>Terms<\/h1>/);
   assert.match(pages.get("photos.html"), /url=\.\/#week-photo/);
-  assert.doesNotMatch(pages.get("sitemap.xml"), /\/photos\.html/);
-  assert.match(pages.get("photo-" + imageId + ".html"), /The description/);
+  assert.doesNotMatch(pages.get("sitemap.xml"), /\/(photos|collections|photo-essays)\.html/);
+  assert.doesNotMatch(pages.get("photo-" + imageId + ".html"), /The description/);
   const canonicals = [];
   for (const [name, html] of pages) {
-    if (!name.endsWith(".html") || name === "photos.html") continue;
+    if (!name.endsWith(".html") || ["photos.html", "collections.html", "photo-essays.html"].includes(name)) continue;
     const canonical = html.match(/rel="canonical" href="([^"]+)"/)[1];
     canonicals.push(canonical);
     assert.match(html, /aria-busy="false" data-prerendered="true"/);
@@ -99,15 +99,24 @@ test("offline documents retain their exact route, and live requests revalidate H
   const saved = new Map();
   const tasks = [];
   let online = true;
+  let status = 200;
   const cache = {
     put: async (request, response) => saved.set(request.url, response),
     keys: async () => [...saved.keys()].map(url => ({ url })),
-    delete: async request => saved.delete(request.url),
+    delete: async (request, { ignoreSearch = false } = {}) => {
+      for (const url of saved.keys()) {
+        if (url === request.url || ignoreSearch && url.split("?")[0] === request.url.split("?")[0]) saved.delete(url);
+      }
+    },
   };
   runInNewContext(source, {
     URL, Response, Set, Request: class { constructor(request, options) { Object.assign(this, request, options); } },
     self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; } },
-    fetch: async request => { assert.equal(request.cache, "no-cache"); if (!online) throw new Error("Offline"); return new Response("Privacy document"); },
+    fetch: async request => {
+      assert.equal(request.cache, "no-cache");
+      if (!online) throw new Error("Offline");
+      return new Response("Privacy document", { status });
+    },
     caches: { open: async () => cache, match: async request => saved.get(request.url)?.clone() },
   });
   async function navigate(url) {
@@ -124,6 +133,22 @@ test("offline documents retain their exact route, and live requests revalidate H
   assert.equal(other.status, 503);
   assert.doesNotMatch(await other.text(), /Privacy document/);
   assert.equal((await navigate("https://example.com/privacy.html?different=1")).status, 503);
+  for (const removed of [404, 410]) {
+    online = true;
+    status = 200;
+    const entry = "https://example.com/entry-retired.html";
+    const alternate = entry + "?from=archive";
+    assert.equal((await navigate(entry)).status, 200);
+    assert.equal((await navigate(alternate)).status, 200);
+    status = 500;
+    assert.equal((await navigate(entry)).status, 200);
+    status = removed;
+    assert.equal((await navigate(entry)).status, removed);
+    online = false;
+    assert.equal((await navigate(entry)).status, 503);
+    assert.equal((await navigate(alternate)).status, 503);
+    assert.equal((await navigate("https://example.com/privacy.html")).status, 200);
+  }
 });
 
 test("archives have accessible pagination and static year, month, and Unicode topic routes", () => {
@@ -151,11 +176,20 @@ test("legal pages offer email without scripts, and reading sections explain thei
   }
   assert.match(pages.get("privacy.html"), /id="contact"/);
   assert.match(pages.get("start.html"), /Find your way in/);
-  assert.match(pages.get("photo-essays.html"), /sequence of photographs/);
-  assert.match(pages.get("collections.html"), /shared theme/);
+  for (const name of ["photo-essays.html", "collections.html"]) assert.match(pages.get(name), /url=archive\.html/);
 });
 
-test("photo metadata preserves descriptions and suppresses filenames and tracking URLs", () => {
+test("notes render without an entry title and preserve their lines as text", () => {
+  const body = "First line\n<script>Second line</script>";
+  const note = { ...post, slug: "short-note", title: "First line", body, excerpt: body, is_note: true };
+  const pages = renderPublicPages(template, { posts: [note], photos: [], images: new Map(), files: new Map() });
+  for (const name of ["index", "archive", "entry-short-note"]) {
+    assert.match(pages.get(name + ".html"), /class="note-text">First line\n&lt;script&gt;Second line&lt;\/script&gt;/);
+  }
+  assert.match(pages.get("entry-short-note.html"), /<h1>Note<\/h1>/);
+});
+
+test("photo metadata keeps accessible alt text and suppresses filenames and tracking URLs", () => {
   assert.equal(photoText("Blue ridges beneath a pale morning sky"), "Blue ridges beneath a pale morning sky");
   for (const value of ["IMG_1234.jpg", "250px Billie Jean Single.jpg utm source=en.wikipedia", "https://example.com/x", "sayan nath FWnbuCU8Axk unsplash"]) assert.equal(photoText(value), "");
   const clean = publicPhoto({ title: "IMG_1234.jpg", alt: "https://example.com/x" });
@@ -169,6 +203,7 @@ test("published attachments become binary direct downloads without exposing cred
   const calls = [];
   t.mock.method(globalThis, "fetch", async (address, options) => {
     calls.push(address);
+    assert.equal(options.redirect, "error");
     if (address.includes("/storage/")) {
       assert.ok(address.endsWith("/" + imageId));
       assert.equal(options.headers.Authorization, "Bearer public");
@@ -205,11 +240,13 @@ test("each comma-separated tag gets its own linked topic and archive page", () =
 });
 
 test("new routes and legacy query links resolve to the same entries and filters", () => {
-  for (const values of [{ post: "first-entry" }, { view: "privacy" }, { view: "photo-essays" }, { view: "photo", photo: imageId }, { view: "photos", year: "2026", series: "A & B" }, { view: "review" }, { tag: "A & B", page: "2" }]) {
+  for (const values of [{ post: "first-entry" }, { view: "privacy" }, { view: "photo", photo: imageId }, { view: "photos", year: "2026", series: "A & B" }, { view: "review" }, { tag: "A & B", page: "2" }]) {
     const url = new URL(pageHref(values), "https://example.com/");
     assert.deepEqual(Object.fromEntries(pageParams(url.search, url.pathname)), values);
   }
   assert.equal(pageParams("?post=old-entry", "/").get("post"), "old-entry");
+  assert.equal(pageParams("?view=photo-essays", "/").get("view"), "archive");
+  assert.equal(pageParams("", "/collections.html").get("view"), "archive");
   assert.equal(pageHref({ post: "../../private" }), "./?post=..%2F..%2Fprivate");
   for (const name of ["../entry-a.html", "folio.html", "media-../x.jpg"]) assert.equal(generatedFile.test(name), false);
 });
@@ -223,7 +260,7 @@ test("new publications use working query links until their HTML pages exist", as
   assert.equal(link({ post: "first-entry" }), "entry-first-entry.html");
   assert.equal(link({ post: "just-published" }), "./?post=just-published");
   assert.equal(link({ view: "photo", photo: "cover" }), "./?view=photo&photo=cover");
-  assert.equal(link({ view: "photo-essays" }), "photo-essays.html");
+  assert.equal(link({ view: "photo-essays" }), "archive.html");
 });
 
 test("RSS uses readable HTML links without changing existing subscription identifiers", async t => {
@@ -261,7 +298,7 @@ test("the build only reads public data, paginates, supports older schemas, and f
     calls.push(url);
     if (url.pathname.endsWith("_posts")) {
       assert.equal(url.searchParams.get("published"), "eq.true");
-      if (url.searchParams.get("select").includes("collection")) return Response.json({ code: "42703" }, { status: 400 });
+      if (url.searchParams.get("select").includes("is_note")) return Response.json({ code: "42703" }, { status: 400 });
       return Response.json(Number(url.searchParams.get("offset")) === 0 ? Array.from({ length: 100 }, (_, id) => ({ ...post, id, body: "Plain text" })) : [{ ...post, body: "Plain text" }]);
     }
     return Response.json({ code: "PGRST205" }, { status: 404 });

@@ -11,7 +11,7 @@ async function featuredSnapshot(config) {
   if (!config.origin) return null;
   try {
     const response = await fetch(config.origin + "/rest/v1/rpc/qmargin_b74_home_photos", {
-      headers: { apikey: config.key }, signal: AbortSignal.timeout(7000),
+      headers: { apikey: config.key }, signal: AbortSignal.timeout(7000), redirect: "error",
     });
     if (!response.ok) return null;
     const { photos, image } = await response.json();
@@ -89,7 +89,12 @@ async function buildApp(app, destination, files, config, childDirectory, feature
       await copyFile(source, target);
     }
   }
-  if (featured) await writeFile(new URL("featured.webp", output), featured.bytes);
+  if (app === "blog") {
+    if (featured) await writeFile(new URL("featured.webp", output), featured.bytes);
+    for (const name of featured ? ["featured.jpg"] : ["featured.jpg", "featured.webp"]) {
+      if (existing.some(entry => entry.name === name)) await unlink(new URL(name, output));
+    }
+  }
   if (publicPages) for (const entry of existing) {
     if (entry.isFile() && (generatedFile.test(entry.name) || entry.name === "photo-shell.js") && !publicPages.has(entry.name)) await unlink(new URL(entry.name, output));
   }

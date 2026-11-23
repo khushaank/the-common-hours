@@ -1,7 +1,7 @@
 import { pageHref } from "./page-url.js";
 import { escape, request } from "./common.js";
 import { cachedEntries } from "./public-cache.js";
-import { collectionEmpty, exploreJournal } from "./reading-copy.js";
+import { noteCard } from "./archive.js";
 
 const entryHref = slug => pageHref({ post: slug });
 
@@ -11,7 +11,7 @@ export function seriesEntries(posts, series) {
 }
 
 function cards(posts) {
-  return posts.map(post => '<article class="entry"><a class="entry-title" href="' + entryHref(post.slug) + '">' +
+  return posts.map(post => post.is_note ? noteCard(post, date => date) : '<article class="entry"><a class="entry-title" href="' + entryHref(post.slug) + '">' +
     escape(post.title) + '</a><p>' + escape(post.excerpt) + '</p></article>').join("");
 }
 
@@ -19,29 +19,6 @@ export function renderReadingList(content, title, entries, empty = "No entries h
   document.title = title + " — The Common Hours";
   content.innerHTML = '<div class="section-head"><h1>' + escape(title) + '</h1></div>' +
     (entries.length ? cards(entries) : '<p>' + escape(empty) + '</p>');
-}
-
-export function renderCollections(content, posts, name) {
-  const groups = new Map();
-  for (const post of posts) {
-    if (!post.collection) continue;
-    if (!groups.has(post.collection)) groups.set(post.collection, []);
-    groups.get(post.collection).push(post);
-  }
-  const introduction = entries => entries.find(entry => entry.collection_intro)?.collection_intro;
-  if (name) {
-    const entries = groups.get(name) || [];
-    renderReadingList(content, entries.length ? name : "Collection unavailable", entries);
-    content.insertAdjacentHTML("afterbegin", '<a class="back" href="collections.html">← All collections</a>');
-    const intro = introduction(entries);
-    if (intro) content.querySelector(".section-head").insertAdjacentHTML("afterend", '<p class="collection-intro">' + escape(intro) + '</p>');
-    return;
-  }
-  renderReadingList(content, "Themed collections", [], collectionEmpty);
-  if (!groups.size) { content.insertAdjacentHTML("beforeend", exploreJournal); return; }
-  content.lastElementChild.outerHTML = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([title, entries]) =>
-    '<article class="entry"><a class="entry-title" href="collections.html?collection=' + encodeURIComponent(title) + '">' +
-    escape(title) + '</a><p>' + escape(introduction(entries) || `${entries.length} ${entries.length === 1 ? "entry" : "entries"}`) + '</p></article>').join("");
 }
 
 export function seriesNavigation(posts, post) {
@@ -105,8 +82,14 @@ export async function renderReview(content) {
     location.replace(pageHref({ post: draft.published_slug }));
     return;
   }
+  if (draft.is_note) {
+    content.innerHTML = '<article class="article journal-note"><p class="meta">Private draft review</p><h1>Note</h1><p class="note-text">' +
+      escape(draft.body || "") + '</p>' +
+      (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
+    return;
+  }
   const { renderText } = await import("./rich.js");
-  content.innerHTML = '<article class="article"><p class="meta">Private draft review' + (draft.photo_essay ? ' · Photo essay' : '') + '</p><h1>' +
+  content.innerHTML = '<article class="article"><p class="meta">Private draft review</p><h1>' +
     escape(draft.title || "Untitled entry") + '</h1><p class="meta">' + escape([draft.published_on, draft.tag].filter(Boolean).join(" · ")) +
     '</p><p>' + escape(draft.excerpt || "") + '</p><div id="entry-body" class="prose"></div>' +
     (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';

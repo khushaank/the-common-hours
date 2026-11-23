@@ -14,7 +14,7 @@ export async function reviewAttachment(request, env, send = fetch) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!origin || !key) return fail(503, "Download unavailable");
   try {
-    // Limit the actual body as well as Content-Length; chunked requests have no length.
+    // Enforce the limit on streamed bodies, including requests without Content-Length.
     const reader = request.body?.getReader();
     if (!reader) return fail(400, "Invalid request");
     let bytes = new Uint8Array();
@@ -45,7 +45,13 @@ export async function reviewAttachment(request, env, send = fetch) {
     });
     if (!file.ok) { await file.body?.cancel(); return fail(file.status === 404 ? 404 : 503, "Attachment unavailable"); }
     // Check again in case the review expired or changed while Storage was opening.
-    if (!await allowed()) { await file.body?.cancel(); return fail(404, "Attachment unavailable"); }
+    let stillAllowed = false;
+    try {
+      stillAllowed = await allowed();
+    } finally {
+      if (!stillAllowed) await file.body?.cancel();
+    }
+    if (!stillAllowed) return fail(404, "Attachment unavailable");
     return new Response(file.body, { headers: {
       ...cors, "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="attachment"',
     } });

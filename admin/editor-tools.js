@@ -51,7 +51,7 @@ const toolbarFormats = [
   ["divider", "Divider", "---"],
 ];
 const commands = [
-  ["image", "Image with caption"],
+  ["image", "Image"],
   ["file", "File"],
   ["pdf", "PDF"],
   ["entry", "Link to entry"],
@@ -128,6 +128,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   let previewRevision = 0;
   let previousBody;
   let displayMarkdown = true;
+  let note = false;
   let editorRevision = 0;
   let uploadRange;
   const previewImages = new Map();
@@ -187,6 +188,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   }
 
   function updateMenu() {
+    if (note) return;
     const range = previewPanel.hidden ? null : visual.range();
     const end = range ? range.startOffset : body.selectionStart;
     const before = range ? range.startContainer.nodeValue?.slice(0, end) || "" : body.value.slice(0, end);
@@ -214,6 +216,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
 
   function refresh() {
     closeMenu();
+    if (note) {
+      count.textContent = body.value.length + " / " + body.maxLength;
+      return;
+    }
     updateBlockFormat();
     const words = body.value.trim().split(/\s+/).filter(Boolean).length;
     count.textContent = words + (words === 1 ? " word" : " words");
@@ -302,13 +308,11 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     document.querySelector("#insert-title").textContent = type === "video" ? "Embed video" :
       type === "pdf" ? "Insert PDF" : "Insert " + name.toLowerCase();
     const label = insert.elements.namedItem("label");
-    const caption = insert.elements.namedItem("caption");
     const url = insert.elements.namedItem("url");
     const file = insert.elements.namedItem("file");
     const isFile = ["image", "file", "pdf"].includes(type);
-    label.parentElement.firstChild.textContent = type === "image" ? "Image description " : "Link text ";
+    label.parentElement.firstChild.textContent = type === "image" ? "Alt text " : "Link text ";
     label.parentElement.hidden = label.disabled = !(type === "image" || type === "link");
-    caption.parentElement.hidden = caption.disabled = type !== "image";
     url.parentElement.hidden = url.disabled = isFile;
     file.parentElement.hidden = file.disabled = !isFile;
     file.parentElement.firstChild.textContent = name + " ";
@@ -384,7 +388,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   }
   previewBody.addEventListener("keydown", commandKey);
   body.addEventListener("keydown", event => {
-    if (event.isComposing) return;
+    if (event.isComposing || note) return;
     if (menu.hidden) {
       if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
         const { value, selectionStart: start, selectionEnd: end } = body;
@@ -490,12 +494,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       let text;
       if (type === "image") {
         if (!label) throw new Error("Describe the image for readers who cannot see it.");
-        const caption = fields.get("caption").trim().replace(/[\\"]/g, "\\$&");
-        const title = caption ? ' "' + caption + '"' : "";
-        checkSpace(label.length + title.length + 51, start, end);
+        checkSpace(label.length + 51, start, end);
         insertStatus.textContent = "Preparing image…";
         const image = await attachments.uploadMedia(file, plainLabel);
-        text = "\n\n![" + label + "](media:" + image.id + title + ")\n\n";
+        text = "\n\n![" + label + "](media:" + image.id + ")\n\n";
       } else if (type === "file" || type === "pdf") {
         if (!file?.size || file.size > attachmentLimit) throw new Error("Choose a file up to 25 MB.");
         if (type === "pdf" && !/\.pdf$/i.test(file.name)) throw new Error("Choose a PDF file.");
@@ -560,8 +562,19 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     else previewRevision++;
   }
 
-  writeMode.addEventListener("click", () => setPreview(false));
-  previewMode.addEventListener("click", () => setPreview(true));
+  for (const button of [writeMode, previewMode]) {
+    button.addEventListener("click", () => {
+      setPreview(button === previewMode);
+      focus();
+    });
+    button.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const show = event.key === "ArrowRight";
+      setPreview(show);
+      (show ? previewMode : writeMode).focus();
+    });
+  }
   editor.addEventListener("input", () => { if (!previewPanel.hidden) void renderPreview(); });
 
   return {
@@ -574,7 +587,15 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       previewBody.replaceChildren();
       if (!previewPanel.hidden) void renderPreview();
     },
-    preview: () => setPreview(true),
+    setNote(value) {
+      note = value;
+      editor.toggleAttribute("data-note", note);
+      body.maxLength = note ? 500 : 99960;
+      body.placeholder = note ? "Write a note…" : "Start writing…";
+      body.setAttribute("aria-label", note ? "Note text" : "Entry body in Markdown");
+      setPreview(!note);
+      refresh();
+    },
     bodyControl,
     focus,
     openImageLibrary,

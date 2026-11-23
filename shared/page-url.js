@@ -1,10 +1,16 @@
-const views = ["archive", "topics", "photos", "start", "privacy", "terms", "collections", "photo-essays"];
+const views = ["archive", "topics", "photos", "start", "privacy", "terms"];
+const retired = ["collections", "photo-essays"];
 const slugPattern = /^[a-z0-9-]{1,120}$/;
 const photoPattern = /^(?:[0-9a-f-]{36}|month-\d{4}-\d{2}|cover)$/i;
 const tagKey = value => btoa(String.fromCharCode(...new TextEncoder().encode(value))).replace(/\+/g, "~").replace(/\//g, "_").replace(/=+$/, "");
 
 export function pageParams(search = location.search, pathname = location.pathname) {
   const params = new URLSearchParams(search);
+  if (retired.includes(params.get("view"))) {
+    params.set("view", "archive");
+    params.delete("collection");
+    return params;
+  }
   if (params.has("view") || params.has("post")) return params;
   const file = pathname.split("/").pop().replace(/\.html$/, "");
   const archive = /^archive(?:-(year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-([1-9]\d*))?$/.exec(file);
@@ -17,7 +23,8 @@ export function pageParams(search = location.search, pathname = location.pathnam
       catch { /* An unknown archive address falls back to all entries. */ }
     }
     if (archive[2]) params.set("page", archive[2]);
-  } else if (views.includes(file)) params.set("view", file);
+  } else if (retired.includes(file)) params.set("view", "archive");
+  else if (views.includes(file)) params.set("view", file);
   else if (file.startsWith("entry-") && slugPattern.test(file.slice(6))) params.set("post", file.slice(6));
   else if (file.startsWith("photo-") && photoPattern.test(file.slice(6))) {
     params.set("view", "photo");
@@ -31,6 +38,7 @@ export function pageHref(values) {
   let file = "./";
   const view = params.get("view");
   const slug = params.get("post");
+  if (retired.includes(view)) return "archive.html";
   if (!view && slugPattern.test(slug || "")) {
     file = "entry-" + slug + ".html";
     params.delete("post");
@@ -53,7 +61,7 @@ export function pageHref(values) {
     params.delete("photo");
   }
   // New publications remain readable before the next static build.
-  if (/^(?:entry-|photo-|archive-)/.test(file) && file !== "photo-essays.html" && typeof document !== "undefined" &&
+  if (/^(?:entry-|photo-|archive-)/.test(file) && typeof document !== "undefined" &&
       !document.querySelector("#public-pages")?.dataset.files.split(" ").includes(file)) {
     return "./?" + new URLSearchParams(values);
   }
