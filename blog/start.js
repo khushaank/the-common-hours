@@ -11,7 +11,9 @@ if (location.search) {
   if (target.pathname !== location.pathname && target.pathname.endsWith(".html")) location.replace(target.href);
 }
 
-import("./journal.js").catch(() => {
+import("./journal.js").then(() => {
+  document.documentElement.setAttribute("data-interactive", "");
+}).catch(() => {
   const content = document.querySelector("#content");
   if (!content) return;
   delete content.dataset.refreshPending;

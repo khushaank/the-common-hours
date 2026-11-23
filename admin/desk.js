@@ -10,6 +10,7 @@ if (window.top !== window.self) {
 }
 
 const login = document.querySelector("#login");
+document.querySelector("#desk-script-notice").hidden = true;
 const mfa = document.querySelector("#mfa");
 const setupMfa = document.querySelector("#start-mfa-setup");
 const verifyMfa = mfa.querySelector('[type="submit"]');
@@ -1372,7 +1373,7 @@ async function openMedia() {
       upload: uploadMedia,
       remove: async asset => {
         if (asset.kind === "image") {
-          if (!await adminRpc("delete_image", { p_id: asset.id })) throw new Error("Remove this image from any entries, drafts, or weekly photos that use it first.");
+          if (!await adminRpc("delete_image", { p_id: asset.id })) throw new Error("Remove this image from any entries or drafts and unfeature it before deleting.");
           return;
         }
         const removed = await removeAttachment(asset.id, await sessionToken());

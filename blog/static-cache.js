@@ -7,7 +7,7 @@ const paths = "__OFFLINE_ASSETS__";
 const scope = new URL(self.registration.scope);
 const shell = new URL("index.html", scope);
 const urls = new Set(Array.isArray(paths) ? paths.map(path => new URL(path, scope).href) : []);
-const publicPage = /^(?:index|archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|topics|photos|start|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html$/i;
+const publicPage = /^(?:index|archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html$/i;
 
 self.addEventListener("install", event => {
   if (!urls.size) return;

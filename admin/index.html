@@ -9,6 +9,7 @@
 <title>Writing desk — The Common Hours</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="scrollbars.css">
 <script type="module" src="desk.js"></script>
 </head>
 <body>
@@ -24,6 +25,7 @@
   <p id="status" role="status"></p>
   <form id="login" class="card login" method="post">
     <h1>Sign in</h1>
+    <p id="desk-script-notice" class="muted">The Writing Desk needs JavaScript to sign in and edit.</p>
     <label>Email<input name="email" type="email" autocomplete="username" required></label>
     <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
     <button class="primary" disabled>Sign in</button>
@@ -158,14 +160,11 @@
           </form>
       </section>
       <section id="site-panel" data-desk-panel hidden>
-        <div class="section-heading"><h1>Photo of the Week</h1></div>
+        <div class="section-heading"><h1>Featured Photo</h1></div>
         <form id="photo-form" class="card photo-workspace" method="post">
-          <div class="photo-week-toolbar" id="photo-week-toolbar">
-            <div><div class="help-row"><label for="photo-week">Week starting</label><span class="field-help"><button type="button" aria-label="Help with photo weeks" aria-describedby="photo-week-help">i</button><span id="photo-week-help" role="tooltip">Choose any date to select its week. The homepage shows the latest featured week.</span></span></div><input id="photo-week" type="date" required></div>
-          </div>
           <div class="photo-main">
           <div id="photo-upload" class="photo-upload">
-            <button type="button" id="pick-week-photo">Choose from Media</button>
+            <button type="button" id="pick-featured-photo">Choose from Media</button>
             <div class="help-row"><label for="photo-files">Photos</label><span class="field-help"><button type="button" aria-label="Help with uploading photos" aria-describedby="photo-upload-help">i</button><span id="photo-upload-help" role="tooltip">Select images and add a descriptive title and alt text for each before publishing.</span></span></div>
             <input id="photo-files" name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" aria-describedby="photo-upload-help">
             <div id="photo-upload-details"></div>
@@ -176,14 +175,14 @@
             <div id="photo-details">
               <label>Title <input name="title" maxlength="160"></label>
               <label>Alt text <input name="alt" maxlength="200"></label>
-              <button type="button" id="remove-week-photo">Remove from week</button>
+              <button type="button" id="remove-featured-photo">Unfeature photo</button>
             </div>
           </div>
-          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to week</button><p id="photo-status" role="status"></p></div>
+          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Feature photos</button><p id="photo-status" role="status"></p></div>
           </div>
-          <section class="week-collection" aria-labelledby="week-collection-title">
-            <div class="body-heading"><div class="help-row"><h2 id="week-collection-title">This week’s photos</h2><span class="field-help"><button type="button" aria-label="Help with removing weekly photos" aria-describedby="photo-remove-help">i</button><span id="photo-remove-help" role="tooltip">Removing a photo from the week keeps it in Media.</span></span></div><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" disabled>Clear this week</button></div></div>
-            <ul id="weekly-photos" aria-live="polite"></ul>
+          <section class="featured-selection" aria-labelledby="featured-selection-title">
+            <div class="body-heading"><div class="help-row"><h2 id="featured-selection-title">On the homepage</h2><span class="field-help"><button type="button" aria-label="Help with featured photos" aria-describedby="photo-remove-help">i</button><span id="photo-remove-help" role="tooltip">Photos stay featured until you remove them. Unfeatured photos stay in Media.</span></span></div><div class="actions"><small id="featured-count"></small><button type="button" id="clear-slideshow" disabled>Clear selection</button></div></div>
+            <ul id="featured-photos" aria-live="polite"></ul>
           </section>
         </form>
       </section>

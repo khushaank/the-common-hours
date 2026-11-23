@@ -189,6 +189,21 @@ test("notes render without an entry title and preserve their lines as text", () 
   assert.match(pages.get("entry-short-note.html"), /<h1>Note<\/h1>/);
 });
 
+test("series articles show membership before the title and keep links in part order", () => {
+  const series = "Making you dream big & bold";
+  const first = { ...post, series, series_order: 1 };
+  const second = { ...post, id: "two", slug: "second-part", title: "Second part", series, series_order: 3 };
+  const unnumbered = { ...post, id: "three", slug: "older-part", series };
+  const standalone = { ...post, id: "four", slug: "standalone" };
+  const pages = renderPublicPages(template, { posts: [second, unnumbered, standalone, first], photos: [], images: new Map(), files: new Map() });
+  const article = pages.get("entry-first-entry.html");
+  assert.match(article, /class="article-series">Part 1 of the series <a href="\.\/\?series=Making\+you\+dream\+big\+%26\+bold">Making you dream big &amp; bold<\/a><\/p><h1>/);
+  assert.match(article, /href="entry-second-part\.html">Next in the series · Second part/);
+  assert.match(article, /href="\.\/\?series=Making\+you\+dream\+big\+%26\+bold">See the full series/);
+  assert.match(pages.get("entry-older-part.html"), /class="article-series">Part of the series/);
+  assert.doesNotMatch(pages.get("entry-standalone.html"), /class="(?:article-series|series-navigation)"/);
+});
+
 test("photo metadata keeps accessible alt text and suppresses filenames and tracking URLs", () => {
   assert.equal(photoText("Blue ridges beneath a pale morning sky"), "Blue ridges beneath a pale morning sky");
   for (const value of ["IMG_1234.jpg", "250px Billie Jean Single.jpg utm source=en.wikipedia", "https://example.com/x", "sayan nath FWnbuCU8Axk unsplash"]) assert.equal(photoText(value), "");

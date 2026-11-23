@@ -1,4 +1,4 @@
-const views = ["archive", "topics", "photos", "start", "privacy", "terms"];
+const views = ["archive", "topics", "photos", "start", "series", "privacy", "terms"];
 const retired = ["collections", "photo-essays"];
 const slugPattern = /^[a-z0-9-]{1,120}$/;
 const photoPattern = /^(?:[0-9a-f-]{36}|month-\d{4}-\d{2}|cover)$/i;

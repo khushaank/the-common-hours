@@ -95,14 +95,6 @@ export async function listAttachments(token) {
 // Monday and display their actual upload date instead.
 export const archivePhotoWeek = "1900-01-01";
 
-export function weekOf(date = journalToday()) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
-  const day = new Date(date + "T00:00:00Z");
-  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== date) return "";
-  day.setUTCDate(day.getUTCDate() - (day.getUTCDay() + 6) % 7);
-  return day.toISOString().slice(0, 10);
-}
-
 export function showFailure(element, message, retry) {
   const text = document.createElement("p");
   text.setAttribute("role", "alert");

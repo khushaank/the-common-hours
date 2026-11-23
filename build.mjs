@@ -45,7 +45,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   release.update(await readFile(assetSource(app, "index.html")));
   if (snapshot) {
     release.update(await readFile(new URL("./prerender.mjs", import.meta.url)));
-    release.update(JSON.stringify([snapshot.posts, snapshot.photos, [...snapshot.images]]));
+    release.update(JSON.stringify([snapshot.posts, snapshot.photos, snapshot.comments, [...snapshot.images]]));
     for (const [name, bytes] of snapshot.files) release.update(name).update(bytes);
   }
   const revision = release.digest("hex").slice(0, 16);

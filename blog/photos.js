@@ -1,4 +1,4 @@
-import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage, weekOf } from "./common.js";
+import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage } from "./common.js";
 import { publicData } from "./public-cache.js";
 import { publicPhoto } from "./photo-text.js";
 
@@ -12,10 +12,6 @@ const dateLabel = (date, options) => new Date(date + "T00:00:00Z").toLocaleDateS
 
 function legacyPhoto(photo) {
   return publicPhoto({ ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" });
-}
-
-function archiveDate(photo) {
-  return photo.week === archivePhotoWeek ? photo.created_at?.slice(0, 10) || archivePhotoWeek : photo.week || photo.month;
 }
 
 async function optional(task) {
@@ -43,15 +39,9 @@ function featuredSnapshot() {
 
 async function featurePhotos(get) {
   const options = { timeout: 5000 };
-  const rows = await get("weekly_photos?select=" + weeklyFields + ",featured&and=(week.lte." + weekOf() +
-    ",week.neq." + archivePhotoWeek + ")&featured=eq.true&order=week.desc,created_at.asc,id.asc&limit=100", options);
-  if (rows.length) {
-    const week = rows[0].week;
-    if (rows.length === 100 && rows.at(-1).week === week) return allRows(path => get(path, options),
-      "weekly_photos?select=" + weeklyFields + "&featured=eq.true&week=eq." + week + "&order=created_at.asc,id.asc");
-    return rows.filter(photo => photo.week === week && photo.featured);
-  }
-  return [cover];
+  const rows = await allRows(path => get(path, options),
+    "weekly_photos?select=" + weeklyFields + "&week=is.null&featured=eq.true&order=created_at.asc,id.asc");
+  return rows.length ? rows : [cover];
 }
 
 export async function startSlideshow(get, demo) {
@@ -174,9 +164,9 @@ export async function startSlideshow(get, demo) {
 }
 
 function photoDate(photo) {
-  if (photo.week === archivePhotoWeek) return dateLabel(archiveDate(photo), { month: "long", day: "numeric", year: "numeric" });
-  return photo.week ? "Week of " + dateLabel(photo.week, { month: "long", day: "numeric", year: "numeric" }) :
-    photo.month ? dateLabel(photo.month, { month: "long", year: "numeric" }) : "";
+  if (photo.month) return dateLabel(photo.month, { month: "long", year: "numeric" });
+  const date = photo.week && photo.week !== archivePhotoWeek ? photo.week : photo.created_at?.slice(0, 10);
+  return date ? dateLabel(date, { month: "long", day: "numeric", year: "numeric" }) : "";
 }
 
 async function showImage(get, picture, photo) {
@@ -219,7 +209,7 @@ async function loadArchivePhoto(get, id) {
 }
 
 export async function renderPhotoView(content, get, demo, id) {
-  const backLink = '<a class="back" href="./#week-photo">← Photo of the Week</a>';
+  const backLink = '<a class="back" href="./#featured-photo">← Featured Photo</a>';
 
   const photo = id === cover.id ? cover : demo ? undefined : await loadArchivePhoto(get, id);
   if (!photo) {

@@ -176,6 +176,40 @@ test("entry status filter combines with title and tag search without changing th
   assert.deepEqual(posts.map(post => post.id), ["one", "two", "three"]);
 });
 
+test("entry arrows move focus and save the selected row without intercepting form controls", () => {
+  const document = element();
+  const panel = element();
+  const stored = new Map();
+  const rows = ["first", "second", "third"].map(entryId => Object.assign(element(), {
+    dataset: { entryId }, matches: selector => selector.includes(".entry-open"),
+    setAttribute(name, value) { this[name] = value; },
+    removeAttribute(name) { delete this[name]; },
+    focus() { document.activeElement = this; },
+  }));
+  document.querySelector = selector => selector === "#entries-panel" ? panel : null;
+  const postList = {
+    querySelector: () => rows.find(row => row["aria-current"]),
+    querySelectorAll: () => rows,
+  };
+  runInNewContext(deskSource.slice(deskSource.indexOf("function rememberEntry("), deskSource.indexOf("function entryIcon(")), {
+    document, postList, draftOwner: "editor", selectedEntry: undefined, selectedEntryKey: () => "entry-selection",
+    localStorage: { setItem: (key, value) => stored.set(key, value) },
+  });
+  const neutral = { matches: () => false, closest: () => null };
+  const press = (key, target = document.activeElement || neutral) =>
+    document.dispatchEvent({ type: "keydown", key, target, preventDefault() {} });
+  press("ArrowDown");
+  assert.equal(document.activeElement, rows[0]);
+  press("ArrowDown");
+  assert.equal(document.activeElement, rows[1]);
+  assert.equal(stored.get("entry-selection"), "second");
+  press("ArrowUp", { matches: () => false, closest: () => true });
+  assert.equal(document.activeElement, rows[1]);
+  press("ArrowUp");
+  assert.equal(document.activeElement, rows[0]);
+  assert.deepEqual(rows.map(row => row.tabIndex), [0, -1, -1]);
+});
+
 test("sidebar collapse switches to icons and offers expansion", () => {
   const button = element();
   const attributes = new Map();

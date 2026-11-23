@@ -5,11 +5,6 @@ import { noteCard } from "./archive.js";
 
 const entryHref = slug => pageHref({ post: slug });
 
-export function seriesEntries(posts, series) {
-  return posts.filter(post => post.series === series).sort((a, b) =>
-    (a.series_order ?? 10000) - (b.series_order ?? 10000) || a.published_on.localeCompare(b.published_on) || a.id.localeCompare(b.id));
-}
-
 function cards(posts) {
   return posts.map(post => post.is_note ? noteCard(post, date => date) : '<article class="entry"><a class="entry-title" href="' + entryHref(post.slug) + '">' +
     escape(post.title) + '</a><p>' + escape(post.excerpt) + '</p></article>').join("");
@@ -19,15 +14,6 @@ export function renderReadingList(content, title, entries, empty = "No entries h
   document.title = title + " — The Common Hours";
   content.innerHTML = '<div class="section-head"><h1>' + escape(title) + '</h1></div>' +
     (entries.length ? cards(entries) : '<p>' + escape(empty) + '</p>');
-}
-
-export function seriesNavigation(posts, post) {
-  if (!post.series) return "";
-  const group = seriesEntries(posts, post.series);
-  const next = group[group.findIndex(item => item.id === post.id) + 1];
-  return '<section class="series-navigation"><h2>' + escape(post.series) + '</h2>' +
-    (next ? '<p><a href="' + entryHref(next.slug) + '">Next in the series · ' + escape(next.title) + '</a></p>' : "") +
-    '<a href="./?series=' + encodeURIComponent(post.series) + '">See the full series</a></section>';
 }
 
 export function restoreArticleAnchors(body) {

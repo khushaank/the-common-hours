@@ -2,12 +2,13 @@ import { entryTags, escape, imageSource, markdownMarker, mediaId } from "./share
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
-import { archiveEntries, archivePageSize, archiveTitle, noteCard, renderArchive } from "./shared/archive.js";
+import { archiveEntries, archivePageSize, archiveTitle, commentCards, noteCard, renderArchive } from "./shared/archive.js";
+import { seriesDirectory, seriesMembership, seriesNavigation } from "./shared/series.js";
 import { startIntroduction, startEmpty } from "./blog/reading-copy.js";
 import { publicPhoto } from "./shared/photo-text.js";
 
 const home = "https://commonhours.qd.je/";
-export const generatedFile = /^(?:(?:archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|topics|photos|start|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html|media-[0-9a-f-]{36}\.jpg|attachment-[0-9a-f-]{36}\.bin|sitemap\.xml|robots\.txt)$/i;
+export const generatedFile = /^(?:(?:archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html|media-[0-9a-f-]{36}\.jpg|attachment-[0-9a-f-]{36}\.bin|sitemap\.xml|robots\.txt)$/i;
 const missingColumn = error => ["42703", "PGRST204"].includes(error.code);
 const missingTable = error => ["42P01", "PGRST205"].includes(error.code);
 const date = value => new Date(value).toLocaleDateString("en", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });
@@ -18,7 +19,7 @@ export async function loadPublicSnapshot(config) {
   const files = new Map();
   const images = new Map();
   const attachments = new Map();
-  if (!config.origin) return { posts: [], photos: [], files, images, attachments };
+  if (!config.origin) return { posts: [], photos: [], comments: [], files, images, attachments };
   async function get(path) {
     const response = await fetch(config.origin + "/rest/v1/qmargin_b74_" + path, {
       headers: { apikey: config.key }, signal: AbortSignal.timeout(12000), redirect: "error",
@@ -45,10 +46,11 @@ export async function loadPublicSnapshot(config) {
   }
   const base = "id,slug,title,tag,excerpt,published_on,body";
   const weekly = "id,week,media_id,title,alt,created_at";
-  const [posts, weeks, months] = await Promise.all([
+  const [posts, weeks, months, comments] = await Promise.all([
     rows("posts", [",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""].map(extra => base + extra), "&published=eq.true&order=published_on.desc,id.desc"),
     rows("weekly_photos", [weekly], "&order=week.desc,created_at.asc,id.asc", true),
     rows("photos", ["month,media_id,alt,caption"], "&order=month.desc", true),
+    rows("comments", ["post_id,display_name,body"], "&approved=eq.true&order=created_at.asc,id.asc"),
   ]);
   const photos = [...weeks, ...months.map(photo => ({ ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" }))]
     .map(publicPhoto).sort((a, b) => photoDate(b).localeCompare(photoDate(a)));
@@ -79,10 +81,10 @@ export async function loadPublicSnapshot(config) {
     files.set(src, bytes);
     attachments.set(id, src);
   }
-  return { posts, photos, files, images, attachments };
+  return { posts, photos, comments, files, images, attachments };
 }
 
-export function renderPublicPages(template, { posts, photos, images, files, attachments = new Map() }) {
+export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map() }) {
   const pages = new Map(files);
   const loading = (template.match(/<!-- public-content -->([\s\S]*?)<!-- \/public-content -->/)?.[1] || "")
     .replace(/\bid="[^"]*"/g, "");
@@ -117,7 +119,7 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
       .replace("</head>", () => `<link rel="canonical" href="${escape(canonical)}"><meta property="og:title" content="${escape(fullTitle)}"><meta property="og:description" content="${escape(description)}"><meta property="og:url" content="${escape(canonical)}"><meta property="og:type" content="${values.post ? "article" : "website"}"></head>`)
       .replace(/<!-- public-content -->[\s\S]*?<!-- \/public-content -->/, () => '<div class="published-copy">' + content + '</div>' + loading)
       .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}"></template></body>`)
-      .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true" data-refresh-pending=""')
+      .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true"')
       .replace('<aside id="sidebar" aria-label="Blog archive"></aside>', `<aside id="sidebar" aria-label="Blog archive">${sidebar}</aside>`);
     pages.set(file, html);
   }
@@ -129,15 +131,25 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
   }
   const starters = posts.filter(post => post.start_here);
   page({ view: "start" }, "Start here", heading("Start here") + startIntroduction + (starters.length ? cards(starters) : `<p>${startEmpty}</p>`), "Selected entries to begin reading The Common Hours.");
+  page({ view: "series" }, "Series", seriesDirectory(posts), "Explore published series in The Common Hours.");
   for (const [view, body] of [["privacy", notice], ["terms", terms]]) {
     page({ view }, view === "privacy" ? "Privacy" : "Terms", `<article class="legal">${body}</article>`, `Read the ${view === "privacy" ? "privacy policy" : "terms"} for The Common Hours.`, "policy-page");
   }
   const topics = [...new Set(posts.flatMap(post => entryTags(post.tag)))].sort();
   page({ view: "topics" }, "All topics", heading("All topics") + topics.map(topic => `<section><h2>${escape(topic)}</h2>${cards(posts.filter(post => entryTags(post.tag).includes(topic)))}</section>`).join(""), "Browse the journal by topic.");
+  const commentsByPost = new Map();
+  for (const comment of comments) {
+    if (!commentsByPost.has(comment.post_id)) commentsByPost.set(comment.post_id, []);
+    commentsByPost.get(comment.post_id).push(comment);
+  }
   for (const post of posts) {
     if (!/^[a-z0-9-]{1,120}$/.test(post.slug)) throw new Error("Invalid published entry slug.");
+    const membership = seriesMembership(post);
+    const navigation = seriesNavigation(posts, post);
+    const discussion = commentCards(commentsByPost.get(post.id) || []);
+    const commentsSection = discussion ? `<section class="comments"><h2>Comments</h2><div>${discussion}</div></section>` : "";
     if (post.is_note) {
-      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note"><h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body"><p class="note-text">${escape(post.body)}</p></div></article>`, post.excerpt, "article-page");
+      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body"><p class="note-text">${escape(post.body)}</p></div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>
@@ -150,7 +162,7 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
         return `<a class="attachment" href="${attachments.get(id)}" download="${escape(attachmentNames.get(id) || "Attachment")}">${label}</a>`;
       })
       .replace(/href="\?post=([a-z0-9-]+)"/g, (_, slug) => `href="${publicFiles.has("entry-" + slug + ".html") ? "entry-" + slug + ".html" : "./?post=" + slug}"`);
-    page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article"><h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article><noscript><p>Enable JavaScript to read or leave comments.</p></noscript>`, post.excerpt, "article-page");
+    page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article">${membership}<h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
   }
   for (const photo of photos) {
     page({ view: "photo", photo: photo.id }, photo.title, `<a class="back" href="./#week-photo">← Photo of the Week</a><article class="photo-detail"><h1>${escape(photo.title)}</h1><p class="meta">${date(photoDate(photo))}</p><div class="photo-detail-image photo-ready">${picture(photo.media_id, photo.alt)}</div></article>`, photo.alt || photo.title);

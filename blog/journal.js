@@ -2,14 +2,15 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, noteCard, renderArchive } from "./archive.js";
+import { archiveTitle, commentCards, noteCard, renderArchive } from "./archive.js";
+import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { entryTags } from "./text.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = pageParams();
-const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "review"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "series", "review"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
@@ -27,7 +28,7 @@ const isJournal = document.documentElement.classList.contains("home-page");
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo";
 if (!isLegal && view !== "review") {
-  const currentNav = view === "archive" || month ? "archive" :
+  const currentNav = ["archive", "series", "topics"].includes(view) || month ? "archive" :
     view === "start" ? "start" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
@@ -172,8 +173,9 @@ async function renderPost(posts, index, firstBody) {
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article${post.is_note ? " journal-note" : ""}">
-    <h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
+    ${seriesMembership(post)}<h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
+    ${seriesNavigation(posts, post)}
     <nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>
     <section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div>
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
@@ -209,9 +211,8 @@ async function renderPost(posts, index, firstBody) {
     }
   }
   const list = document.querySelector("#comment-list");
-  const { restoreArticleAnchors, seriesNavigation } = await import("./reading.js");
+  const { restoreArticleAnchors } = await import("./reading.js");
   restoreArticleAnchors(bodyElement);
-  bodyElement.closest("article").insertAdjacentHTML("afterend", seriesNavigation(posts, post));
   const form = document.querySelector("#comment-form");
   const status = document.querySelector("#comment-status");
   const button = form.querySelector("button");
@@ -222,8 +223,7 @@ async function renderPost(posts, index, firstBody) {
   const storageKey = "qmargin-preview:" + post.slug;
 
   function showComments(comments) {
-    list.innerHTML = comments.map(comment => `<article class="comment"><h3>${escape(comment.display_name)}</h3>
-      <p>${escape(comment.body)}</p></article>`).join("") || '<p class="status">No comments yet.</p>';
+    list.innerHTML = commentCards(comments) || '<p class="status">No comments yet.</p>';
   }
 
   form.addEventListener("submit", async event => {
@@ -294,8 +294,14 @@ async function start() {
   }
   const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
+  if (view === "series") {
+    document.title = "Series — The Common Hours";
+    content.innerHTML = seriesDirectory(posts);
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    return;
+  }
   if (view === "start" || series) {
-    const { renderReadingList, seriesEntries } = await import("./reading.js");
+    const { renderReadingList } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));
     else {
       renderReadingList(content, "Start here", posts.filter(post => post.start_here), startEmpty);
@@ -333,7 +339,12 @@ async function start() {
 }
 
 async function load() {
-  if (content.dataset.prerendered) content.dataset.refreshPending = "";
+  if (content.dataset.prerendered && location.search) {
+    const rendered = new URLSearchParams(document.documentElement.dataset.route);
+    if (["view", "post", "series", "month", "tag", "year", "page", "photo"].some(key => rendered.get(key) !== params.get(key))) {
+      content.dataset.refreshPending = "";
+    }
+  }
   content.setAttribute("aria-busy", "true");
   document.querySelector("#refresh-status")?.remove();
   try {

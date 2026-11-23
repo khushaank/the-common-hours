@@ -11,7 +11,7 @@ export const adminFiles = [
   "visual-editor.js", "pdf-thumbnail.js", "turndown.js", "pdf-engine.js", "pdf-worker.js", "LICENSE-turndown.txt", "LICENSE-pdfjs.txt",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
-export const sharedFiles = ["common.js", "text.js", "photo-text.js", "page-url.js", "archive.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
+export const sharedFiles = ["scrollbars.css", "common.js", "text.js", "photo-text.js", "page-url.js", "archive.js", "series.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
   "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt"];
 export const securityHeaders = {
   "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'none'; object-src 'none'",

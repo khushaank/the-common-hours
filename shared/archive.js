@@ -13,6 +13,11 @@ export function noteCard(post, dateLabel) {
   return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">Note · <time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p><p class="note-text">${escape(post.excerpt)}</p></article>`;
 }
 
+export function commentCards(comments) {
+  return comments.map(comment => `<article class="comment"><h3>${escape(comment.display_name)}</h3>
+    <p>${escape(comment.body)}</p></article>`).join("");
+}
+
 export function archiveEntries(posts, params) {
   return posts.filter(post => (!params.get("year") || post.published_on.startsWith(params.get("year") + "-")) &&
     (!params.get("month") || post.published_on.startsWith(params.get("month") + "-")) &&
@@ -29,7 +34,7 @@ export function renderArchive(posts, params) {
   const selection = [selected.year, selected.month && monthLabel(selected.month), selected.tag].filter(Boolean).join(" · ");
   return `<div class="section-head"><h1>Archive</h1><span class="section-note">${entries.length} ${entries.length === 1 ? "entry" : "entries"}</span></div>
     <nav class="archive-browse" aria-label="Browse the archive">
-      <p><a href="archive.html">All entries</a></p>
+      <p><a href="archive.html">All entries</a> · <a href="topics.html">Topics</a> · <a href="series.html">Series</a></p>
       <details${selection ? " open" : ""}><summary>Browse by year, month, or topic</summary>
         <h2>Year</h2><div>${links("year", unique(posts.map(post => post.published_on.slice(0, 4))))}</div>
         <h2>Month</h2><div>${links("month", unique(posts.map(post => post.published_on.slice(0, 7))), monthLabel)}</div>
