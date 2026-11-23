@@ -753,7 +753,8 @@ async function openDesk() {
   draftOwner = allowed[0].user_id;
   void loadReferences();
   await loadPosts();
-  const requested = new URLSearchParams(location.search).get("draft");
+  const section = deskSection();
+  const requested = requestedDraft(section);
   let lastDraft = drafts.find(draft => draft.slot === requested);
   let lastEntry;
   try {
@@ -763,14 +764,13 @@ async function openDesk() {
   } catch { /* A remembered entry is optional. */ }
   openEditor(lastEntry, lastDraft && draftEntry(lastDraft));
   recoverDraft();
-  showSection(lastDraft?.slot === requested ? "compose" : "stats");
   storeSession();
   login.reset();
   login.hidden = true;
   desk.hidden = false;
   document.body.classList.add("desk-open");
   deskMenu.hidden = false;
-  void openStats();
+  openSection(lastDraft && lastDraft.slot === requested ? "compose" : section);
 }
 
 try {
@@ -1077,17 +1077,32 @@ editor.addEventListener("input", event => {
   saveBackup();
 });
 
-function updateDeskAddress(section) {
+function sectionHash(section) {
+  return "#" + ({ stats: "dashboard", site: "photos", compose: "entries" }[section] || section);
+}
+
+function deskSection() {
+  return sections.find(button => sectionHash(button.dataset.section) === location.hash)?.dataset.section || "stats";
+}
+
+function requestedDraft(section) {
+  return !location.hash || section === "entries" ? new URLSearchParams(location.search).get("draft") : null;
+}
+
+function updateDeskAddress(section, navigate = false) {
   const url = new URL(location.href);
   url.searchParams.delete("draft");
   url.searchParams.delete("post");
   if (section === "compose" && activeDraft) {
     url.search = "?draft=" + encodeURIComponent(activeDraft.slot) + "&post=" + encodeURIComponent(activeDraft.slug) + "/draft";
   }
-  if (url.href !== location.href) history.replaceState(null, "", url);
+  url.hash = sectionHash(section);
+  if (url.href === location.href) return;
+  if (navigate) history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
 }
 
-function showSection(section) {
+function showSection(section, navigate = false) {
   if (!document.querySelector("#entries-panel").hidden) entryListScroll = window.scrollY;
   document.body.classList.toggle("writing", section === "compose");
   for (const panel of document.querySelectorAll("[data-desk-panel]")) panel.hidden = panel.id !== section + "-panel";
@@ -1095,7 +1110,7 @@ function showSection(section) {
     const selected = button.dataset.section === section || section === "compose" && button.dataset.section === "entries";
     button.setAttribute("aria-pressed", String(selected));
   }
-  updateDeskAddress(section);
+  updateDeskAddress(section, navigate);
   window.scrollTo(0, section === "entries" ? entryListScroll : 0);
 }
 
@@ -1184,6 +1199,31 @@ async function openMedia() {
 }
 
 document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
+function openSection(section, navigate = false) {
+  showSection(section, navigate);
+  if (section === "site") void photoTools.loadPhoto();
+  if (section === "inbox") void openInbox();
+  if (section === "comments") void openComments();
+  if (section === "stats") void openStats();
+  if (section === "media") void openMedia();
+  if (section === "references") void loadReferences();
+}
+
+function restoreDeskSection() {
+  if (desk.hidden || busy) return;
+  const section = deskSection();
+  const draft = drafts.find(row => row.slot === requestedDraft(section));
+  if (draft && activeDraft?.slot !== draft.slot) {
+    openEditor(undefined, draftEntry(draft));
+    recoverDraft();
+  }
+  const screen = draft ? "compose" : section;
+  if (document.querySelector("#" + screen + "-panel").hidden) openSection(screen);
+  else updateDeskAddress(screen);
+}
+window.addEventListener("popstate", restoreDeskSection);
+window.addEventListener("hashchange", restoreDeskSection);
+
 for (const button of sections) {
   button.addEventListener("click", () => {
     if (deskNav.matches(":popover-open")) deskNav.hidePopover();
@@ -1191,13 +1231,7 @@ for (const button of sections) {
     if (busy) return;
     const section = button.dataset.section;
     if (button.getAttribute("aria-pressed") === "true" && !document.body.classList.contains("writing")) return;
-    showSection(section);
-    if (section === "site") void photoTools.loadPhoto();
-    if (section === "inbox") void openInbox();
-    if (section === "comments") void openComments();
-    if (section === "stats") void openStats();
-    if (section === "media") void openMedia();
-    if (section === "references") void loadReferences();
+    openSection(section, true);
   });
 }
 

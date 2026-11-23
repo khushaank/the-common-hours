@@ -52,7 +52,8 @@ to the homepage. Live document requests revalidate the browser’s HTTP cache.
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
 
-The Writing Desk opens on **Dashboard**. **All entries** includes your saved
+The Writing Desk opens on **Dashboard** by default. Section links such as
+`#media` reopen that section when refreshed. **All entries** includes your saved
 drafts. **Save draft** on a published entry creates a private copy with a
 `/draft` suffix in the desk. Select **Generate preview link** to give someone
 with the link access to that saved copy for up to 24 hours. The editor opens in

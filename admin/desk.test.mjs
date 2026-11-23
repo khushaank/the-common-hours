@@ -262,6 +262,34 @@ test("Dashboard, Entries, and the editor are separate screens with the correct n
   }
 });
 
+test("section links retain their screen on refresh and preserve private draft addresses", () => {
+  const sections = ["stats", "entries", "site", "media", "references", "comments", "inbox"].map(section => ({ dataset: { section } }));
+  const location = new URL("https://example.test/desk/");
+  const navigations = [];
+  const history = {
+    pushState(_, __, url) { navigations.push("push"); location.href = url.href; },
+    replaceState(_, __, url) { navigations.push("replace"); location.href = url.href; },
+  };
+  const routes = runInNewContext(deskSource.slice(deskSource.indexOf("function sectionHash("), deskSource.indexOf("function showSection(")) +
+    "\n({ deskSection, requestedDraft, updateDeskAddress })", { sections, location, history, URL, URLSearchParams,
+      activeDraft: { slot: "draft-id", slug: "my-post" } });
+  assert.equal(routes.deskSection(), "stats");
+  routes.updateDeskAddress("stats");
+  assert.equal(location.hash, "#dashboard");
+  for (const [section, hash] of [["media", "#media"], ["site", "#photos"], ["inbox", "#inbox"]]) {
+    routes.updateDeskAddress(section, true);
+    assert.equal(location.hash, hash);
+    assert.equal(routes.deskSection(), section);
+  }
+  routes.updateDeskAddress("compose");
+  assert.match(location.href, /\?draft=draft-id&post=my-post\/draft#entries$/);
+  assert.equal(routes.requestedDraft(routes.deskSection()), "draft-id");
+  routes.updateDeskAddress("media", true);
+  assert.equal(location.search, "");
+  assert.equal(routes.requestedDraft("media"), null);
+  assert.deepEqual(navigations, ["replace", "push", "push", "push", "replace", "push"]);
+});
+
 test("reopening the selected entry shows its editor without resetting unsaved content", async () => {
   let screen;
   let pending;
