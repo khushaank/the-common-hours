@@ -322,6 +322,16 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     await as("authenticated", admin);
     await db.exec(`insert into public.qmargin_b74_working_drafts (user_id, slot, fields)
       values ('${admin}', '${orphan}', '{"body":"Private MFA check"}')`);
+    await db.exec(`update public.profiles set role = 'admin', is_admin = true where id = '${newcomer}'`);
+    await as("authenticated", newcomer, "aal2");
+    assert.equal(await value("select public.is_admin_member()"), true);
+    assert.equal(await value("select public.qmargin_b74_can_start_desk_sign_in()"), false);
+    assert.equal(await value("select count(*) from public.qmargin_b74_admins"), 0);
+    assert.equal(await value("select count(*) from public.qmargin_b74_working_drafts"), 0);
+    assert.equal(await value(`with changed as (update public.qmargin_b74_posts set title = 'Changed' where id = '${orphan}' returning id)
+      select count(*) from changed`), 0);
+    await denied(`insert into public.qmargin_b74_admins (user_id) values ('${newcomer}')`);
+    await denied(`select public.qmargin_b74_create_draft_preview('${orphan}', '${draftPreview}')`);
     await as("authenticated", admin, "aal1");
     assert.equal(await value("select public.qmargin_b74_can_start_desk_sign_in()"), true);
     assert.equal(await value("select count(*) from public.qmargin_b74_admins"), 0);

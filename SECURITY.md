@@ -17,6 +17,15 @@ Apply [`supabase/desk-mfa-enrollment.sql`](supabase/desk-mfa-enrollment.sql) bef
 publishing the enrollment screen. A desk admin with no verified factor can
 sign in with their password, select **Show QR code**, and enter a code from
 their authenticator app. An existing verified factor must be used at sign-in.
+
+The journal and the older site share Supabase Auth. The Writing Desk uses its
+own `qmargin_b74_admins` allowlist, regardless of a user's role on the older
+site. Browser accounts cannot add themselves to this list. A signed-in user
+outside the list gets public reader access only. Writing Desk logout revokes
+its own session. The account's password and authenticator are shared. Changes
+to project-wide Auth settings affect both sites, and project-wide database
+credentials can access both sites' tables.
+
 [`supabase/secure-published-media.sql`](supabase/secure-published-media.sql)
 limits weekly photos to entries in the slideshow and photos paired with a
 published entry. Rebuild the public site after applying it to remove stale static copies.
