@@ -21,7 +21,7 @@ function element() {
   };
 }
 
-function editorTools(value, start = 0, end = value.length) {
+function editorTools(value, start = 0, end = value.length, getReferences) {
   const nodes = new Map();
   const query = selector => { if (!nodes.has(selector)) nodes.set(selector, element()); return nodes.get(selector); };
   const body = Object.assign(element(), {
@@ -38,10 +38,10 @@ function editorTools(value, start = 0, end = value.length) {
   query("#insert-dialog").showModal = () => { query("#insert-dialog").open = true; };
   query("#entry-preview").hidden = true;
   const setup = runInNewContext(source.slice(source.indexOf("const markdownLabel")).replaceAll("export ", "") + "\nsetupEditorTools", {
-    document: { querySelector: query, createElement: element }, Event,
+    document: { querySelector: query, createElement: element }, Event, URL,
     allowedImages: new Set(), readMediaImage() {},
   });
-  const tools = setup(editor, () => {}, {}, () => []);
+  const tools = setup(editor, () => {}, {}, () => [], getReferences);
   const format = key => query(".format-tools").dispatchEvent({ type: "click", target: { closest: () => ({ dataset: { format: key } }) } });
   return { body, query, tools, format };
 }
@@ -62,10 +62,10 @@ test("toolbar formats only the selection and keeps slash command insertion worki
   const empty = editorTools("", 0, 0);
   empty.format("bold");
   assert.equal(empty.body.value, "**Bold text**");
-  const slash = editorTools("/list", 5, 5);
+  const slash = editorTools("/footnote", 9, 9);
   slash.body.dispatchEvent(new Event("input"));
   slash.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
-  assert.equal(slash.body.value, "\n\n- List item\n\n");
+  assert.equal(slash.body.value, "^[Footnote text]");
 });
 
 test("heading dropdown changes complete lines, replaces existing headings, and restores paragraphs", () => {
@@ -91,15 +91,15 @@ test("slash menu omits toolbar formatting and retains every other insert command
   const view = editorTools("/", 1, 1);
   view.body.dispatchEvent(new Event("input"));
   const names = Array.from(view.query("#command-menu").children, button => button.dataset.command);
-  assert.deepEqual(names, ["list", "square", "numbered", "letters", "quote", "image", "library", "video", "file", "pdf", "link", "entry", "footnote", "divider"]);
-  for (const name of ["heading", "bold", "italic"]) {
+  assert.deepEqual(names, ["image", "file", "pdf", "entry", "footnote"]);
+  for (const name of ["heading", "bold", "italic", "list", "numbered", "quote", "library", "video", "divider"]) {
     const removed = editorTools("/" + name, name.length + 1, name.length + 1);
     removed.body.dispatchEvent(new Event("input"));
     assert.equal(removed.query("#command-menu").hidden, true);
   }
 });
 
-test("toolbar honors the body limit, passes selected link text, and exposes remaining tools", () => {
+test("toolbar honors the body limit, passes selected link text, and opens the file picker", () => {
   const view = editorTools("A link");
   view.format("link");
   assert.equal(view.query("#insert-dialog").open, true);
@@ -110,10 +110,11 @@ test("toolbar honors the body limit, passes selected link text, and exposes rema
   assert.equal(full.body.value, "12345");
   assert.match(full.query("#status").textContent, /length limit/);
   const menu = editorTools("");
+  let picked = false;
+  menu.query("#entry-file").click = () => { picked = true; };
   menu.query(".format-tools").dispatchEvent({ type: "click", target: { closest: () => ({ id: "more-formats" }) } });
-  assert.equal(menu.query("#command-menu").hidden, false);
-  assert.ok(menu.query("#command-menu").children.some(button => button.dataset.command === "file"));
-  assert.ok(menu.query("#command-menu").children.some(button => button.dataset.command === "image"));
+  assert.equal(menu.query("#command-menu").hidden, true);
+  assert.equal(picked, true);
   menu.query("#preview-mode").dispatchEvent(new Event("click"));
   assert.equal(menu.query("#write-panel").hidden, true);
   assert.equal(menu.query(".format-tools").hidden, true);
@@ -123,6 +124,14 @@ test("toolbar honors the body limit, passes selected link text, and exposes rema
   assert.equal(menu.query("#write-panel").hidden, false);
   assert.equal(menu.query(".format-tools").hidden, false);
   assert.equal(menu.query("#preview-mode").hidden, false);
+});
+
+test("an @ shortcut inserts the saved label and URL at the caret", () => {
+  const view = editorTools("See @HAR", 8, 8, () => [{ alias: "harvey", label: "Harvey", url: "https://example.test/harvey" }]);
+  view.body.dispatchEvent(new Event("input"));
+  assert.equal(view.query("#command-menu").children[0].dataset.command, "@harvey");
+  view.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
+  assert.equal(view.body.value, "See [Harvey](<https://example.test/harvey>)");
 });
 
 test("entry status filter combines with title and tag search without changing the source order", () => {
@@ -135,7 +144,7 @@ test("entry status filter combines with title and tag search without changing th
     { id: "two", title: "Elephant", tag: "Quiet pages", published: false, published_on: "2026-11-12" },
     { id: "three", title: "Footbridge", tag: "Walking", published: true, published_on: "2026-11-11" },
   ];
-  const render = runInNewContext(deskSource.slice(deskSource.indexOf("function renderPostList()"), deskSource.indexOf("\nconst tags =")) + "\nrenderPostList", {
+  const render = runInNewContext(deskSource.slice(deskSource.indexOf("function renderPostList()"), deskSource.indexOf("\nasync function deleteEntry")) + "\nrenderPostList", {
     postList: list, search, entryFilter: filter, posts, current: "one",
     document: { querySelector: () => count, createElement: element },
   });
@@ -147,11 +156,12 @@ test("entry status filter combines with title and tag search without changing th
   search.value = "QUIET";
   render();
   assert.equal(list.children.length, 1);
-  assert.equal(list.children[0].children[0].textContent, "Market");
+  assert.equal(list.children[0].children[0].textContent, "1.");
+  assert.equal(list.children[0].children[1].textContent, "Market");
   assert.equal(count.textContent, "1 of 3 entries");
   filter.value = "draft";
   render();
-  assert.equal(list.children[0].children[0].textContent, "Elephant");
+  assert.equal(list.children[0].children[1].textContent, "Elephant");
   search.value = "Missing";
   render();
   assert.equal(list.children[0].textContent, "No matching entries.");
@@ -178,7 +188,7 @@ test("sidebar collapse switches to icons and offers expansion", () => {
   assert.equal(classes.size, 0);
 });
 
-test("layout preserves entry fields and previews and removes review creation", async () => {
+test("layout keeps publishing settings opt-in and exposes one draft action", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   for (const name of ["title", "slug", "tag", "excerpt", "published_on", "series", "series_order", "start_here", "reader_prompt", "paired_photo", "collection", "collection_intro", "photo_essay", "body"]) {
     assert.ok(html.includes('name="' + name + '"'), name);
@@ -186,9 +196,10 @@ test("layout preserves entry fields and previews and removes review creation", a
   for (const id of ["write-mode", "preview-mode", "entry-actions", "insert-dialog", "entry-link-dialog", "library-dialog", "media-dialog"]) {
     assert.ok(html.includes('id="' + id + '"'), id);
   }
-  assert.match(html, /<section[^>]+id="entry-details"/);
-  assert.doesNotMatch(html, /<details[^>]+id="entry-details"/);
-  assert.doesNotMatch(html, /id="(?:review-entry|review-result|reconnect-review)"/);
+  assert.match(html, /<section[^>]+id="entry-details"[^>]+hidden>/);
+  assert.equal(html.match(/value="draft" formnovalidate/g).length, 1);
+  assert.match(html, /id="entry-actions"[^>]*>[\s\S]*?id="write-mode"[\s\S]*?id="preview-mode"/);
+  assert.match(html, /<textarea[^>]+id="editor-title"[^>]+readonly/);
   for (const id of ["entries-panel", "compose-panel", "stats-panel", "comments-panel"]) assert.ok(html.includes('id="' + id + '" data-desk-panel'));
   for (const id of ["collapse-rail", "desk-logout"]) {
     const button = html.match(new RegExp('<button[^>]+id="' + id + '"[^>]*>[\\s\\S]*?</button>'))[0];
@@ -197,21 +208,37 @@ test("layout preserves entry fields and previews and removes review creation", a
   }
 });
 
-test("published updates appear only while changed, including the entry actions menu", () => {
-  const buttons = [element(), element()];
-  const context = { activePost: { published: true }, dirty: () => false, editor: { querySelectorAll: () => buttons } };
+test("the draft action is enabled only for unsaved changes and Publish is independent", () => {
+  const draftButton = element();
+  const publishButton = element();
+  const context = { activePost: { published: true }, dirty: () => false, snapshot: () => "changed", savedDraftSnapshot: undefined,
+    draftButton, publishButton, shareButton: element(), busy: false, cloudDraft: false };
   const update = runInNewContext(deskSource.slice(deskSource.indexOf("function updatePublishActions("), deskSource.indexOf("function readBackup(")) + "\nupdatePublishActions", context);
   update();
-  assert.ok(buttons.every(button => button.hidden));
+  assert.equal(publishButton.hidden, true);
+  assert.equal(draftButton.hidden, true);
   context.dirty = () => true;
   update();
-  assert.ok(buttons.every(button => !button.hidden && button.textContent === "Update published entry"));
-  context.dirty = () => false;
+  assert.equal(publishButton.textContent, "Update published entry");
+  assert.equal(draftButton.disabled, false);
+  assert.equal(draftButton.textContent, "Save draft");
+  context.savedDraftSnapshot = "changed";
   update();
-  assert.ok(buttons.every(button => button.hidden));
+  assert.equal(draftButton.disabled, true);
+  assert.equal(draftButton.textContent, "Draft saved");
+  assert.equal(publishButton.hidden, false);
   context.activePost = undefined;
   update();
-  assert.ok(buttons.every(button => !button.hidden && button.textContent === "Publish"));
+  assert.equal(publishButton.textContent, "Publish");
+});
+
+test("publish validation reports each invalid field and accepts a blank generated excerpt", () => {
+  const validate = runInNewContext(deskSource.slice(deskSource.indexOf("function validateEntry("), deskSource.indexOf('editor.addEventListener("submit"')) + "\nvalidateEntry", {
+    entryTags: value => value.split(",").map(tag => tag.trim()), mediaId: /^valid$/,
+  });
+  const invalid = { title: "", body: "", tag: "", published_on: "", slug: "bad slug", collection_intro: "Introduction", collection: "" };
+  assert.deepEqual([...validate(invalid).keys()], ["title", "body", "tag", "published_on", "slug", "collection"]);
+  assert.equal(validate({ title: "A title", body: "Body", tag: "Notes, AI", published_on: "2026-11-23", slug: "a-title", excerpt: "" }).size, 0);
 });
 
 test("Dashboard, Entries, and the editor are separate screens with the correct navigation state", () => {
@@ -238,7 +265,7 @@ test("reopening the selected entry shows its editor without resetting unsaved co
     busy: false, current: "one", canLeaveDraft: () => true,
     run(button, action) { pending = Promise.resolve().then(action); return pending; },
     api() { requests++; throw new Error("The selected entry must stay in memory"); },
-    showSection(value) { screen = value; }, editorTitle: { focus() { focused = true; } },
+    showSection(value) { screen = value; }, editTitle: { focus() { focused = true; } },
   });
   edit({ id: "one" }, element());
   await pending;
@@ -304,7 +331,7 @@ test("Comments includes published and pending comments and filters them independ
   assert.equal(comments.children[0].children[2].textContent, "Pending comment");
 });
 
-test("Photos opens on the full archive and metadata edits preserve slideshow selection", async () => {
+test("weekly photos can be removed from the slideshow without touching media", async () => {
   const nodes = new Map();
   function photoNode(tagName) {
     const node = element();
@@ -326,7 +353,7 @@ test("Photos opens on the full archive and metadata edits preserve slideshow sel
   let saved;
   const photo = { id: "photo", media_id: "media", title: "A real photograph", alt: "Trees by the river", description: "", week: "2026-11-09", featured: true };
   const setup = runInNewContext(photosSource.replace(/^import[^\n]+\n/gm, "").replaceAll("export ", "") + "\nsetupPhotoTools", {
-    document: { querySelector: query, createElement: photoNode }, window: {},
+    document: { querySelector: query, createElement: photoNode }, window: {}, confirm: () => true,
     archivePhotoWeek: "1900-01-01", weekOf: () => "2026-11-16", journalToday: () => "2026-11-16",
     allRows: (api, path) => api(path), loadImage: async () => null, imageSource: () => "", photoText: () => true,
     missingColumn: () => false, missingFeature: () => false,
@@ -338,12 +365,12 @@ test("Photos opens on the full archive and metadata edits preserve slideshow sel
     return [photo];
   });
   await tools.loadPhoto();
-  assert.doesNotMatch(paths[0], /week=eq\./);
-  assert.equal(query("#photo-week").required, false);
+  assert.match(paths[0], /week=eq\.2026-11-16&featured=eq\.true/);
   query("#weekly-photos").children[0].children[0].fire("click");
-  query("featured").checked = false;
   await form.fire("submit");
-  assert.equal(saved.featured, true);
-  query("#show-week-photos").fire("click");
-  assert.match(paths.at(-1), /week=eq\.2026-11-16/);
+  assert.equal(saved.featured, undefined);
+  query("#remove-week-photo").fire("click");
+  assert.match(paths.at(-1), /weekly_photos\?.*&id=eq\.photo/);
+  assert.equal(saved.featured, false);
+  assert.ok(paths.every(path => path.startsWith("weekly_photos?")));
 });

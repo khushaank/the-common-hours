@@ -193,5 +193,67 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     `);
     await assert.rejects(run("verify-security.sql"), /FAIL: anonymous private rows visible in site_settings/);
     await db.exec("rollback; reset role");
+
+    await run("upgrade-desk-workflow.sql");
+    await run("upgrade-desk-workflow.sql");
+    const image = "66666666-6666-6666-6666-666666666666";
+    await db.exec(`
+      insert into public.qmargin_b74_media (id, encoded, width, height, alt) values ('${image}', 'AAAA', 1, 1, 'Leaves');
+      insert into public.qmargin_b74_weekly_photos (id, week, media_id, title, alt)
+      values ('${image}', '2026-11-16', '${image}', 'Leaves', 'Green leaves');
+    `);
+    await as("authenticated", owner);
+    await denied("insert into public.qmargin_b74_references values ('harvey', 'Harvey', 'https://example.test/')");
+    assert.equal(await value("select count(*) from public.qmargin_b74_references"), 0);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), false);
+    assert.equal(await value(`with gone as (delete from public.qmargin_b74_posts where id = '${file}' returning id) select count(*) from gone`), 0);
+    await as("authenticated", admin);
+    await db.exec(`
+      insert into public.qmargin_b74_references values ('harvey', 'Harvey', 'https://example.test/');
+      insert into public.qmargin_b74_posts (title, slug, tag, excerpt, body, published, series)
+      select 'Part ' || part, 'series-' || part, 'A long tag with words, A second long tag with words', 'Excerpt', 'Body', true, 'Serial'
+        from generate_series(1, 10) part;
+      insert into public.qmargin_b74_posts (title, slug, tag, excerpt, body, published, series)
+      values ('Next', 'series-next', 'Writing, Notes', '', 'Other body', false, 'SERIAL');
+    `);
+    assert.equal(await value("select series_order from public.qmargin_b74_posts where slug = 'series-next'"), 11);
+    await db.exec("update public.qmargin_b74_posts set published = true, excerpt = 'Generated' where slug = 'series-next'");
+    assert.equal(await value("select series_order from public.qmargin_b74_posts where slug = 'series-next'"), 11);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), false);
+    await db.exec(`update public.qmargin_b74_weekly_photos set featured = false where id = '${image}'`);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 1);
+    await db.exec(`insert into public.qmargin_b74_working_drafts (user_id, slot, fields)
+      values ('${admin}', '${file}', jsonb_build_object('body', '![Photo](media:${image})'))`);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), false);
+    await db.exec(`delete from public.qmargin_b74_posts where id = '${file}'`);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_working_drafts where slot = '${file}'`), 0);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), true);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 0);
+    await as("anon");
+    await denied("select * from public.qmargin_b74_references");
+    await as("postgres");
+    await run("reset-sample-traffic.sql");
+    assert.equal(await value("select count(*) from public.qmargin_b74_traffic"), 0);
+    assert.ok(await value("select jsonb_array_length(rows) from qmargin_b74_private.sample_traffic_20261123") > 0);
+    await db.exec("insert into public.qmargin_b74_traffic values (current_date, 'journal', 1, 1)");
+    await run("reset-sample-traffic.sql");
+    assert.equal(await value("select count(*) from public.qmargin_b74_traffic"), 1);
+
+    await run("keep-entry-links.sql");
+    await db.exec(`
+      create table qmargin_b74_private.sample_cleanup_20261116 (
+        id integer primary key, saved_at timestamptz not null default now(), data jsonb not null
+      );
+      insert into qmargin_b74_private.sample_cleanup_20261116 (id, data)
+      values (1, '{"posts":[],"photos":[],"comments":[]}');
+    `);
+    const entries = await value("select count(*) from public.qmargin_b74_posts");
+    await run("remove-confirmed-samples.sql");
+    await run("remove-confirmed-samples.sql");
+    assert.equal(await value("select count(*) from public.qmargin_b74_posts"), entries);
+    const [verification] = await run("verify-confirmed-samples.sql");
+    assert.equal(verification.rows[0].remaining_sample_entries, 0);
+    assert.equal(verification.rows[0].remaining_sample_photos, 0);
+    assert.equal(verification.rows[0].visitors_can_read_backup, false);
   } finally { await db.close(); }
 });

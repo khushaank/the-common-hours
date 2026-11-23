@@ -21,7 +21,7 @@ async function featuredSnapshot(config) {
       .webp({ quality: 76 }).toBuffer({ resolveWithObject: true });
     const version = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
     const [first] = photos;
-    if (!/^(?:[0-9a-f-]{36}|month-\d{4}-\d{2})$/i.test(first.id)) return null;
+    if (!/^[0-9a-f-]{36}$/i.test(first.id)) return null;
     const data = JSON.stringify({ first: { id: first.id, media_id: first.media_id }, width: info.width, height: info.height, version });
     return { bytes, version, markup: '<template id="featured-snapshot" data-value="' +
       data.replace(/[&"<>]/g, char => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[char]) + '"></template>' };
@@ -55,7 +55,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
-    : !entry.isFile() || !(allowedFiles.has(entry.name) || app === "blog" && generatedFile.test(entry.name)))) {
+    : !entry.isFile() || !(allowedFiles.has(entry.name) || app === "blog" && (generatedFile.test(entry.name) || entry.name === "photo-shell.js")))) {
     throw new Error("Clear the extra files from " + destination + " before building.");
   }
 
@@ -91,7 +91,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   }
   if (featured) await writeFile(new URL("featured.webp", output), featured.bytes);
   if (publicPages) for (const entry of existing) {
-    if (entry.isFile() && generatedFile.test(entry.name) && !publicPages.has(entry.name)) await unlink(new URL(entry.name, output));
+    if (entry.isFile() && (generatedFile.test(entry.name) || entry.name === "photo-shell.js") && !publicPages.has(entry.name)) await unlink(new URL(entry.name, output));
   }
   await writeFile(new URL("config.js", output), settings);
 }

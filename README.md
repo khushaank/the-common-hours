@@ -25,18 +25,19 @@ on demand and every six hours while the GitHub Actions schedule is active.
 Run `supabase/keep-entry-links.sql` to preserve links to published entries when
 their slugs change. It starts with the slugs currently stored in the database.
 
-The desk no longer creates or refreshes review links. Write and Preview remain
-available in the editor. Previously shared links retain their existing expiry;
-the reader and protected attachment endpoint still handle them.
+Apply [`supabase/upgrade-desk-workflow.sql`](supabase/upgrade-desk-workflow.sql)
+after the journal and security upgrades. It enables References, longer tag lists,
+automatic series numbers, and deletion in Entries and Media. The share button
+copies a public entry link or creates a draft review link that expires in 24 hours.
 
-**Publish journal** also generates HTML for the journal, archive, photos, public
+**Publish journal** also generates HTML for the journal, archive, photo details, public
 entries, and policies, plus `sitemap.xml`. These pages can be read without
 JavaScript. Legacy query links redirect in the browser; new links use separate
 HTML pages so search engines and link previews receive the right content.
 GitHub Pages cannot redirect query strings on the server: HTML-only visitors
 must use the `.html` links. The archive has 15 entries per page and separate
 pages for years, months, and topics, all browsable without JavaScript.
-Search, photo filters, comments, and the contact form use JavaScript.
+Search, the Photo of the Week slideshow, comments, and the contact form use JavaScript.
 The HTML copy refreshes with each workflow run, including the six-hour schedule;
 the app continues to load current public data. Unpublishing an entry or photo
 also requires a successful **Publish journal** run to remove its HTML/image copy.
@@ -51,7 +52,9 @@ Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
 
 The Writing Desk opens on **Dashboard**. **Entries** lists every entry; selecting
-one opens its editor and publish settings on a separate screen. **Comments** shows
+one opens its editor. Select **Publish settings** to set tags, series, and the
+entry’s place on **Start here**. Leave the excerpt blank to generate it from the
+body when publishing. **Comments** shows
 all comments, with Published and Pending filters; privacy requests stay in Inbox.
 
 Dashboard uses the existing daily traffic totals and each entry’s publication
@@ -59,18 +62,15 @@ date. No new database migration is required for this layout.
 
 Run [`supabase/add-journal-features.sql`](supabase/add-journal-features.sql) to enable
 reader prompts, photo pairings, themed collections, and photo essays. Set them under
-**Entries → Reader prompt, photo essay, and collection** in the Writing Desk.
+**Entries → Publish settings → Reader prompt, photo essay, and collection**.
 Use the same collection name on each entry and add the introduction to one entry.
 To publish a photo essay, add at least two different images to the entry body in the
-order you want them to appear. Use `/image` to upload with a caption or `/library`
-to reuse an image.
+order you want them to appear. Use `/image` to upload with a caption or open the
+image library from the toolbar to reuse an image.
 
-For public archive photos, go to **Writing Desk → Photos → Archive** (the default).
-Choose one or more image files and select **Add to archive**. Select an uploaded
-photo to edit its title, alt text, description, or photo series. New uploads
-require a descriptive title and alt text for each photo before publication.
-Existing filename-like public titles and alt text use neutral placeholders until
-the editor supplies descriptions; stored originals are preserved in the desk.
+In **Writing Desk → Photos**, upload or choose an image from **Media** to add it to
+**Photo of the Week**. Removing it from the week keeps the file in **Media**.
+Select the file in **Media** to delete it when it’s no longer in use.
 
 The confirmed sample cleanup and its optional undo are saved as
 [`supabase/remove-confirmed-samples.sql`](supabase/remove-confirmed-samples.sql)
@@ -80,6 +80,11 @@ grants. It was applied on 16 November 2026: 68 sample entries, 32 sample photos,
 and 57 attached comments were removed. Elephant, Love - the test, This shall pass,
 and the five actual photo uploads remain. The read-only confirmation is saved in
 [`supabase/verify-confirmed-samples.sql`](supabase/verify-confirmed-samples.sql).
+Rerunning the content cleanup with its backup in place leaves content alone.
+If the SQL Editor reported that `sample_cleanup_20261116` already exists, verify
+the earlier cleanup and run only [`supabase/reset-sample-traffic.sql`](supabase/reset-sample-traffic.sql)
+to back up and clear the remaining counters once. The counters have no sample
+flag, so this clears all views and visits recorded before the first reset.
 Browser-only development previews contain no sample articles.
 
 Original journal material and project code are reserved by their respective rights holders. Third-party files retain their accompanying licenses.

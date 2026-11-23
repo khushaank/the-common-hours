@@ -32,12 +32,12 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.match(pages.get("privacy.html"), /<h1>Privacy<\/h1>/);
   assert.match(pages.get("privacy.html"), /What the journal collects/);
   assert.match(pages.get("terms.html"), /<h1>Terms<\/h1>/);
-  assert.match(pages.get("photos.html"), /1 photo/);
-  assert.match(pages.get("photos.html"), /<strong>\$&amp; &quot;A photograph&quot;<\/strong>/);
+  assert.match(pages.get("photos.html"), /url=\.\/#week-photo/);
+  assert.doesNotMatch(pages.get("sitemap.xml"), /\/photos\.html/);
   assert.match(pages.get("photo-" + imageId + ".html"), /The description/);
   const canonicals = [];
   for (const [name, html] of pages) {
-    if (!name.endsWith(".html")) continue;
+    if (!name.endsWith(".html") || name === "photos.html") continue;
     const canonical = html.match(/rel="canonical" href="([^"]+)"/)[1];
     canonicals.push(canonical);
     assert.match(html, /aria-busy="false" data-prerendered="true"/);
@@ -185,12 +185,22 @@ test("published attachments become binary direct downloads without exposing cred
   assert.equal(calls.filter(url => url.includes("/storage/")).length, 1);
 });
 
-test("empty archives render an empty state without a loading placeholder", () => {
+test("an empty entry archive renders a readable empty state", () => {
   const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() });
-  assert.match(pages.get("photos.html"), /There are no photos in the archive yet/);
   assert.match(pages.get("archive.html"), /No entries here yet/);
-  const published = pages.get("photos.html").match(/<div class="published-copy">([\s\S]*?)<\/div>\s*<p class="loading/)[1];
-  assert.doesNotMatch(published, /Loading photos/);
+  const published = pages.get("archive.html").match(/<div class="published-copy">([\s\S]*?)<\/div>\s*<p class="loading/)[1];
+  assert.doesNotMatch(published, /Loading/);
+});
+
+test("each comma-separated tag gets its own linked topic and archive page", () => {
+  const tagged = { ...post, tag: "Notes, AI, ai" };
+  const pages = renderPublicPages(template, { posts: [tagged], photos: [], images: new Map(), files: new Map() });
+  for (const tag of ["Notes", "AI"]) {
+    const path = pageHref({ view: "archive", tag });
+    assert.match(pages.get(path), /href="entry-first-entry.html"/);
+    assert.ok(pages.get("entry-first-entry.html").includes('href="' + path + '">' + tag + "</a>"));
+  }
+  assert.equal(pages.has(pageHref({ view: "archive", tag: "ai" })), false);
 });
 
 test("new routes and legacy query links resolve to the same entries and filters", () => {

@@ -1,5 +1,6 @@
 import { imageSource, missingFeature, showFailure } from "./common.js";
 import { loadCatalog } from "./media-catalog.js";
+import { isSupportedImage, promptImageAlt } from "./editor-tools.js";
 
 const types = { image: "Image", pdf: "PDF", document: "Document", file: "File" };
 const pageSize = 18;
@@ -15,6 +16,9 @@ export function setupMediaEditor(api, storage) {
   const picture = document.querySelector("#media-preview");
   const download = document.querySelector("#media-download");
   const close = document.querySelector("#media-close");
+  const remove = document.querySelector("#media-delete");
+  const add = document.querySelector("#media-add");
+  const fileInput = document.querySelector("#media-file");
   const save = form.querySelector('[type="submit"]');
   const message = document.querySelector("#media-edit-status");
   let catalog = [];
@@ -115,7 +119,7 @@ export function setupMediaEditor(api, storage) {
       title: fields.get("title").trim(), alt: fields.get("alt").trim(), description: fields.get("description").trim(),
     };
     if (selected.kind === "image" && !record.alt) { message.textContent = "Enter alt text for this image."; return; }
-    save.disabled = close.disabled = true;
+    save.disabled = close.disabled = remove.disabled = true;
     try {
       await storage.save(selected, record);
       Object.assign(selected, record);
@@ -125,7 +129,7 @@ export function setupMediaEditor(api, storage) {
     } catch (error) {
       message.textContent = missingFeature(error) || error.code === "PGRST202" ? "Apply the editor upgrade to save media details." : error.message;
     } finally {
-      save.disabled = close.disabled = false;
+      save.disabled = close.disabled = remove.disabled = false;
     }
   });
   download.addEventListener("click", async () => {
@@ -140,6 +144,40 @@ export function setupMediaEditor(api, storage) {
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch { message.textContent = "The file could not download."; }
     finally { download.disabled = false; }
+  });
+  add.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const [file] = fileInput.files;
+    fileInput.value = "";
+    if (!file) return;
+    add.disabled = true;
+    try {
+      const image = isSupportedImage(file);
+      const alt = image ? promptImageAlt(file) : "";
+      if (image && !alt) return;
+      status.textContent = "Uploading " + file.name + "…";
+      await storage.upload(file, alt);
+      search.value = "";
+      filter.value = "all";
+      await load();
+    } catch (error) { status.textContent = error.message; }
+    finally { add.disabled = false; }
+  });
+  remove.addEventListener("click", async () => {
+    if (!confirm("Permanently delete this media item?")) return;
+    const asset = selected;
+    save.disabled = close.disabled = remove.disabled = download.disabled = true;
+    message.textContent = "Deleting…";
+    try {
+      await storage.remove(asset);
+      catalog = catalog.filter(item => item !== asset);
+      previews.delete(asset.id);
+      dialog.close();
+      render();
+      status.textContent = "Media deleted.";
+    } catch (error) {
+      message.textContent = error.code === "PGRST202" ? "Apply the writing desk workflow SQL to delete media." : error.message;
+    } finally { save.disabled = close.disabled = remove.disabled = download.disabled = false; }
   });
   close.addEventListener("click", () => dialog.close());
   dialog.addEventListener("cancel", event => { if (save.disabled) event.preventDefault(); });

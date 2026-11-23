@@ -38,6 +38,7 @@
       <button type="button" aria-pressed="false" data-section="entries" aria-label="Entries" title="Entries"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8ZM14 3v5h5M8 12h8M8 16h6"/></svg><span class="nav-label">Entries</span></button>
       <button type="button" aria-pressed="false" data-section="site" aria-label="Photos" title="Photos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span class="nav-label">Photos</span></button>
       <button type="button" aria-pressed="false" data-section="media" aria-label="Media" title="Media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7ZM3 7l9 5 9-5M12 12v10M7 4.8l10 5.5v8.5"/></svg><span class="nav-label">Media</span></button>
+      <button type="button" aria-pressed="false" data-section="references" aria-label="References" title="References"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7m2.2 6.8a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span class="nav-label">References</span></button>
       <button type="button" aria-pressed="false" data-section="comments" aria-label="Comments" title="Comments"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Comments</span></button>
       <button type="button" aria-pressed="false" data-section="inbox" aria-label="Inbox" title="Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Inbox</span></button>
       <button type="button" id="collapse-rail" aria-label="Collapse sidebar" title="Collapse sidebar" aria-controls="desk-nav" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m7-13-4 4 4 4"/></svg></button>
@@ -73,52 +74,49 @@
               <span aria-hidden="true">›</span><span id="editor-breadcrumb">New entry</span>
             </div>
             <div class="actions compose-actions">
-              <button type="submit" value="draft" formnovalidate>Save draft</button>
-              <div class="editor-mode" role="group" aria-label="Editor mode">
-                <button type="button" id="write-mode" aria-pressed="true" aria-controls="write-panel">Write</button>
-                <button type="button" id="preview-mode" aria-pressed="false" aria-controls="entry-preview">Preview <span aria-hidden="true">↗</span></button>
-              </div>
+              <button type="submit" value="draft" formnovalidate disabled>Draft saved</button>
+              <button type="button" id="edit-entry-settings" aria-controls="entry-details" aria-expanded="false">Publish settings</button>
               <button type="submit" class="primary" value="publish" formnovalidate>Publish</button>
             </div>
           </div>
           <header class="compose-heading">
-            <div class="compose-title-row"><h1><textarea id="editor-title" name="title" rows="1" maxlength="180" placeholder="New entry" aria-label="Entry title" required></textarea></h1>
+            <div class="compose-title-row"><h1><textarea id="editor-title" name="title" rows="1" maxlength="180" placeholder="New entry" aria-label="Entry title" readonly tabindex="-1" required></textarea></h1>
+              <button class="icon-button" type="button" id="edit-entry-title" aria-label="Edit title" title="Edit title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 5 5M4 20l1-5L16 4a2 2 0 0 1 4 4L9 19Z"/></svg></button>
+              <button class="icon-button" type="button" id="share-entry" aria-label="Share entry" title="Share entry" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M7 10H5v11h14V10h-2"/></svg></button>
               <button type="button" id="entry-actions-button" popovertarget="entry-actions" aria-label="Entry actions" title="Entry actions"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
               <div id="entry-actions" popover="auto" aria-label="Entry actions">
-                <button type="button" id="edit-entry-title">Edit title</button>
-                <button type="button" id="edit-entry-body">Edit body</button>
-                <button type="button" id="edit-entry-settings">Publish settings</button>
-                <button type="submit" value="draft" formnovalidate>Save draft</button>
-                <button type="submit" value="publish" formnovalidate>Publish</button>
+                <button type="button" id="write-mode" aria-pressed="true" aria-controls="write-panel">Write</button>
+                <button type="button" id="preview-mode" aria-pressed="false" aria-controls="entry-preview">Preview</button>
               </div>
             </div>
             <p class="entry-state"><span id="editor-state">Draft</span><span id="editor-date"></span></p>
           </header>
-            <section class="entry-details" id="entry-details" aria-labelledby="publish-settings-title" tabindex="-1">
+            <section class="entry-details" id="entry-details" aria-labelledby="publish-settings-title" tabindex="-1" hidden>
               <h2 id="publish-settings-title">Publish settings</h2>
               <div class="metadata">
               <div class="fields">
                 <label>URL slug<input name="slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="Generated from the title"></label>
-                <div class="tag-field"><label for="entry-tag">Tag</label><input id="entry-tag" name="tag" maxlength="40" placeholder="Choose or type a tag" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="tags" autocomplete="off" required><div id="tags" role="listbox" aria-label="Tag suggestions" hidden></div></div>
+                <div class="tag-field"><label for="entry-tag">Tags</label><div id="tag-chips" class="tag-chips"></div><input id="entry-tag" maxlength="400" placeholder="Type a tag, then add a comma" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="tags" autocomplete="off"><input type="hidden" name="tag"><div id="tags" role="listbox" aria-label="Tag suggestions" hidden></div></div>
                 <label>Publication date<input name="published_on" type="date" required></label>
               </div>
-              <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" required></textarea></label>
+              <label>Excerpt<textarea name="excerpt" rows="2" maxlength="500" placeholder="Automatically generated from the entry if left blank"></textarea></label>
               <div class="fields">
-                <label>Series <input name="series" maxlength="100"></label>
-                <label>Part number <input name="series_order" type="number" min="1" max="9999"></label>
+                <div><label for="entry-series">Series</label><div class="series-picker"><select id="entry-series" name="series"><option value="">No series</option></select><button type="button" class="icon-button" id="add-series" aria-label="Add a series" title="Add a series"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div></div>
+                <label>Part number <input name="series_order" type="number" min="1" max="9999" readonly></label>
               </div>
-              <label class="checkbox"><input name="start_here" type="checkbox" value="true"> Show on Start here</label>
+              <label class="checkbox"><input name="start_here" type="checkbox" value="true"> Feature this entry on Start here</label>
               <details id="entry-features">
                 <summary>Reader prompt, photo essay, and collection</summary>
                 <label>Reader prompt <textarea name="reader_prompt" rows="2" maxlength="500" placeholder="Ask readers a question above the comment form"></textarea></label>
+                <p class="muted">An optional question shown above the comment form.</p>
                 <label>Paired photo <select name="paired_photo"><option value="">No paired photo</option></select></label>
                 <p id="pairing-status" class="muted" role="status"></p>
                 <div class="fields">
-                  <label>Themed collection <input name="collection" maxlength="100" placeholder="Use the same name on related entries"></label>
-                  <label>Collection introduction <textarea name="collection_intro" rows="2" maxlength="500" placeholder="Add an introduction on one entry in the collection"></textarea></label>
+                  <label>Themed collection <input name="collection" maxlength="100" placeholder="Group entries about the same topic"></label>
+                  <label>Collection introduction <textarea name="collection_intro" rows="2" maxlength="500" placeholder="Introduce the group on its public collection page"></textarea></label>
                 </div>
                 <label class="checkbox"><input name="photo_essay" type="checkbox" value="true"> List as a photo essay</label>
-                <p class="muted">Use /image in the body to add photos in order, with optional captions. Use /library to reuse an uploaded image.</p>
+                <p class="muted">Lists the entry on the Photo essays page. Add at least two different images from the image library.</p>
               </details>
               </div>
             </section>
@@ -140,7 +138,8 @@
                   <span class="tool-divider"></span>
                   <button type="button" data-format="library" aria-label="Insert image from library" title="Image library"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-5 5 6"/></svg></button>
                   <button type="button" data-format="video" aria-label="Embed video" title="Embed video"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></svg></button>
-                  <button type="button" id="more-formats" aria-label="More insert tools" title="More insert tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg></button>
+                  <button type="button" id="more-formats" aria-label="Upload a file" title="Upload a file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg></button>
+                  <input type="file" id="entry-file" hidden>
                 </div>
               </div>
               <div class="editor-body" id="write-panel">
@@ -161,16 +160,15 @@
           </form>
       </section>
       <section id="site-panel" data-desk-panel hidden>
-        <div class="section-heading"><h1>Photos</h1><a href="../photos.html" target="_blank" rel="noopener noreferrer">View photo archive ↗</a></div>
-        <p class="muted">Manage the photo archive, or choose Photo of the Week to arrange the slideshow.</p>
+        <div class="section-heading"><h1>Photo of the Week</h1></div>
         <form id="photo-form" class="card photo-workspace" method="post">
-          <div class="actions" role="group" aria-label="Photo collection"><button type="button" id="show-week-photos" aria-pressed="false">Photo of the Week</button><button type="button" id="show-archive-photos" aria-pressed="true">Archive</button></div>
-          <div class="photo-week-toolbar" id="photo-week-toolbar" hidden>
+          <div class="photo-week-toolbar" id="photo-week-toolbar">
             <label>Week starting <input id="photo-week" type="date" required></label>
             <p class="muted">Choose any date to select its week. The homepage shows the latest featured week.</p>
           </div>
           <div class="photo-main">
           <div id="photo-upload" class="photo-upload">
+            <button type="button" id="pick-week-photo">Choose from Media</button>
             <label>Photos <input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" aria-describedby="photo-upload-help"></label>
             <p id="photo-upload-help" class="muted">Select images and add a descriptive title and alt text for each before publishing.</p>
             <div id="photo-upload-details"></div>
@@ -182,21 +180,20 @@
               <label>Title <input name="title" maxlength="160"></label>
               <label>Alt text <input name="alt" maxlength="200"></label>
               <label>Description <textarea name="description" maxlength="4000" rows="5"></textarea></label>
-              <label>Photo series <input name="series" maxlength="100"></label>
-              <label class="checkbox" id="photo-featured" hidden><input name="featured" type="checkbox" checked> Include in the slideshow</label>
+              <button type="button" id="remove-week-photo">Remove from week</button>
             </div>
           </div>
-          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to archive</button><p id="photo-status" role="status"></p></div>
+          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Add to week</button><p id="photo-status" role="status"></p></div>
           </div>
           <section class="week-collection" aria-labelledby="week-collection-title">
-            <div class="body-heading"><h2 id="week-collection-title">Photo archive</h2><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" hidden disabled>Clear slideshow queue</button></div></div>
-            <p id="photo-queue-help" class="muted queue-help" hidden>Cleared photos stay in the archive. To feature one again, select it below and check “Include in the slideshow.”</p>
+            <div class="body-heading"><h2 id="week-collection-title">This week’s photos</h2><div class="actions"><small id="weekly-count"></small><button type="button" id="clear-slideshow" disabled>Clear this week</button></div></div>
+            <p class="muted queue-help">Removing a photo from the week keeps it in Media.</p>
             <ul id="weekly-photos" aria-live="polite"></ul>
           </section>
         </form>
       </section>
       <section id="media-panel" data-desk-panel hidden>
-        <div class="section-heading"><h1>Media</h1></div>
+        <div class="section-heading"><h1>Media</h1><button type="button" class="icon-button" id="media-add" aria-label="Upload media" title="Upload media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input type="file" id="media-file" hidden></div>
         <div class="card">
           <div class="fields media-filters">
             <label>Search media <input type="search" id="media-search" autocomplete="off"></label>
@@ -210,10 +207,24 @@
           <button type="button" id="media-more" hidden>Show more</button>
         </div>
       </section>
+      <section id="references-panel" data-desk-panel hidden>
+        <div class="section-heading"><h1>References</h1></div>
+        <form id="reference-form" class="card">
+          <div class="fields">
+            <label>Shortcut <input name="alias" placeholder="harvey" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
+            <label>Link text <input name="label" placeholder="Harvey" maxlength="120" required></label>
+            <label>Link URL <input name="url" type="url" placeholder="https://" maxlength="2000" required></label>
+          </div>
+          <p class="muted">Type @ in the entry body to find a saved shortcut or published entry. Save links to external websites or specific public pages here.</p>
+          <div class="actions"><button type="submit" class="primary">Save reference</button><button type="button" id="cancel-reference" hidden>Cancel edit</button></div>
+        </form>
+        <p id="reference-status" role="status"></p>
+        <ul id="reference-list"></ul>
+      </section>
       <section id="stats-panel" data-desk-panel hidden>
         <div class="section-heading">
           <div><p class="eyebrow">The Common Hours</p><h1>Dashboard</h1></div>
-          <label>Period <select id="stats-period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></label>
+          <label>Period <select id="stats-period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option><option value="five-years">Past five years</option></select></label>
         </div>
         <div class="dashboard-overview">
           <section class="card dashboard-latest"><span class="eyebrow">Last published entry</span><button type="button" id="last-published-entry" disabled>No published entries yet</button><p id="last-published-date" class="muted"></p></section>
@@ -264,11 +275,18 @@
       <label id="media-alt-label">Alt text <input name="alt" maxlength="200"></label>
       <label>Description <textarea name="description" maxlength="4000" rows="4"></textarea></label>
       <p id="media-edit-status" role="status"></p>
-      <div class="actions"><button type="button" id="media-download">Download file</button><button type="submit" class="primary">Save details</button></div>
+      <div class="actions"><button type="button" id="media-delete">Delete media</button><button type="button" id="media-download">Download file</button><button type="submit" class="primary">Save details</button></div>
     </form>
   </dialog>
+  <dialog id="share-dialog" aria-labelledby="share-title">
+    <div class="body-heading"><h2 id="share-title">Share entry</h2><button type="button" id="close-share">Close</button></div>
+    <p id="share-notice"></p>
+    <label>Link <input id="share-link" readonly></label>
+    <div class="actions"><button type="button" class="primary" id="copy-share">Copy link</button><p id="share-status" role="status"></p></div>
+  </dialog>
   <dialog id="library-dialog" aria-labelledby="library-title">
-    <div class="body-heading"><h2 id="library-title">Image library</h2><button type="button" id="library-close">Close</button></div>
+    <div class="body-heading"><h2 id="library-title">Image library</h2><div class="actions"><button type="button" class="icon-button" id="library-add" aria-label="Upload an image" title="Upload an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" id="library-close">Close</button></div></div>
+    <input type="file" id="library-file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" hidden>
     <label>Find an image <input id="library-search" type="search" autocomplete="off" disabled></label>
     <p id="library-status" role="status"></p>
     <div id="library-results" class="library-grid"></div>

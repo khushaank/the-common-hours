@@ -5,6 +5,15 @@ export const escape = value => String(value).replace(/[&<>"']/g, char => ({
 export const mediaId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 export const markdownMarker = "<!-- common-hours-markdown -->\n";
 
+export function entryTags(value = "") {
+  const tags = new Map();
+  for (const part of value.split(",")) {
+    const tag = part.trim();
+    if (tag && !tags.has(tag.toLowerCase())) tags.set(tag.toLowerCase(), tag);
+  }
+  return [...tags.values()];
+}
+
 export function imageSource(image) {
   if (!image || typeof image.encoded !== "string" || image.encoded.length > 1333336 ||
       !/^[A-Za-z0-9+/]+={0,2}$/.test(image.encoded)) return "";

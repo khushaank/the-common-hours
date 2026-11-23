@@ -1,6 +1,5 @@
-import { pageHref, pageParams } from "./page-url.js";
-import { photoArchiveShell } from "./photo-shell.js";
-import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingColumn, missingFeature, readMediaImage, weekOf } from "./common.js";
+import { pageHref } from "./page-url.js";
+import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage, weekOf } from "./common.js";
 import { publicData } from "./public-cache.js";
 import { publicPhoto } from "./photo-text.js";
 
@@ -210,12 +209,6 @@ async function showImage(get, picture, photo) {
   }
 }
 
-function archiveCard(photo) {
-  return '<li><a href="' + escape(photoLink(photo.id)) + '"><div class="photo-thumb"><img width="320" height="213" decoding="async" alt="' +
-    escape(photo.alt) + '"></div><div class="photo-card-caption"><strong>' + escape(photo.title) + '</strong><small>' + escape(photoDate(photo)) +
-    (photo.series ? ' · ' + escape(photo.series) : '') + '</small></div></a></li>';
-}
-
 async function loadArchivePhoto(get, id) {
   if (mediaId.test(id || "")) {
     const [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + ",description&id=eq." + id)), 0);
@@ -243,120 +236,18 @@ async function pairedEntries(get, id) {
   } catch { return []; }
 }
 
-async function archiveWeekly(get) {
-  const order = "&order=week.desc,created_at.asc,id.asc";
-  try { return await optional(allRows(get, "weekly_photos?select=" + weeklyFields + ",series" + order)); }
-  catch (error) {
-    if (!missingColumn(error)) throw error;
-    return optional(allRows(get, "weekly_photos?select=" + weeklyFields + order));
-  }
-}
-
-export async function renderPhotoView(content, get, demo, view, id) {
-  const archiveLink = '<a class="back" href="photos.html">← Photo archive</a>';
-  if (view === "photos") {
-    document.title = "Photo archive — The Common Hours";
-    if (!content.querySelector(".photo-archive")) content.innerHTML = photoArchiveShell;
-    const [weekly, legacy] = demo ? [[], []] : await publicData("photo-archive", () => Promise.all([
-      archiveWeekly(get),
-      optional(allRows(get, "photos?select=" + legacyFields + "&order=month.desc")),
-    ]), 0);
-    const photos = [...weekly, ...legacy.map(legacyPhoto)].map(publicPhoto).sort((a, b) =>
-      archiveDate(b).localeCompare(archiveDate(a)));
-    const archive = content.querySelector(".photo-archive");
-    archive.classList.remove("route-skeleton");
-    content.querySelectorAll(".route-skeleton, .loading").forEach(item => item.remove());
-    const year = content.querySelector("#photo-year");
-    const month = content.querySelector("#photo-month");
-    const series = content.querySelector("#photo-series");
-    const result = content.querySelector("#photo-results");
-    const count = content.querySelector("#photo-count");
-    const clear = content.querySelector("#photo-clear");
-    const params = pageParams();
-    const photoMonth = photo => archiveDate(photo).slice(0, 7);
-    const photoYear = photo => photoMonth(photo).slice(0, 4);
-    const unique = values => [...new Set(values)];
-    year.replaceChildren(new Option("All years", ""), ...unique(photos.map(photoYear)).map(name => new Option(name)));
-    series.replaceChildren(new Option("All series", ""), ...[...new Set(photos.map(photo => photo.series).filter(Boolean))].sort().map(name => new Option(name)));
-    const choose = (select, value) => { select.value = [...select.options].some(option => option.value === value) ? value : ""; };
-    function loadMonths(value) {
-      const months = unique(photos.filter(photo => !year.value || photoYear(photo) === year.value).map(photoMonth));
-      month.replaceChildren(new Option("All months", ""), ...months.map(key => new Option(
-        dateLabel(key + "-01", { month: "long", ...(year.value ? {} : { year: "numeric" }) }), key)));
-      choose(month, value);
-    }
-    choose(year, params.get("year"));
-    choose(series, params.get("series"));
-    loadMonths(params.get("month"));
-    for (const input of [year, month, series]) input.disabled = false;
-    let observer;
-    const cards = new Map();
-    const grid = document.createElement("ul");
-    grid.className = "photo-grid";
-    result.replaceChildren(grid);
-    const empty = document.createElement("p");
-    empty.className = "photo-empty";
-    empty.textContent = photos.length ? "No photos match these filters." : "There are no photos in the archive yet.";
-    result.append(empty);
-    function render() {
-      observer?.disconnect();
-      const matches = photos.filter(photo => (!year.value || photoYear(photo) === year.value) &&
-        (!month.value || photoMonth(photo) === month.value) && (!series.value || photo.series === series.value));
-      count.textContent = matches.length + (matches.length === 1 ? " photo" : " photos");
-      clear.disabled = !(year.value || month.value || series.value);
-      empty.hidden = Boolean(matches.length);
-      grid.hidden = !matches.length;
-      const byPicture = new Map();
-      grid.replaceChildren(...matches.map(photo => {
-        if (!cards.has(photo.id)) {
-          const card = document.createElement("template");
-          card.innerHTML = archiveCard(photo);
-          cards.set(photo.id, card.content.firstElementChild);
-        }
-        const item = cards.get(photo.id);
-        const picture = item.querySelector("img:not([data-requested])");
-        if (picture) byPicture.set(picture, photo);
-        return item;
-      }));
-      const reveal = (picture, photo) => {
-        picture.dataset.requested = "";
-        void showImage(get, picture, photo);
-      };
-      if (typeof IntersectionObserver !== "function") { byPicture.forEach((photo, image) => reveal(image, photo)); return; }
-      observer = new IntersectionObserver(entries => {
-        for (const { isIntersecting, target } of entries) {
-          if (!isIntersecting) continue;
-          observer.unobserve(target);
-          reveal(target, byPicture.get(target));
-        }
-      }, { rootMargin: "180px" });
-      byPicture.forEach((_, picture) => observer.observe(picture));
-    }
-    const update = () => {
-      const state = new URLSearchParams({ view: "photos" });
-      if (year.value) state.set("year", year.value);
-      if (month.value) state.set("month", month.value);
-      if (series.value) state.set("series", series.value);
-      history.replaceState(null, "", pageHref(state));
-      render();
-    };
-    year.addEventListener("change", () => { loadMonths(month.value); update(); });
-    month.addEventListener("change", update);
-    series.addEventListener("change", update);
-    clear.addEventListener("click", () => { year.value = series.value = ""; loadMonths(""); update(); });
-    render();
-    return;
-  }
+export async function renderPhotoView(content, get, demo, id) {
+  const backLink = '<a class="back" href="./#week-photo">← Photo of the Week</a>';
 
   const photo = id === cover.id ? cover : demo ? undefined : await loadArchivePhoto(get, id);
   if (!photo) {
     document.title = "Photo unavailable — The Common Hours";
-    content.innerHTML = archiveLink + "<h1>Photo unavailable</h1>";
+    content.innerHTML = backLink + "<h1>Photo unavailable</h1>";
     return;
   }
   document.title = photo.title + " — The Common Hours";
   const date = photoDate(photo);
-  content.innerHTML = archiveLink + '<article class="photo-detail"><h1>' + escape(photo.title) + '</h1>' +
+  content.innerHTML = backLink + '<article class="photo-detail"><h1>' + escape(photo.title) + '</h1>' +
     (date ? '<p class="meta">' + escape(date) + '</p>' : '') +
     '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high"></div>' +
     (photo.description ? '<p class="photo-description">' + escape(photo.description) + '</p>' : '') + '</article>';

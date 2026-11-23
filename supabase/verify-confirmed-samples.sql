@@ -7,6 +7,10 @@ select
   jsonb_array_length(data -> 'posts') as backed_up_entries,
   jsonb_array_length(data -> 'photos') as backed_up_photos,
   jsonb_array_length(data -> 'comments') as backed_up_comments,
+  (select count(*) from jsonb_array_elements(data -> 'posts') sample
+    join public.qmargin_b74_posts entry on entry.id = (sample ->> 'id')::uuid) as remaining_sample_entries,
+  (select count(*) from jsonb_array_elements(data -> 'photos') sample
+    join public.qmargin_b74_weekly_photos photo on photo.id = (sample ->> 'id')::uuid) as remaining_sample_photos,
   has_table_privilege('anon', 'qmargin_b74_private.sample_cleanup_20261116', 'SELECT') as visitors_can_read_backup,
   has_table_privilege('authenticated', 'qmargin_b74_private.sample_cleanup_20261116', 'SELECT') as clients_can_read_backup
 from qmargin_b74_private.sample_cleanup_20261116 where id = 1;

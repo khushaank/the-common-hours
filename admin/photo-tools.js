@@ -1,4 +1,4 @@
-import { allRows, archivePhotoWeek, imageSource, journalToday, missingColumn, missingFeature, weekOf } from "./common.js";
+import { allRows, imageSource, journalToday, missingFeature, weekOf } from "./common.js";
 import { loadImage, uploadImage } from "./editor-tools.js";
 import { photoText } from "./photo-text.js";
 
@@ -8,12 +8,11 @@ async function refreshPublicPhotos() {
   if (!("caches" in window)) return;
   try {
     const cache = await caches.open("common-hours-public-v1");
-    await Promise.all(["photo-archive", "featured-v5"].map(key =>
-      cache.delete(new URL("../?__journal_cache=" + key, location.href))));
+    await cache.delete(new URL("../?__journal_cache=featured-v5", location.href));
   } catch { /* Public pages recheck soon if storage is unavailable. */ }
 }
 
-export function setupPhotoTools(api) {
+export function setupPhotoTools(api, openLibrary) {
   const form = document.querySelector("#photo-form");
   const week = document.querySelector("#photo-week");
   const list = document.querySelector("#weekly-photos");
@@ -27,32 +26,15 @@ export function setupPhotoTools(api) {
   const newPhoto = document.querySelector("#new-photo");
   const preview = document.querySelector("#photo-preview");
   const clear = document.querySelector("#clear-slideshow");
+  const pick = document.querySelector("#pick-week-photo");
+  const remove = document.querySelector("#remove-week-photo");
   let selected;
   let pending = [];
   let ready = false;
   let revision = 0;
-  let supportsSeries = true;
-  let archive = true;
-  const currentWeek = () => archive ? archivePhotoWeek : weekOf(week.value);
-  const weekMode = document.querySelector("#show-week-photos");
-  const archiveMode = document.querySelector("#show-archive-photos");
-  for (const button of [weekMode, archiveMode]) button.addEventListener("click", () => {
-    if (archive === (button === archiveMode)) return;
-    archive = button === archiveMode;
-    weekMode.setAttribute("aria-pressed", String(!archive));
-    archiveMode.setAttribute("aria-pressed", String(archive));
-    document.querySelector("#photo-week-toolbar").hidden = archive;
-    document.querySelector("#photo-featured").hidden = archive;
-    document.querySelector("#photo-queue-help").hidden = archive;
-    clear.hidden = archive;
-    week.required = !archive;
-    document.querySelector("#week-collection-title").textContent = archive ? "Photo archive" : "This week’s photos";
-    document.querySelector("#photo-upload-help").textContent = "Select images and add a descriptive title and alt text for each before publishing.";
-    void loadPhoto();
-  });
+  const currentWeek = () => weekOf(week.value);
 
   week.value = weekOf();
-  week.required = false;
 
   function clearImage(image) {
     image.hidden = true;
@@ -82,14 +64,12 @@ export function setupPhotoTools(api) {
     status.textContent = "";
     upload.hidden = files.disabled = Boolean(photo);
     editPanel.hidden = !photo;
-    files.required = !photo;
-    for (const name of ["title", "alt", "description", "series"]) {
+    for (const name of ["title", "alt", "description"]) {
       const field = form.elements.namedItem(name);
       field.value = photo?.[name] || "";
       field.required = Boolean(photo) && (name === "title" || name === "alt");
     }
-    form.elements.namedItem("featured").checked = photo?.featured ?? true;
-    save.textContent = photo ? "Save photo" : archive ? "Add to archive" : "Add to week";
+    save.textContent = photo ? "Save photo" : "Add to week";
     save.disabled = !ready || !photo;
     for (const button of list.querySelectorAll("button")) {
       button.setAttribute("aria-pressed", String(button.dataset.id === photo?.id));
@@ -120,29 +100,23 @@ export function setupPhotoTools(api) {
       status.textContent = "Choose a date for the week.";
       return;
     }
-    if (!archive) week.value = start;
+    week.value = start;
     if (!preserve) edit();
     ready = false;
     count.textContent = "Loading…";
     list.setAttribute("aria-busy", "true");
     list.innerHTML = '<li class="photo-placeholder" aria-hidden="true"></li>';
-    save.disabled = newPhoto.disabled = true;
+    save.disabled = newPhoto.disabled = pick.disabled = true;
     try {
-      const filter = (archive ? "" : "&week=eq." + start) + "&order=created_at.desc,id.desc";
-      let photos;
-      try { photos = await allRows(api, "weekly_photos?select=" + fields + ",series" + filter); }
-      catch (error) {
-        if (!missingColumn(error)) throw error;
-        supportsSeries = false;
-        photos = await allRows(api, "weekly_photos?select=" + fields + filter);
-      }
+      const photos = await allRows(api, "weekly_photos?select=" + fields + "&week=eq." + start +
+        "&featured=eq.true&order=created_at.desc,id.desc");
       if (loading !== revision) return;
       list.replaceChildren();
       count.textContent = photos.length + (photos.length === 1 ? " photo" : " photos");
       if (!photos.length) {
         const empty = document.createElement("li");
         empty.className = "empty-week";
-        empty.textContent = archive ? "No photos in the archive yet." : "No photos for this week.";
+        empty.textContent = "No photos for this week.";
         list.append(empty);
       }
       for (const photo of photos) {
@@ -153,7 +127,7 @@ export function setupPhotoTools(api) {
         button.dataset.id = photo.id;
         button.textContent = photo.title;
         button.setAttribute("aria-pressed", String(photo.id === selected?.id));
-        state.textContent = photo.featured && photo.week !== archivePhotoWeek ? (photo.week > journalToday() ? "Scheduled" : "In slideshow") : "Archive only";
+        state.textContent = photo.week > journalToday() ? "Scheduled" : "In slideshow";
         button.append(state);
         button.addEventListener("click", () => {
           edit(photo);
@@ -163,7 +137,7 @@ export function setupPhotoTools(api) {
         list.append(item);
       }
       ready = true;
-      clear.disabled = archive || !photos.some(photo => photo.featured);
+      clear.disabled = !photos.length;
       save.disabled = !selected && !pending.length;
     } catch (error) {
       if (loading !== revision) return;
@@ -173,39 +147,40 @@ export function setupPhotoTools(api) {
     } finally {
       if (loading === revision) {
         list.removeAttribute("aria-busy");
-        newPhoto.disabled = false;
+        newPhoto.disabled = pick.disabled = false;
       }
     }
   }
 
-  clear.addEventListener("click", async () => {
+  async function removePhotos(photo) {
     const start = weekOf(week.value);
-    if (archive || !ready || clear.disabled || !start) return;
-    if (!confirm("Clear this week’s slideshow queue? The photos will stay in the archive.")) return;
+    if (!ready || clear.disabled || !start) return;
+    if (!confirm(photo ? "Remove this photo from the week? It will stay in Media." : "Clear this week’s slideshow? The photos will stay in Media.")) return;
     clear.disabled = form.inert = week.disabled = true;
     status.textContent = "Clearing the slideshow queue…";
     try {
-      await api("weekly_photos?week=eq." + start + "&featured=eq.true", {
+      await api("weekly_photos?week=eq." + start + "&featured=eq.true" + (photo ? "&id=eq." + photo.id : ""), {
         method: "PATCH", body: { featured: false }, prefer: "return=minimal",
       });
       await refreshPublicPhotos();
-      if (selected) form.elements.namedItem("featured").checked = false;
-      await loadPhoto({ preserve: true });
-      if (ready) status.textContent = "Slideshow queue cleared. The photos are still in the archive.";
+      await loadPhoto();
+      if (ready) status.textContent = photo ? "Photo removed from the week. It is still in Media." : "Slideshow cleared. The photos are still in Media.";
     } catch (error) {
       status.textContent = error.message;
       clear.disabled = false;
     } finally { form.inert = week.disabled = false; }
-  });
+  }
+  clear.addEventListener("click", () => void removePhotos());
+  remove.addEventListener("click", () => { if (selected) void removePhotos(selected); });
 
   newPhoto.addEventListener("click", () => { edit(); files.focus(); });
   week.addEventListener("change", () => void loadPhoto());
-  files.addEventListener("change", () => {
-    pending = [...files.files].map(file => ({ file, id: crypto.randomUUID(), media: undefined, title: "", alt: "" }));
+  function preparePhotos(entries) {
+    pending = entries;
     uploadDetails.replaceChildren(...pending.map(entry => {
       const group = document.createElement("fieldset");
       const legend = document.createElement("legend");
-      legend.textContent = entry.file.name;
+      legend.textContent = entry.file?.name || entry.title || "Image from Media";
       group.append(legend);
       for (const [name, title, maxLength] of [["title", "Photo title", 160], ["alt", "Alt text — describe what the image shows", 200]]) {
         const label = document.createElement("label");
@@ -214,6 +189,7 @@ export function setupPhotoTools(api) {
         input.name = name + "-" + entry.id;
         input.required = true;
         input.maxLength = maxLength;
+        input.value = entry[name];
         input.addEventListener("input", () => { entry[name] = input.value.trim(); });
         label.append(input);
         group.append(label);
@@ -221,7 +197,14 @@ export function setupPhotoTools(api) {
       return group;
     }));
     save.disabled = !ready || !pending.length;
+  }
+  files.addEventListener("change", () => {
+    preparePhotos([...files.files].map(file => ({ file, id: crypto.randomUUID(), title: "", alt: "" })));
   });
+  pick.addEventListener("click", () => openLibrary(image => {
+    edit();
+    preparePhotos([{ id: crypto.randomUUID(), media: image, title: image.title.slice(0, 160), alt: image.alt }]);
+  }, () => pick.focus(), message => { status.textContent = message; }));
 
   form.addEventListener("submit", async event => {
     event.preventDefault();
@@ -236,11 +219,8 @@ export function setupPhotoTools(api) {
       if (current) {
         const record = {
           title: formData.get("title").trim(), alt: formData.get("alt").trim(),
-          description: formData.get("description").trim(), featured: archive ? current.featured : formData.has("featured"),
+          description: formData.get("description").trim(),
         };
-        const series = formData.get("series").trim();
-        if (supportsSeries) record.series = series;
-        else if (series) throw new Error("Apply the editor upgrade to save photo series.");
         if (!record.title || !record.alt) throw new Error("Enter a title and alt text.");
         if (!photoText(record.title) || !photoText(record.alt)) throw new Error("Use descriptive titles and alt text, without filenames or URLs.");
         status.textContent = "Saving photo…";
@@ -256,7 +236,7 @@ export function setupPhotoTools(api) {
         for (const [index, entry] of pending.entries()) {
           status.textContent = "Preparing photo " + (index + 1) + " of " + pending.length + "…";
           entry.media ??= await uploadImage(api, entry.file, entry.alt);
-          rows.push({ id: entry.id, week: start, media_id: entry.media.id, title: entry.title, alt: entry.alt, featured: !archive });
+          rows.push({ id: entry.id, week: start, media_id: entry.media.id, title: entry.title, alt: entry.alt, featured: true });
         }
         await api("weekly_photos?on_conflict=id", {
           method: "POST", body: rows, prefer: "resolution=ignore-duplicates,return=minimal",
@@ -265,7 +245,7 @@ export function setupPhotoTools(api) {
       }
       await refreshPublicPhotos();
       await loadPhoto({ preserve: true });
-      if (ready) status.textContent = current ? "Photo saved." : archive ? "Photos added to the archive." : "Photos added to the week.";
+      if (ready) status.textContent = current ? "Photo saved." : "Photos added to the week.";
     } catch (error) {
       status.textContent = missingFeature(error) ? "Apply the Supabase writing desk upgrade to manage weekly photos." : error.message;
       save.disabled = false;

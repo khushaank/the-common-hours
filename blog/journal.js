@@ -4,6 +4,7 @@ import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missin
 import { publicData } from "./public-cache.js";
 import { archiveTitle, renderArchive } from "./archive.js";
 import { startIntroduction, startEmpty, photoEssayEmpty, exploreJournal } from "./reading-copy.js";
+import { entryTags } from "./text.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
@@ -25,10 +26,10 @@ const postLink = post => link({ post: post.slug });
 const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
-const isPhoto = view === "photo" || view === "photos";
+const isPhoto = view === "photo";
 if (view === "collections" || view === "photo-essays") document.documentElement.classList.add("wide-page");
 if (!isLegal && view !== "review") {
-  const currentNav = isPhoto || view === "photo-essays" ? "photos" : ["archive", "collections"].includes(view) || month ? "archive" :
+  const currentNav = ["archive", "collections"].includes(view) || month ? "archive" :
     view === "start" ? "start" : "journal";
   document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
 }
@@ -118,8 +119,7 @@ function recordView(page, post = null) {
 
 function grouped(posts, value) {
   const groups = new Map();
-  for (const post of posts) {
-    const name = value(post);
+  for (const name of posts.flatMap(value)) {
     groups.set(name, (groups.get(name) || 0) + 1);
   }
   return groups;
@@ -133,11 +133,11 @@ function sideLinks(groups, key, label, selected) {
 
 function metadata(post, byline = false) {
   return `<p class="meta"><time datetime="${escape(post.published_on)}">${dateLabel(post.published_on)}</time>
-    <a class="tag" href="${link({ view: "archive", tag: post.tag })}">${escape(post.tag)}</a>${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
+    ${entryTags(post.tag).map(tag => `<a class="tag" href="${link({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ")}${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
 }
 
 function renderList(posts) {
-  const filtered = posts.filter(post => (!month || post.published_on.startsWith(month + "-")) && (!tag || post.tag === tag));
+  const filtered = posts.filter(post => (!month || post.published_on.startsWith(month + "-")) && (!tag || entryTags(post.tag).includes(tag)));
   const title = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? monthLabel(month) : tag || "Latest entries";
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const page = Math.min(totalPages, Math.max(1, Number.parseInt(params.get("page"), 10) || 1));
@@ -297,7 +297,7 @@ async function start() {
   }
   if (isPhoto) {
     const { renderPhotoView } = await import("./photos.js");
-    await renderPhotoView(content, get, demo, view, params.get("photo"));
+    await renderPhotoView(content, get, demo, params.get("photo"));
     recordView(view);
     return;
   }
@@ -323,7 +323,7 @@ async function start() {
     return;
   }
   const months = grouped(posts, post => post.published_on.slice(0, 7));
-  const topics = [...grouped(posts, post => post.tag)].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
+  const topics = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   const topTopics = topics.slice(0, 10);
   const archives = sideLinks(months, "month", monthLabel, month);
   const sidebarMarkup = `<section class="side-section"><h2 class="side-title">Blog archive</h2>
@@ -364,17 +364,6 @@ async function load() {
       status.id = "refresh-status";
       content.after(status);
       showFailure(status, "The latest updates could not load. You can still read this published copy.", load);
-    } else if (view === "photos" && content.querySelector("#photo-results")) {
-      content.querySelector(".photo-archive").classList.remove("route-skeleton");
-      content.querySelectorAll(".route-skeleton, .loading").forEach(item => item.remove());
-      const count = content.querySelector("#photo-count");
-      const results = content.querySelector("#photo-results");
-      count.textContent = "";
-      showFailure(results, "The photos could not load. Try again.", () => {
-        results.replaceChildren();
-        count.textContent = "Loading photos…";
-        void load();
-      });
     } else showFailure(content, navigator.onLine ? "The journal could not load. Check your connection and try again." :
       "This page hasn’t been saved on this device. Reconnect to open it.", load);
   } finally {

@@ -28,7 +28,7 @@ export async function request(path, { method = "GET", body, token, prefer, timeo
   if (download && response.ok) return response.blob();
   const data = response.headers.get("content-type")?.includes("json") ? await response.json().catch(() => null) : null;
   if (!response.ok) throw new RequestError(response.status, data?.code || data?.error_code || data?.error);
-  if (response.status === 204 || method === "DELETE" && !prefer) return null;
+  if (response.status === 204) return null;
   if (method === "GET" && data === null) throw new Error("The service returned an unexpected response. Try again.");
   return data;
 }
@@ -74,6 +74,10 @@ export async function uploadAttachment(id, file, token) {
 }
 export const fetchAttachment = (id, token = publishableKey) =>
   request(attachmentPath(id), { token, timeout: 120000, download: true });
+export const removeAttachment = (id, token) =>
+  request("/storage/v1/object/qmargin-b74-attachments", {
+    method: "DELETE", token, body: { prefixes: [id] },
+  });
 
 export async function listAttachments(token) {
   const files = [];

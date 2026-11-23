@@ -1,6 +1,7 @@
 -- Approved cleanup: 68 generated entries, their 57 comments, and 32 sample photos.
 -- Keeps Elephant, Love - the test, This shall pass, and genuine photo uploads.
--- Run once as postgres. A private backup is saved before anything is removed.
+-- Run as postgres. A private backup is saved before anything is removed.
+-- A completed cleanup is safe to rerun. Use reset-sample-traffic.sql for the remaining counters.
 begin;
 set local lock_timeout = '10s';
 lock table public.qmargin_b74_posts, public.qmargin_b74_weekly_photos,
@@ -9,7 +10,7 @@ lock table public.qmargin_b74_posts, public.qmargin_b74_weekly_photos,
   public.qmargin_b74_asset_details, public.qmargin_b74_traffic,
   qmargin_b74_private.review_links in share row exclusive mode;
 
-create table qmargin_b74_private.sample_cleanup_20261116 (
+create table if not exists qmargin_b74_private.sample_cleanup_20261116 (
   id integer primary key check (id = 1),
   saved_at timestamptz not null default now(),
   data jsonb not null
@@ -23,6 +24,11 @@ declare
   sample_photos uuid[];
   sample_media uuid[];
 begin
+  if exists (select 1 from qmargin_b74_private.sample_cleanup_20261116 where id = 1) then
+    raise notice 'The sample entry and photo cleanup already has a backup. Use reset-sample-traffic.sql to reset views and visits.';
+    return;
+  end if;
+
   select array_agg(id) into sample_posts from public.qmargin_b74_posts
     where body like '%I stayed a little longer than I had planned. Once the first rush had passed, there was room to notice what I usually walk past.%'
        or body like '%I wrote it down that evening, before the rest of the day had crowded out the detail.%';

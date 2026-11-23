@@ -29,7 +29,7 @@
   <div class="wrap mast">
     <a class="brand" href="./">The Common Hours</a>
     <nav aria-label="Main navigation">
-      <a href="./" id="journal-link">Journal</a><a href="archive.html" id="archive-link">Archive</a><a href="photos.html" id="photos-link">Photos</a>
+      <a href="./" id="journal-link">Journal</a><a href="archive.html" id="archive-link">Archive</a><a href="./#week-photo">Photo of the Week</a>
       <a href="start.html" id="start-link">Start here</a>
       <button id="search-link" class="search-icon" type="button" aria-label="Search the journal" aria-expanded="false" aria-controls="nav-search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></button>
     </nav>
@@ -81,24 +81,6 @@
         <div class="section-head"><div class="skeleton skeleton-heading"></div></div>
         <div class="archive-skeleton-rows"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>
       </div>
-      <section class="route-skeleton photo-archive" data-skeleton="photos">
-        <header class="photo-archive-head"><p class="photo-kicker">The Common Hours · Photography</p><h1>Photo archive</h1><p>Browse the journal’s photo collection by date or series. <a href="photo-essays.html">Explore photo essays →</a></p></header>
-        <div class="photo-filter-bar">
-          <div class="photo-filters" role="group" aria-label="Filter photos">
-            <label>Year <select id="photo-year" disabled><option>All years</option></select></label>
-            <label>Month <select id="photo-month" disabled><option>All months</option></select></label>
-            <label>Series <select id="photo-series" disabled><option>All series</option></select></label>
-          </div>
-          <div class="photo-filter-meta"><span id="photo-count" aria-live="polite">Loading photos…</span><button id="photo-clear" class="quiet-button" type="button" disabled>Reset</button></div>
-        </div>
-        <div id="photo-results">
-          <div class="photo-grid" aria-hidden="true">
-            <div><div class="photo-thumb skeleton"></div><div class="photo-card-caption"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line meta-line"></div></div></div>
-            <div><div class="photo-thumb skeleton"></div><div class="photo-card-caption"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line meta-line"></div></div></div>
-            <div><div class="photo-thumb skeleton"></div><div class="photo-card-caption"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line meta-line"></div></div></div>
-          </div>
-        </div>
-      </section>
       <div class="route-skeleton" data-skeleton="photo" aria-hidden="true">
         <div class="skeleton skeleton-line meta-line"></div><div class="skeleton skeleton-heading"></div>
         <div class="photo-detail-image skeleton"></div><div class="skeleton skeleton-line short"></div>

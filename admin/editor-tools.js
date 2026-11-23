@@ -37,26 +37,47 @@ export async function encodeImage(file) {
 
 const markdownLabel = text => text.replace(/[\\[\]*_`<>&]/g, "\\$&").replace(/[\r\n]+/g, " ");
 const imageTypes = [...allowedImages].join(",");
-const inlineFormats = [
+const toolbarFormats = [
   ["bold", "Bold", "**Bold text**"],
   ["italic", "Italic", "*Italic text*"],
-];
-const commands = [
   ["list", "Bulleted list", "- List item"],
-  ["square", "Square list", "+ List item"],
   ["numbered", "Numbered list", "1. List item"],
-  ["letters", "Lettered list", "1) List item"],
   ["quote", "Quote", "> Quote"],
-  ["image", "Image"],
   ["library", "Image library"],
   ["video", "Embed video"],
-  ["file", "File"],
-  ["pdf", "PDF"],
   ["link", "Link"],
-  ["entry", "Link to entry"],
-  ["footnote", "Footnote", "^[Footnote text]"],
   ["divider", "Divider", "---"],
 ];
+const commands = [
+  ["image", "Image with caption"],
+  ["file", "File"],
+  ["pdf", "PDF"],
+  ["entry", "Link to entry"],
+  ["footnote", "Footnote", "^[Footnote text]"],
+];
+
+export const isSupportedImage = file => allowedImages.has(file.type);
+
+export function promptImageAlt(file) {
+  const alt = prompt("Describe the image for readers who cannot see it.\n" + file.name)?.trim();
+  if (alt?.length > 200) throw new Error("Use 200 characters or fewer for alt text.");
+  return alt;
+}
+
+export async function entryExcerpt(body, title, markdown = true) {
+  let text = body;
+  if (markdown && body) {
+    const { renderMarkup } = await import("./rich.js");
+    const container = document.createElement("template");
+    container.innerHTML = renderMarkup(body);
+    container.content.querySelectorAll(".media-slot, .video, .footnotes, .footnote-ref").forEach(element => element.remove());
+    text = [...container.content.childNodes].map(node => node.textContent).join(" ");
+  }
+  const excerpt = text.trim().replace(/\s+/g, " ") || title.trim();
+  if (excerpt.length <= 240) return excerpt;
+  const limit = excerpt.lastIndexOf(" ", 239);
+  return excerpt.slice(0, limit > 160 ? limit : 239).replace(/[\uD800-\uDBFF]$/, "").trimEnd() + "…";
+}
 
 export async function uploadImage(api, file, alt) {
   const record = await encodeImage(file);
@@ -75,7 +96,7 @@ export async function uploadImage(api, file, alt) {
 
 export const loadImage = readMediaImage;
 
-export function setupEditorTools(editor, api, attachments, getEntries) {
+export function setupEditorTools(editor, api, attachments, getEntries, getReferences = () => []) {
   const body = editor.elements.namedItem("body");
   const dialog = document.querySelector("#insert-dialog");
   const insert = document.querySelector("#insert-form");
@@ -93,6 +114,8 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   const entryDialog = document.querySelector("#entry-link-dialog");
   const entrySearch = document.querySelector("#entry-link-search");
   const entryResults = document.querySelector("#entry-link-results");
+  const entryFile = document.querySelector("#entry-file");
+  const uploadButton = document.querySelector("#more-formats");
   let insertion;
   let command;
   let active = 0;
@@ -102,6 +125,8 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   let library;
   let previewRevision = 0;
   let previousBody;
+  let editorRevision = 0;
+  let uploadRange;
   const previewImages = new Map();
 
   function checkSpace(length, start, end) {
@@ -132,7 +157,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
       button.classList.toggle("active", index === active);
       button.textContent = name;
       const shortcut = document.createElement("kbd");
-      shortcut.textContent = "/" + key;
+      shortcut.textContent = key.startsWith("@") ? key : "/" + key;
       button.append(shortcut);
       return button;
     });
@@ -143,10 +168,20 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
 
   function updateMenu() {
     const end = body.selectionStart;
-    const match = /(?:^|\s)\/([a-z]*)$/i.exec(body.value.slice(0, end));
+    const match = /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(body.value.slice(0, end));
     if (body.selectionEnd !== end || !match) { closeMenu(); return; }
-    const query = match[1].toLowerCase();
-    matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
+    const [, trigger, value] = match;
+    const query = value.toLowerCase();
+    if (trigger === "@") {
+      const saved = getReferences().filter(ref => ref.alias.startsWith(query) || ref.label.toLowerCase().startsWith(query));
+      const entries = getEntries().filter(entry => entry.published && query &&
+        (entry.slug.startsWith(query) || entry.title.toLowerCase().startsWith(query)) &&
+        !saved.some(ref => ref.alias === entry.slug));
+      matches = [...saved.map(ref => ["@" + ref.alias, ref.label, ref.url]),
+        ...entries.map(entry => ["@" + entry.slug, entry.title, "?post=" + entry.slug])].slice(0, 12);
+    } else {
+      matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
+    }
     command = { start: end - query.length - 1, end };
     active = 0;
     renderMenu();
@@ -162,6 +197,14 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   function updateBlockFormat() {
     const start = body.value.slice(0, body.selectionStart).lastIndexOf("\n") + 1;
     blockFormat.value = /^(#{1,6})\s/.exec(body.value.slice(start))?.[1].length.toString() || "";
+  }
+
+  function openImageLibrary(onPick, onClose, onError) {
+    library ??= import("./image-library.js").then(({ setupImageLibrary }) => setupImageLibrary(api, id => loadImage(api, id), attachments.uploadMedia, promptImageAlt));
+    void library.then(open => open(onPick, onClose)).catch(() => {
+      library = undefined;
+      onError("The image library could not open. Try again.");
+    });
   }
 
   blockFormat.addEventListener("change", () => {
@@ -180,14 +223,22 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   function choose([type, name, template], selected = "") {
     const { start, end } = command;
     closeMenu();
+    if (type.startsWith("@")) {
+      try {
+        let href = template;
+        if (!/^\?post=[a-z0-9-]{1,120}$/.test(href)) {
+          const url = new URL(href);
+          if (url.protocol !== "https:" || url.username || url.password) throw new Error("This reference needs a valid HTTPS URL.");
+          href = url.href;
+        }
+        replace("[" + markdownLabel(name) + "](<" + href + ">)", start, end);
+      } catch (error) { status.textContent = error.message; }
+      return;
+    }
     if (type === "library") {
-      library ??= import("./image-library.js").then(({ setupImageLibrary }) => setupImageLibrary(api, id => loadImage(api, id)));
-      void library.then(open => open(({ id, alt }) => {
+      openImageLibrary(({ id, alt }) => {
         replace("\n\n![" + markdownLabel(alt) + "](media:" + id + ")\n\n", start, end);
-      }, () => body.focus())).catch(() => {
-        library = undefined;
-        status.textContent = "The image library could not open. Try again.";
-      });
+      }, () => body.focus(), message => { status.textContent = message; });
       return;
     }
     if (type === "entry") {
@@ -309,7 +360,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
   menu.addEventListener("mousedown", event => event.preventDefault());
   menu.addEventListener("click", event => {
     const button = event.target.closest("[data-command]");
-    if (button && command) choose(commands.find(([key]) => key === button.dataset.command));
+    if (button && command) choose(matches.find(([key]) => key === button.dataset.command));
   });
   const formatTools = document.querySelector(".format-tools");
   formatTools.addEventListener("mousedown", event => { if (!event.target.closest("select")) event.preventDefault(); });
@@ -318,11 +369,34 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     if (!button) return;
     command = { start: body.selectionStart, end: body.selectionEnd };
     if (button.id === "more-formats") {
-      matches = commands;
-      active = 0;
-      renderMenu();
-      menu.querySelector("button")?.focus();
-    } else choose([...inlineFormats, ...commands].find(([key]) => key === button.dataset.format), body.value.slice(command.start, command.end));
+      uploadRange = { ...command, revision: editorRevision, value: body.value };
+      closeMenu();
+      entryFile.click();
+    } else choose(toolbarFormats.find(([key]) => key === button.dataset.format), body.value.slice(command.start, command.end));
+  });
+  entryFile.addEventListener("change", async () => {
+    const [file] = entryFile.files;
+    const range = uploadRange;
+    entryFile.value = "";
+    if (!file || !range) return;
+    uploadButton.disabled = true;
+    try {
+      const image = isSupportedImage(file);
+      const alt = image ? promptImageAlt(file) : "";
+      if (image && !alt) return;
+      checkSpace(markdownLabel(alt || file.name.slice(0, 200)).length + 56, range.start, range.end);
+      status.textContent = "Uploading " + file.name + "…";
+      const asset = await attachments.uploadMedia(file, alt);
+      if (range.revision !== editorRevision || range.value !== body.value) {
+        status.textContent = "Upload saved in Media. The entry changed during upload.";
+        return;
+      }
+      const label = markdownLabel(alt || asset.title);
+      const text = image ? "![" + label + "](media:" + asset.id + ")" : "[" + label + "](attachment:" + asset.id + ")";
+      replace("\n\n" + text + "\n\n", range.start, range.end);
+      status.textContent = "Upload inserted.";
+    } catch (error) { status.textContent = error.message; }
+    finally { uploadButton.disabled = false; }
   });
   body.addEventListener("paste", event => {
     const raw = event.clipboardData?.getData("text/plain").trim();
@@ -359,7 +433,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
         const title = caption ? ' "' + caption + '"' : "";
         checkSpace(label.length + title.length + 51, start, end);
         insertStatus.textContent = "Preparing image…";
-        const image = await uploadImage(api, file, plainLabel);
+        const image = await attachments.uploadMedia(file, plainLabel);
         text = "\n\n![" + label + "](media:" + image.id + title + ")\n\n";
       } else if (type === "file" || type === "pdf") {
         if (!file?.size || file.size > attachmentLimit) throw new Error("Choose a file up to 25 MB.");
@@ -397,15 +471,16 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
     const revision = ++previewRevision;
     const fields = editor.elements;
     document.querySelector("#preview-meta").textContent = [fields.namedItem("published_on").value, fields.namedItem("tag").value].filter(Boolean).join(" · ");
-    document.querySelector("#preview-excerpt").textContent = fields.namedItem("excerpt").value;
     const prompt = document.querySelector("#preview-prompt");
     prompt.textContent = fields.namedItem("reader_prompt").value.trim();
     prompt.hidden = !prompt.textContent;
     const value = body.value;
-    if (value === previousBody) return;
     try {
       const { renderText } = await import("./rich.js");
+      const excerpt = fields.namedItem("excerpt").value || await entryExcerpt(value, fields.namedItem("title").value);
       if (revision !== previewRevision || previewPanel.hidden) return;
+      document.querySelector("#preview-excerpt").textContent = excerpt;
+      if (value === previousBody) return;
       previousBody = value;
       renderText(previewBody, value || "Start writing to preview your entry.", id => {
         if (!previewImages.has(id)) previewImages.set(id, loadImage(api, id).catch(error => {
@@ -437,6 +512,7 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
 
   return {
     refresh() {
+      editorRevision++;
       refresh();
       previewImages.clear();
       previousBody = undefined;
@@ -444,5 +520,6 @@ export function setupEditorTools(editor, api, attachments, getEntries) {
       if (!previewPanel.hidden) void renderPreview();
     },
     write: () => setPreview(false),
+    openImageLibrary,
   };
 }

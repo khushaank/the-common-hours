@@ -1,8 +1,7 @@
-import { escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
+import { entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
-import { photoArchiveShell } from "./blog/photo-shell.js";
 import { archiveEntries, archivePageSize, archiveTitle, renderArchive } from "./shared/archive.js";
 import { startIntroduction, startEmpty, photoEssayEmpty, collectionEmpty, exploreJournal } from "./blog/reading-copy.js";
 import { publicPhoto } from "./shared/photo-text.js";
@@ -88,7 +87,7 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
     .replace(/\bid="[^"]*"/g, "");
   photos = photos.map(publicPhoto);
   const archiveRoutes = [{ view: "archive" }];
-  for (const [key, values] of [["year", posts.map(post => post.published_on.slice(0, 4))], ["month", posts.map(post => post.published_on.slice(0, 7))], ["tag", posts.map(post => post.tag)]]) {
+  for (const [key, values] of [["year", posts.map(post => post.published_on.slice(0, 4))], ["month", posts.map(post => post.published_on.slice(0, 7))], ["tag", posts.flatMap(post => entryTags(post.tag))]]) {
     for (const value of new Set(values)) archiveRoutes.push({ view: "archive", [key]: value });
   }
   const archivePages = archiveRoutes.flatMap(values => Array.from({ length: Math.max(1, Math.ceil(archiveEntries(posts, new URLSearchParams(values)).length / archivePageSize)) }, (_, index) =>
@@ -98,7 +97,8 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
     ...photos.map(photo => pageHref({ view: "photo", photo: photo.id })),
     ...archivePages.map(pageHref), ...attachments.values(),
   ]);
-  const cards = entries => entries.map(post => `<article class="entry"><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${escape(post.tag)}</p><h2 class="entry-title"><a href="${href({ post: post.slug })}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>";
+  const tagLinks = post => entryTags(post.tag).map(tag => `<a class="tag" href="${href({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ");
+  const cards = entries => entries.map(post => `<article class="entry"><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)}</p><h2 class="entry-title"><a href="${href({ post: post.slug })}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>";
   const picture = (id, alt) => {
     const image = images.get(id);
     return image ? `<img src="${image.src}" width="${Number(image.width)}" height="${Number(image.height)}" alt="${escape(alt || image.alt || "")}" loading="lazy" decoding="async">` : `<span class="photo-unavailable">${escape(alt || "Photo unavailable")}</span>`;
@@ -133,8 +133,8 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
   for (const [view, body] of [["privacy", notice], ["terms", terms]]) {
     page({ view }, view === "privacy" ? "Privacy" : "Terms", `<article class="legal">${body}</article>`, `Read the ${view === "privacy" ? "privacy policy" : "terms"} for The Common Hours.`, "policy-page");
   }
-  const topics = [...new Set(posts.map(post => post.tag))].sort();
-  page({ view: "topics" }, "All topics", heading("All topics") + topics.map(topic => `<section><h2>${escape(topic)}</h2>${cards(posts.filter(post => post.tag === topic))}</section>`).join(""), "Browse the journal by topic.");
+  const topics = [...new Set(posts.flatMap(post => entryTags(post.tag)))].sort();
+  page({ view: "topics" }, "All topics", heading("All topics") + topics.map(topic => `<section><h2>${escape(topic)}</h2>${cards(posts.filter(post => entryTags(post.tag).includes(topic)))}</section>`).join(""), "Browse the journal by topic.");
   const collections = [...new Set(posts.map(post => post.collection).filter(Boolean))].sort();
   page({ view: "collections" }, "Themed collections", heading("Themed collections") + (collections.map(name => {
     const entries = posts.filter(post => post.collection === name);
@@ -154,15 +154,13 @@ export function renderPublicPages(template, { posts, photos, images, files, atta
       .replace(/href="\?post=([a-z0-9-]+)"/g, (_, slug) => `href="${publicFiles.has("entry-" + slug + ".html") ? "entry-" + slug + ".html" : "./?post=" + slug}"`);
     const paired = photos.find(photo => photo.id === post.paired_photo);
     if (paired) body += `<figure class="captioned-photo">${picture(paired.media_id, paired.alt)}<figcaption><a href="${href({ view: "photo", photo: paired.id })}">Paired photo · ${escape(paired.title)}</a></figcaption></figure>`;
-    page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article"><h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${escape(post.tag)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article><noscript><p>Enable JavaScript to read or leave comments.</p></noscript>`, post.excerpt, "article-page");
+    page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article"><h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article><noscript><p>Enable JavaScript to read or leave comments.</p></noscript>`, post.excerpt, "article-page");
   }
-  let archive = photoArchiveShell.replace("Loading photos…", photos.length + (photos.length === 1 ? " photo" : " photos"));
-  archive = archive.replace(/<div id="photo-results">[\s\S]*$/, () => `<div id="photo-results">${photos.length ? '<ul class="photo-grid">' + photos.map(photo => `<li><a href="${href({ view: "photo", photo: photo.id })}"><div class="photo-thumb photo-ready">${picture(photo.media_id, photo.alt)}</div><div class="photo-card-caption"><strong>${escape(photo.title)}</strong><small>${date(photoDate(photo))}${photo.series ? " · " + escape(photo.series) : ""}</small></div></a></li>`).join("") + "</ul>" : '<p class="photo-empty">There are no photos in the archive yet.</p>'}</div></section>`);
-  page({ view: "photos" }, "Photo archive", archive, "Browse the journal’s photographs by date or series.");
   for (const photo of photos) {
-    page({ view: "photo", photo: photo.id }, photo.title, `<a class="back" href="photos.html">← Photo archive</a><article class="photo-detail"><h1>${escape(photo.title)}</h1><p class="meta">${date(photoDate(photo))}</p><div class="photo-detail-image photo-ready">${picture(photo.media_id, photo.alt)}</div>${photo.description ? `<p class="photo-description">${escape(photo.description)}</p>` : ""}</article>`, photo.description || photo.alt || photo.title);
+    page({ view: "photo", photo: photo.id }, photo.title, `<a class="back" href="./#week-photo">← Photo of the Week</a><article class="photo-detail"><h1>${escape(photo.title)}</h1><p class="meta">${date(photoDate(photo))}</p><div class="photo-detail-image photo-ready">${picture(photo.media_id, photo.alt)}</div>${photo.description ? `<p class="photo-description">${escape(photo.description)}</p>` : ""}</article>`, photo.description || photo.alt || photo.title);
   }
   pages.set("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + [...pages.keys()].filter(file => file.endsWith(".html")).map(file => `<url><loc>${escape(new URL(file === "index.html" ? "./" : file, home).href)}</loc></url>`).join("") + "</urlset>\n");
   pages.set("robots.txt", "User-agent: *\nAllow: /\nSitemap: " + home + "sitemap.xml\n");
+  pages.set("photos.html", '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Photo of the Week</title><meta http-equiv="refresh" content="0; url=./#week-photo"><p><a href="./#week-photo">Photo of the Week</a></p></html>');
   return pages;
 }

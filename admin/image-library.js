@@ -3,12 +3,14 @@ import { loadCatalog } from "./media-catalog.js";
 
 const pageSize = 12;
 
-export function setupImageLibrary(api, loadImage) {
+export function setupImageLibrary(api, loadImage, upload, describe) {
   const dialog = document.querySelector("#library-dialog");
   const search = document.querySelector("#library-search");
   const grid = document.querySelector("#library-results");
   const status = document.querySelector("#library-status");
   const more = document.querySelector("#library-more");
+  const add = document.querySelector("#library-add");
+  const fileInput = document.querySelector("#library-file");
   let images = [];
   let limit = pageSize;
   let revision = 0;
@@ -75,6 +77,29 @@ export function setupImageLibrary(api, loadImage) {
   }
 
   search.addEventListener("input", () => { limit = pageSize; render(); });
+  add.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const [file] = fileInput.files;
+    fileInput.value = "";
+    if (!file) return;
+    add.disabled = true;
+    const loading = revision;
+    try {
+      const alt = describe(file);
+      if (!alt) return;
+      status.textContent = "Uploading " + file.name + "…";
+      const image = await upload(file, alt);
+      if (revision !== loading) return;
+      images.unshift(image);
+      search.value = "";
+      search.disabled = false;
+      render();
+      grid.firstElementChild?.focus();
+      status.textContent = "Image uploaded. Select it to insert.";
+    } catch (error) {
+      if (revision === loading) status.textContent = error.message;
+    } finally { add.disabled = false; }
+  });
   more.addEventListener("click", () => {
     const firstNew = limit;
     limit += pageSize;
@@ -97,7 +122,7 @@ export function setupImageLibrary(api, loadImage) {
     images = [];
     limit = pageSize;
     search.value = "";
-    search.disabled = true;
+    search.disabled = add.disabled = true;
     more.hidden = true;
     status.textContent = "Loading images…";
     dialog.showModal();
@@ -109,6 +134,8 @@ export function setupImageLibrary(api, loadImage) {
       render();
     } catch {
       if (revision === loading) status.textContent = "The image library could not load. Close it and try again.";
+    } finally {
+      if (revision === loading) add.disabled = false;
     }
   };
 }
