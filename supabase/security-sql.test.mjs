@@ -314,10 +314,16 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
 
     await run("require-desk-mfa.sql");
     await run("require-desk-mfa.sql");
+    await run("desk-mfa-enrollment.sql");
+    await as("anon");
+    await denied("select public.qmargin_b74_can_start_desk_sign_in()");
+    await as("authenticated", newcomer, "aal1");
+    assert.equal(await value("select public.qmargin_b74_can_start_desk_sign_in()"), false);
     await as("authenticated", admin);
     await db.exec(`insert into public.qmargin_b74_working_drafts (user_id, slot, fields)
       values ('${admin}', '${orphan}', '{"body":"Private MFA check"}')`);
     await as("authenticated", admin, "aal1");
+    assert.equal(await value("select public.qmargin_b74_can_start_desk_sign_in()"), true);
     assert.equal(await value("select count(*) from public.qmargin_b74_admins"), 0);
     assert.equal(await value("select count(*) from public.qmargin_b74_working_drafts"), 0);
     assert.ok(await value("select count(*) from public.qmargin_b74_posts where published") > 0);

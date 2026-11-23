@@ -16,6 +16,9 @@
 * { box-sizing: border-box; }
 html { overflow-x: clip; }
 [hidden] { display: none !important; }
+#mfa-enrollment { display: grid; gap: 8px; }
+#mfa-qr { max-width: 100%; height: auto; }
+#mfa-key { display: block; margin-top: 6px; overflow-wrap: anywhere; }
 body { margin: 0; color: var(--ink); background: radial-gradient(ellipse at 75% 45%, #fffcf8, transparent 75%), var(--paper); font: 13px/1.5 "DM Sans", system-ui, sans-serif; }
 .shell { width: calc(100% - 36px); margin: 18px auto 36px; }
 .mast, .mast-start, .section-heading, .body-heading, .actions { display: flex; align-items: center; gap: 12px; }

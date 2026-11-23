@@ -13,6 +13,10 @@ After publishing the MFA-capable Writing Desk, apply
 [`supabase/require-desk-mfa.sql`](supabase/require-desk-mfa.sql). Each desk
 administrator needs a verified authenticator app factor before applying it.
 Supabase denies privileged requests unless the session has completed MFA.
+Apply [`supabase/desk-mfa-enrollment.sql`](supabase/desk-mfa-enrollment.sql) before
+publishing the enrollment screen. A desk admin with no verified factor can
+sign in with their password, select **Show QR code**, and enter a code from
+their authenticator app. An existing verified factor must be used at sign-in.
 [`supabase/secure-published-media.sql`](supabase/secure-published-media.sql)
 limits weekly photos to entries in the slideshow and photos paired with a
 published entry. Rebuild the public site after applying it to remove stale static copies.

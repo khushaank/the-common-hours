@@ -11,6 +11,12 @@ if (window.top !== window.self) {
 
 const login = document.querySelector("#login");
 const mfa = document.querySelector("#mfa");
+const setupMfa = document.querySelector("#start-mfa-setup");
+const verifyMfa = mfa.querySelector('[type="submit"]');
+const authenticatorCode = mfa.elements.namedItem("code");
+const mfaEnrollment = document.querySelector("#mfa-enrollment");
+const mfaQr = document.querySelector("#mfa-qr");
+const mfaKey = document.querySelector("#mfa-key");
 const editor = document.querySelector("#editor");
 const desk = document.querySelector("#desk");
 const status = document.querySelector("#status");
@@ -769,7 +775,7 @@ async function openDesk() {
   storeSession();
   login.reset();
   login.hidden = true;
-  mfa.hidden = true;
+  clearAuthenticatorSetup();
   desk.hidden = false;
   document.body.classList.add("desk-open");
   deskMenu.hidden = false;
@@ -783,17 +789,60 @@ function verifiedSession(token) {
   } catch { return false; }
 }
 
+function clearAuthenticatorSetup() {
+  factorId = undefined;
+  mfa.reset();
+  mfa.hidden = mfaEnrollment.hidden = true;
+  mfaQr.removeAttribute("src");
+  mfaKey.textContent = "";
+}
+
+function showAuthenticatorStep(factor, enrolling = false) {
+  factorId = factor;
+  login.hidden = true;
+  mfa.hidden = false;
+  setupMfa.hidden = Boolean(factor);
+  authenticatorCode.disabled = verifyMfa.hidden = document.querySelector("#mfa-code").hidden = !factor;
+  document.querySelector("#mfa-title").textContent = enrolling ? "Set up your authenticator" : "Verify sign-in";
+  document.querySelector("#mfa-help").textContent = enrolling
+    ? factor ? "Scan the QR code in your authenticator app, then enter the six-digit code it generates."
+      : "Add the Writing Desk to your authenticator app to complete sign-in."
+    : "Enter the six-digit code from your authenticator app.";
+  (factor ? authenticatorCode : setupMfa).focus();
+}
+
 async function openVerifiedDesk() {
   const token = await sessionToken();
   if (verifiedSession(token)) return openDesk();
-  const user = await request("/auth/v1/user", { token });
-  const factor = (user.user ?? user).factors?.find(item => item.factor_type === "totp" && item.status === "verified" && mediaId.test(item.id));
-  if (!factor) throw new Error("This account needs a verified authenticator to open the writing desk.");
-  factorId = factor.id;
-  login.hidden = true;
-  mfa.hidden = false;
-  mfa.elements.namedItem("code").focus();
+  const [allowed, user] = await Promise.all([
+    adminRpc("can_start_desk_sign_in", {}),
+    request("/auth/v1/user", { token }),
+  ]);
+  if (allowed !== true) throw new Error("This account is not on the Writing Desk’s admin list.");
+  const factors = (user.user ?? user).factors?.filter(item => item.status === "verified") || [];
+  const factor = factors.find(item => item.factor_type === "totp" && mediaId.test(item.id));
+  if (!factor && factors.length) throw new Error("This account uses another verification method. Update its authenticator in Supabase.");
+  showAuthenticatorStep(factor?.id, !factor);
 }
+
+setupMfa.addEventListener("click", () => {
+  if (!session || factorId || busy) return;
+  void run(setupMfa, async () => {
+    const enrollment = await request("/auth/v1/factors", {
+      method: "POST", token: await sessionToken(),
+      body: { factor_type: "totp", issuer: "The Common Hours" },
+    });
+    const qr = enrollment?.totp?.qr_code;
+    const key = enrollment?.totp?.secret;
+    if (!mediaId.test(enrollment?.id || "") || typeof qr !== "string" || !/^[A-Z2-7]+=*$/i.test(key || "")) {
+      throw new Error("Authenticator setup could not start. Try again.");
+    }
+    mfaQr.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(qr);
+    mfaKey.textContent = key;
+    mfaEnrollment.hidden = false;
+    showAuthenticatorStep(enrollment.id, true);
+  });
+});
 
 async function verifyAuthenticator(code) {
   const token = await sessionToken();
@@ -814,8 +863,7 @@ async function verifyAuthenticator(code) {
 function resetLogin() {
   session = draftOwner = factorId = undefined;
   storeSession();
-  mfa.reset();
-  mfa.hidden = true;
+  clearAuthenticatorSetup();
   login.hidden = false;
 }
 
@@ -827,9 +875,8 @@ document.querySelector("#cancel-mfa").addEventListener("click", () => {
 mfa.addEventListener("submit", event => {
   event.preventDefault();
   if (!session || !factorId || busy) return;
-  const input = mfa.elements.namedItem("code");
-  const code = input.value;
-  input.value = "";
+  const code = authenticatorCode.value;
+  authenticatorCode.value = "";
   void run(event.submitter, async () => {
     if (!verifiedSession(await sessionToken())) await verifyAuthenticator(code);
     await openDesk();

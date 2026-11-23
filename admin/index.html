@@ -29,9 +29,14 @@
     <button class="primary" disabled>Sign in</button>
   </form>
   <form id="mfa" class="card login" method="post" hidden>
-    <h1>Verify sign-in</h1>
-    <label>Authenticator code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
-    <div class="actions"><button type="submit" class="primary">Verify code</button><button type="button" id="cancel-mfa">Back to sign in</button></div>
+    <h1 id="mfa-title">Verify sign-in</h1>
+    <p id="mfa-help" class="muted">Enter the six-digit code from your authenticator app.</p>
+    <div id="mfa-enrollment" hidden>
+      <img id="mfa-qr" width="180" height="180" alt="QR code for authenticator setup">
+      <details><summary>Enter the setup key manually</summary><code id="mfa-key"></code></details>
+    </div>
+    <label id="mfa-code">Authenticator code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+    <div class="actions"><button type="submit" class="primary">Verify code</button><button type="button" id="start-mfa-setup" class="primary" hidden>Show QR code</button><button type="button" id="cancel-mfa">Back to sign in</button></div>
   </form>
   <div id="desk" hidden>
     <nav class="desk-nav" id="desk-nav" aria-label="Writing desk sections" popover="auto">
