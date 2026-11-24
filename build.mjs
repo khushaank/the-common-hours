@@ -48,8 +48,12 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     release.update(JSON.stringify([snapshot.posts, snapshot.photos, snapshot.comments, [...snapshot.images]]));
     for (const [name, bytes] of snapshot.files) release.update(name).update(bytes);
   }
-  const revision = release.digest("hex").slice(0, 16);
   const versioned = new Set([...browserAssets, "config.js"]);
+  if (app === "blog") {
+    versioned.add("footer-landscape.jpg");
+    release.update(await readFile(assetSource(app, "footer-landscape.jpg")));
+  }
+  const revision = release.digest("hex").slice(0, 16);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
   if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); }
   const existing = await readdir(output, { withFileTypes: true });
@@ -77,7 +81,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
       await writeFile(target, await sharp(await readFile(source))
         .resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 76, mozjpeg: true }).toBuffer());
     } else if (file === "static-cache.js") {
-      const offline = [...versioned].map(version).concat("index.html", assets.filter(name => /\.(?:jpg|woff2|svg|png|webmanifest)$/.test(name)));
+      const offline = [...new Set([...versioned, "index.html", ...assets.filter(name => /\.(?:jpg|woff2|svg|png|webmanifest)$/.test(name))])].map(version);
       if (featured) offline.push("featured.webp?v=" + featured.version);
       const hash = createHash("sha256").update(revision).update(JSON.stringify(offline));
       for (const name of offline.filter(name => !name.includes("?") && name !== "index.html")) hash.update(await readFile(assetSource(app, name)));

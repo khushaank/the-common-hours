@@ -162,7 +162,7 @@ async function renderPost(posts, index, firstBody) {
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   const previousNext = `<nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>`;
   if (!retain) content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article${post.is_note ? " journal-note" : ""}">
-    ${seriesMembership(post)}<h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
+    ${seriesMembership(post, posts)}<h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     ${seriesNavigation(posts, post)}
     ${previousNext}<section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div></section>`;

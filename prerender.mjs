@@ -155,7 +155,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   }
   for (const post of posts) {
     if (!/^[a-z0-9-]{1,120}$/.test(post.slug)) throw new Error("Invalid published entry slug.");
-    const membership = seriesMembership(post);
+    const membership = seriesMembership(post, posts);
     const navigation = seriesNavigation(posts, post);
     const discussion = commentCards(commentsByPost.get(post.id) || []);
     const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;

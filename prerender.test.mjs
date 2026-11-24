@@ -218,10 +218,30 @@ test("series articles show membership before the title and keep links in part or
   assert.match(article, /href="entry-second-part\.html">Next in the series · Second part/);
   assert.ok(article.includes('href="series.html#' + seriesAnchor + '">See the full series'));
   const directory = pages.get("series.html");
+  assert.equal(seriesAnchor, "series-making-you-dream-big-bold");
+  assert.ok(directory.includes('id="series-' + Buffer.from(series).toString("base64url") + '"'));
   assert.ok(directory.includes('id="' + seriesAnchor + '"'));
+  assert.match(directory, /<h1>Making you dream big &amp; bold<\/h1>[\s\S]*<ol class="series-parts">/);
+  assert.doesNotMatch(directory, /<h1>Series<\/h1>/);
+  assert.match(directory, /class="series-part-number">Part 1<\/span>[\s\S]*?<h2 class="entry-title">/);
   assert.ok(directory.indexOf("entry-first-entry.html") < directory.indexOf("entry-second-part.html"));
   assert.match(pages.get("entry-older-part.html"), /class="article-series">Part of the series/);
   assert.doesNotMatch(pages.get("entry-standalone.html"), /class="(?:article-series|series-navigation)"/);
+});
+
+test("series with similar names keep distinct links and fragment targets", () => {
+  const entries = [
+    { ...post, series: "Field notes" },
+    { ...post, id: "two", slug: "another-entry", series: "Field-notes" },
+  ];
+  const pages = renderPublicPages(template, { posts: entries, photos: [], images: new Map(), files: new Map() });
+  const directory = pages.get("series.html");
+  assert.match(directory, /<h1>Series<\/h1>/);
+  for (const entry of entries) {
+    const target = "series-" + Buffer.from(entry.series).toString("base64url");
+    assert.ok(pages.get("entry-" + entry.slug + ".html").includes('href="series.html#' + target + '"'));
+    assert.ok(directory.includes('id="' + target + '"'));
+  }
 });
 
 test("photo metadata keeps accessible alt text and suppresses filenames and tracking URLs", () => {

@@ -27,7 +27,9 @@ test("a built featured photo and footer are available in the initial homepage HT
   assert.match(pages.get("index.html"), /aria-label="Featured Photo">[\s\S]+src="featured\.webp\?v=0123456789abcdef" width="1000" height="600"/);
   assert.match(pages.get("index.html"), /id="photo-caption">Lake &amp; mist/);
   for (const file of ["index.html", "archive.html"]) {
-    assert.match(pages.get(file), /<footer class="site-footer">[\s\S]+class="back-to-top" href="#top"[\s\S]+<\/div>\s*<img class="footer-landscape" src="footer-landscape\.jpg"[^>]*>\s*<\/footer>/);
+    const html = pages.get(file);
+    assert.match(html, /<footer class="site-footer">\s*<img class="footer-landscape" src="footer-landscape\.jpg"[^>]*>[\s\S]+class="back-to-top" href="#top"/);
+    assert.doesNotMatch(html.match(/<header[\s\S]+?<\/header>/)[0], /Featured Photo|#featured-photo/);
   }
   assert.doesNotMatch(pages.get("archive.html"), /featured\.webp|id="featured-snapshot"/);
 });
