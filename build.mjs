@@ -71,7 +71,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     const target = new URL(file, output);
     if (file === "index.html") {
       const html = withConnectSource(await readFile(source, "utf8"), config);
-      const document = html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`);
+      const document = html.replace(/\b(src|srcset|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`);
       if (snapshot) {
         publicPages = renderPublicPages(document, snapshot, featured);
         for (const [name, data] of publicPages) await writeFile(new URL(name, output), data);
@@ -84,12 +84,15 @@ async function buildApp(app, destination, files, config, childDirectory, feature
         .resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 76, mozjpeg: true }).toBuffer());
     } else if (file === "static-cache.js") {
       const offline = [...new Set([...versioned, "index.html", ...assets.filter(name => /\.(?:jpg|woff2|svg|png|webmanifest)$/.test(name))])].map(version);
+      const entries = [...(publicPages?.keys() || [])].filter(name => /^entry-[a-z0-9-]+\.html$/.test(name)).slice(0, 5);
       if (featured) offline.push("featured.webp?v=" + featured.version);
-      const hash = createHash("sha256").update(revision).update(JSON.stringify(offline));
+      const worker = await readFile(source, "utf8");
+      const hash = createHash("sha256").update(revision).update(worker).update(JSON.stringify([offline, entries]));
       for (const name of offline.filter(name => !name.includes("?") && name !== "index.html")) hash.update(await readFile(assetSource(app, name)));
-      await writeFile(target, (await readFile(source, "utf8"))
+      await writeFile(target, worker
         .replace("__STATIC_REVISION__", hash.digest("hex").slice(0, 16))
-        .replace('"__OFFLINE_ASSETS__"', JSON.stringify(offline)));
+        .replace('"__OFFLINE_ASSETS__"', JSON.stringify(offline))
+        .replace('"__OFFLINE_ENTRIES__"', JSON.stringify(entries)));
     } else {
       await copyFile(source, target);
     }

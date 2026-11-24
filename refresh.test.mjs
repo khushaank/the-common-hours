@@ -15,7 +15,9 @@ test("prebuilt pages render readable content without a page preloader or fallbac
   assert.match(home, /aria-label="Featured Photo" aria-busy="true" hidden/);
   assert.match(home, /class="published-copy"/);
   assert.doesNotMatch(home, /data-refresh-pending=""/);
-  assert.match(home, /id="script-notice">JavaScript is unavailable/);
+  assert.doesNotMatch(home, /id="script-notice"/);
+  assert.match(home, /id="site-notice"[^>]*hidden/);
+  assert.match(home, /<noscript><dialog[^>]+open[^>]+JavaScript unavailable/);
   assert.doesNotMatch(home, /data-skeleton=/);
 });
 
@@ -33,7 +35,7 @@ test("a built featured photo and footer are available in the initial homepage HT
   assert.doesNotMatch(untitled, /Unnamed photo|Untitled photograph/);
   for (const file of ["index.html", "archive.html"]) {
     const html = pages.get(file);
-    assert.match(html, /<footer class="site-footer">\s*<img class="footer-landscape" src="footer-landscape\.jpg"[^>]*>[\s\S]+class="back-to-top" href="#top"/);
+    assert.match(html, /<footer class="site-footer">\s*<picture class="footer-landscape"><source media="\(min-width: 761px\)" srcset="footer-landscape\.jpg"[\s\S]+class="back-to-top" href="#top"/);
     assert.doesNotMatch(html.match(/<header[\s\S]+?<\/header>/)[0], /Featured Photo|#featured-photo/);
   }
   assert.doesNotMatch(pages.get("archive.html"), /featured\.webp|id="featured-snapshot"/);
@@ -41,7 +43,17 @@ test("a built featured photo and footer are available in the initial homepage HT
 
 function carousel(get) {
   const attributes = new Map();
-  const element = () => ({ hidden: false, textContent: "", addEventListener() {}, setAttribute() {}, contains: () => false });
+  const element = () => {
+    const handlers = new Map();
+    const attrs = new Set();
+    return {
+      hidden: false, textContent: "", addEventListener: (key, handler) => handlers.set(key, handler),
+      dispatch: (key, event) => handlers.get(key)(event), setAttribute: key => attrs.add(key),
+      removeAttribute: key => attrs.delete(key), hasAttribute: key => attrs.has(key),
+      toggleAttribute: key => attrs.has(key) ? attrs.delete(key) : attrs.add(key),
+      setPointerCapture() {}, contains: () => false,
+    };
+  };
   const picture = { ...element(), getAttribute: name => attributes.get(name), hasAttribute: name => attributes.has(name),
     set src(value) { attributes.set("src", value); } };
   const caption = { ...element(), busy: false, setAttribute() { this.busy = true; }, removeAttribute() { this.busy = false; } };
@@ -62,8 +74,43 @@ function carousel(get) {
     getImage: async (_, photo) => ({ src: photo.id === "cover" ? "cover.jpg" : "live.jpg", width: 1200, height: 800 }),
     Image: class { async decode() {} }, clearTimeout() {}, setTimeout() {},
   });
-  return { run: () => run(get, false), attributes, figure, caption, status };
+  return { run: () => run(get, false), attributes, figure, caption, status, slide: items[".slide"], arrow: items["#slide-next"] };
 }
+
+test("tapping the featured photo reveals the next arrow without changing the photo", async () => {
+  const view = carousel(async () => [{ id: "first", title: "First" }, { id: "second", title: "Second" }]);
+  await view.run();
+  assert.equal(view.slide.hasAttribute("data-controls-open"), false);
+  const tap = { pointerId: 1, pointerType: "touch", clientX: 40, clientY: 80 };
+  view.slide.dispatch("pointerdown", { ...tap, button: 0, isPrimary: true, target: { closest: () => null } });
+  view.slide.dispatch("pointerup", tap);
+  assert.equal(view.slide.hasAttribute("data-controls-open"), true);
+  assert.equal(view.arrow.hidden, false);
+  assert.equal(view.caption.textContent, "First");
+});
+
+test("startup notices appear on actual script failure or connection loss and can be closed", async () => {
+  const code = await readFile(new URL("./blog/boot.js", import.meta.url), "utf8");
+  const handlers = new Map();
+  const listen = prefix => (name, handler) => handlers.set(prefix + name, handler);
+  const label = {};
+  const notice = { hidden: true, querySelector: selector => selector === "p" ? label : { addEventListener: listen("close:") } };
+  runInNewContext(code, {
+    navigator: { onLine: true }, window: { addEventListener: listen("window:") },
+    document: { querySelector: selector => selector === "#site-notice" ? notice : { addEventListener: listen("script:") },
+      documentElement: { hasAttribute: () => false } },
+  });
+  assert.equal(notice.hidden, true);
+  handlers.get("window:offline")();
+  assert.match(label.textContent, /offline/);
+  handlers.get("close:click")();
+  assert.equal(notice.hidden, true);
+  handlers.get("window:online")();
+  handlers.get("window:offline")();
+  assert.equal(notice.hidden, false);
+  handlers.get("window:error")({ target: { id: "journal-start" } });
+  assert.match(label.textContent, /JavaScript could not load/);
+});
 
 test("hero stays hidden during a delayed request, then shows the decoded photo directly", async () => {
   let resolve;

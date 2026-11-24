@@ -48,8 +48,9 @@ Published attachments are copied as binary downloads with their original link
 labels as filenames. Only files readable with the public key and referenced by
 published entries are included; private draft attachments stay in Supabase.
 Removing a published attachment also requires a successful publishing run.
-Offline documents are cached by exact URL; an unavailable page never falls back
-to the homepage. Live document requests revalidate the browser’s HTTP cache.
+The journal saves its five latest published entries and pages you open for offline reading.
+The offline screen lists saved articles, and each saved page opens at its original URL.
+Live document requests revalidate the browser’s HTTP cache.
 
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.

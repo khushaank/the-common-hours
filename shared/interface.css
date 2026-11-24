@@ -1,4 +1,4 @@
-.shortcut-dialog, .unexpected-error {
+.shortcut-dialog, .unexpected-error, .site-notice {
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--ink);
@@ -18,6 +18,19 @@
 .shortcut-dialog dl div { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; padding-block: 10px; border-top: 1px solid var(--line); }
 .shortcut-dialog dd { margin: 0; }
 .shortcut-dialog kbd { display: inline-block; padding: 3px 7px; border-radius: 4px; background: var(--soft); color: var(--ink); font: 12px/1.3 system-ui, sans-serif; }
-.unexpected-error { position: fixed; inset: 12px 12px auto auto; z-index: 10; max-width: min(420px, calc(100% - 24px)); padding: 12px 14px; }
-.unexpected-error p { margin: 0 0 8px; }
-.unexpected-error button { margin-inline-end: 8px; }
+.unexpected-error, .site-notice {
+  position: fixed; inset: 12px 12px auto auto; z-index: 10; width: max-content;
+  max-width: min(420px, calc(100% - 24px)); padding: 12px 14px; margin: 0;
+}
+.site-notice p, .unexpected-error p { margin: 0; }
+.site-notice, .failure-message:has(.notice-close) { padding-inline-end: 54px; min-height: 44px; }
+.failure-message:has(.notice-close) { position: relative; }
+.failure-message > .quiet-button { margin-top: 8px; }
+.notice-close {
+  position: absolute; inset: 0 0 auto auto; display: grid; place-items: center;
+  width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent;
+  color: var(--ink); font: 24px/1 system-ui, sans-serif;
+}
+.notice-close:hover { background: var(--soft); color: var(--ink); }
+.notice-close:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.site-notice form { display: contents; }

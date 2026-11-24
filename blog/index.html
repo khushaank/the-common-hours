@@ -63,7 +63,6 @@
   <div id="featured-photo-status" class="status" hidden></div>
   </div>
   <!-- featured-snapshot -->
-  <p id="script-notice">JavaScript is unavailable. You can still read and browse.</p>
   <div class="layout">
     <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true">
       <!-- public-content -->
@@ -74,9 +73,12 @@
   </div>
 </main>
 <footer class="site-footer">
-  <img class="footer-landscape" src="footer-landscape.jpg" width="1440" height="182" alt="" draggable="false" loading="lazy" decoding="async">
+  <picture class="footer-landscape"><source media="(min-width: 761px)" srcset="footer-landscape.jpg"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="1440" height="182" alt="" draggable="false" loading="lazy" decoding="async"></picture>
   <div class="wrap"><nav aria-label="Site policies and feed"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="feed.xml">RSS</a></nav><a class="back-to-top" href="#top">Back to top <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg></a></div>
 </footer>
-<script type="module" src="start.js"></script>
+<noscript><dialog class="site-notice" open aria-label="JavaScript unavailable"><p>JavaScript is unavailable. You can still read and browse.</p><form method="dialog"><button type="submit" class="notice-close" aria-label="Close notice">×</button></form></dialog></noscript>
+<aside id="site-notice" class="site-notice" hidden aria-label="Journal notice"><p role="status"></p><button class="notice-close" type="button" aria-label="Close notice">×</button></aside>
+<script src="boot.js"></script>
+<script type="module" id="journal-start" src="start.js"></script>
 </body>
 </html>

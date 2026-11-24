@@ -67,13 +67,13 @@ test("static pages contain readable content, public links, safe formatting, and 
 
 test("a failed live refresh preserves the published copy and exposes retry", async () => {
   const source = await readFile(new URL("./blog/journal.js", import.meta.url), "utf8");
-  const load = source.slice(source.indexOf("async function load()"), source.indexOf("\nif (isJournal)"));
+  const load = source.slice(source.indexOf("async function load()"), source.indexOf("\nif (isJournal"));
   let retry;
   let busy;
   let status;
   const content = { dataset: { prerendered: "true" }, setAttribute: (_, value) => { busy = value; }, after: value => { status = value; } };
   await runInNewContext(load + "\nload()", {
-    content,
+    content, offline: () => false,
     location: { search: "" },
     document: { querySelector: () => null, createElement: () => ({}) },
     start: async () => { throw new Error("Network unavailable"); },
@@ -88,12 +88,12 @@ test("a failed live refresh preserves the published copy and exposes retry", asy
 
 test("a successful refresh keeps the published marker when the published DOM is retained", async () => {
   const source = await readFile(new URL("./blog/journal.js", import.meta.url), "utf8");
-  const load = source.slice(source.indexOf("async function load()"), source.indexOf("\nif (isJournal)"));
+  const load = source.slice(source.indexOf("async function load()"), source.indexOf("\nif (isJournal"));
   for (const retained of [true, false]) {
     const content = { dataset: { prerendered: "true" }, querySelector: () => retained, setAttribute(name, value) { this[name] = value; } };
     await runInNewContext(load + "\nload()", {
       content, location: { search: "" }, document: { querySelector: () => null }, start: async () => {},
-      view: null, loadNoteImages: async () => {}, publicImage() {},
+      view: null, offline: () => false, loadNoteImages: async () => {}, publicImage() {},
     });
     assert.equal(content.dataset.prerendered, retained ? "true" : undefined);
     assert.equal(content["aria-busy"], "false");
@@ -115,10 +115,10 @@ test("offline navigation does not display the homepage as an entry or intercept 
   const handlers = {};
   const cached = renderPublicPages(template, { posts: [post], photos: [], images: new Map(), files: new Map() }).get("index.html");
   runInNewContext(source, {
-    URL, Request: class { constructor(request, options) { Object.assign(this, request, options); } }, Response, Set,
+    URL, AbortSignal, Headers, Request: class { constructor(request, options) { Object.assign(this, request, options); } }, Response, Set,
     self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; } },
     fetch: async () => { throw new Error("Offline"); },
-    caches: { match: async key => String(key) === "https://example.com/index.html" ? new Response(cached) : undefined },
+    caches: { open: async () => ({ keys: async () => [] }), match: async key => String(key) === "https://example.com/index.html" ? new Response(cached) : undefined },
   });
   let result;
   handlers.fetch({ request: { url: "https://example.com/entry-first-entry.html", method: "GET", mode: "navigate" }, respondWith: response => { result = response; }, waitUntil: () => {} });
@@ -147,7 +147,7 @@ test("offline documents retain their exact route, and live requests revalidate H
     },
   };
   runInNewContext(source, {
-    URL, Response, Set, Request: class { constructor(request, options) { Object.assign(this, request, options); } },
+    URL, Response, Headers, AbortSignal, Set, Request: class { constructor(request, options) { Object.assign(this, request, options); } },
     self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; } },
     fetch: async request => {
       assert.equal(request.cache, "no-cache");
@@ -186,6 +186,64 @@ test("offline documents retain their exact route, and live requests revalidate H
     assert.equal((await navigate(alternate)).status, 503);
     assert.equal((await navigate("https://example.com/privacy.html")).status, 200);
   }
+});
+
+test("the first online visit saves recent articles and offers them on the offline screen", async () => {
+  const entry = "entry-first-entry.html";
+  const articleUrl = "https://example.com/" + entry;
+  const imageUrl = "https://example.com/media-" + imageId + ".jpg";
+  const source = (await readFile(new URL("./blog/static-cache.js", import.meta.url), "utf8"))
+    .replace('"__OFFLINE_ASSETS__"', '["index.html","style.css"]')
+    .replace('"__OFFLINE_ENTRIES__"', JSON.stringify([entry]));
+  const handlers = {};
+  const stores = new Map();
+  const urlFor = key => key.url ?? String(key);
+  const caches = {
+    async open(name) {
+      if (!stores.has(name)) stores.set(name, new Map());
+      const items = stores.get(name);
+      return {
+        addAll: async urls => { for (const url of urls) items.set(urlFor(url), new Response("Asset")); },
+        match: async key => items.get(urlFor(key))?.clone(),
+        put: async (key, response) => items.set(urlFor(key), response),
+        keys: async () => [...items.keys()].map(url => ({ url })),
+      };
+    },
+    async match(key, { cacheName }) { return (await this.open(cacheName)).match(key); },
+  };
+  let online = true;
+  runInNewContext(source, {
+    URL, Response, Headers, AbortSignal, caches,
+    Request: class { constructor(request, options) { this.url = request.url || String(request); Object.assign(this, options); } },
+    self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; }, skipWaiting() {} },
+    fetch: async request => {
+      if (!online) throw new Error("Offline");
+      if (request.url === articleUrl || request.url.endsWith("entry-read-first.html")) return new Response(
+        '<html><title>Saved &amp; readable - The Common Hours</title><p>Original article</p><img src="media-' + imageId + '.jpg"></html>');
+      assert.equal(request.url, imageUrl);
+      return new Response("Photo");
+    },
+  });
+  let install;
+  handlers.install({ waitUntil: task => { install = task; } });
+  await install;
+  handlers.message({ data: "save-public-page", source: { url: "https://example.com/entry-read-first.html" },
+    waitUntil: task => { install = task; } });
+  await install;
+  online = false;
+  async function request(path, options) {
+    let result;
+    handlers.fetch({ request: { url: "https://example.com" + path, method: "GET", ...options },
+      waitUntil() {}, respondWith: task => { result = task; } });
+    return (await result).text();
+  }
+  const home = await request("/", { mode: "navigate" });
+  assert.match(home, /You’re offline/);
+  assert.match(home, /Available offline/);
+  assert.match(home, /href="https:\/\/example\.com\/entry-first-entry\.html">Saved &amp; readable/);
+  assert.match(home, /href="https:\/\/example\.com\/entry-read-first\.html"/);
+  assert.match(await request("/" + entry, { mode: "navigate" }), /<html data-offline-copy>.*Original article/);
+  assert.equal(await request(new URL(imageUrl).pathname, { destination: "image" }), "Photo");
 });
 
 test("archives have accessible pagination and static year, month, and Unicode topic routes", () => {

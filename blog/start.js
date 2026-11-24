@@ -3,7 +3,8 @@ import { setupShortcuts } from "./keyboard.js";
 import { pageHref, pageParams } from "./page-url.js";
 import { setupImageViewer } from "./image-viewer.js";
 
-watchUnexpectedErrors("Part of the journal ran into a problem. You can keep reading or reload the page.");
+watchUnexpectedErrors("Part of the journal ran into a problem. You can keep reading or reload the page.",
+  () => document.documentElement.hasAttribute("data-interactive"));
 
 document.addEventListener("contextmenu", event => {
   if (event.target.closest("img")) event.preventDefault();
@@ -26,9 +27,12 @@ import("./journal.js").catch(() => {
   delete content.dataset.refreshPending;
   content.setAttribute("aria-busy", "false");
   const status = document.createElement("div");
-  if (content.dataset.prerendered) content.append(status);
+  if (content.dataset.prerendered) {
+    status.className = "unexpected-error";
+    content.after(status);
+  }
   else content.replaceChildren(status);
-  showFailure(status, "The journal could not start. Reload to try again.", () => location.reload(), "Reload");
+  showFailure(status, "The journal’s JavaScript could not load. Reload to try again.", () => location.reload(), "Reload", () => status.remove());
 });
 
 setupSearch();
@@ -43,14 +47,10 @@ setupShortcuts("Journal shortcuts", [
 ]);
 document.documentElement.setAttribute("data-interactive", "");
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
-  const register = () => void navigator.serviceWorker.register("./static-cache.js", { updateViaCache: "none" }).catch(() => {});
-  // Preparing the offline copy should not compete with the first visible page.
-  const afterLoad = () => {
-    if ("requestIdleCallback" in window) requestIdleCallback(register);
-    else setTimeout(register, 0);
-  };
-  if (document.readyState === "complete") afterLoad();
-  else window.addEventListener("load", afterLoad, { once: true });
+  const workers = navigator.serviceWorker;
+  workers.addEventListener("controllerchange", () => workers.controller?.postMessage("save-public-page"));
+  void workers.register("./static-cache.js", { updateViaCache: "none" }).then(() => workers.ready)
+    .then(registration => registration.active?.postMessage("save-public-page")).catch(() => {});
 }
 
 function setupSearch() {
@@ -86,7 +86,7 @@ function setupSearch() {
         const entries = await findEntries(term);
         if (current === revision) results.innerHTML = searchCards(entries, term);
       } catch {
-        if (current === revision) showFailure(results, "Search could not load.", () => updateSearch(0));
+        if (current === revision) showFailure(results, "Search could not load.", () => updateSearch(0), "Try again", true);
       } finally {
         if (current === revision) results.removeAttribute("aria-busy");
       }

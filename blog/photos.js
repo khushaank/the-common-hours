@@ -70,7 +70,7 @@ export async function startSlideshow(get, demo) {
     figure.removeAttribute("aria-busy");
     caption.removeAttribute("aria-busy");
     status.hidden = false;
-    showFailure(status, message, retry);
+    showFailure(status, message, retry, "Try again", () => { status.hidden = true; });
   }
 
   let photos;
@@ -88,7 +88,8 @@ export async function startSlideshow(get, demo) {
 
   function schedule() {
     clearTimeout(timer);
-    if (!motion.matches && !hovered && !slide.contains(document.activeElement) && !document.hidden && photos.length > 1) {
+    if (!motion.matches && !hovered && !slide.hasAttribute("data-controls-open") &&
+        !slide.contains(document.activeElement) && !document.hidden && photos.length > 1) {
       timer = setTimeout(() => void show(requestedIndex + 1), 10000);
     }
   }
@@ -167,6 +168,11 @@ export async function startSlideshow(get, demo) {
     const x = event.clientX - drag.x, y = event.clientY - drag.y;
     drag = undefined;
     if (Math.abs(x) > 40 && Math.abs(x) > Math.abs(y) * 1.3) void show(requestedIndex + (x < 0 ? 1 : -1));
+    else if (Math.abs(x) < 12 && Math.abs(y) < 12 &&
+        (event.pointerType !== "mouse" || matchMedia("(max-width: 760px)").matches)) {
+      slide.toggleAttribute("data-controls-open");
+      schedule();
+    }
   });
   slide.addEventListener("lostpointercapture", event => { if (event.pointerId === drag?.id) drag = undefined; });
   slide.addEventListener("pointerenter", event => { if (event.pointerType === "mouse") { hovered = true; schedule(); } });
@@ -175,6 +181,11 @@ export async function startSlideshow(get, demo) {
   slide.addEventListener("focusout", () => setTimeout(schedule, 0));
   motion.addEventListener("change", schedule);
   document.addEventListener("visibilitychange", schedule);
+  document.addEventListener("pointerdown", event => {
+    if (!slide.hasAttribute("data-controls-open") || slide.contains(event.target)) return;
+    slide.removeAttribute("data-controls-open");
+    schedule();
+  });
   await show(0);
 }
 

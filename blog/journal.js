@@ -29,6 +29,7 @@ const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo";
+const offline = () => !navigator.onLine || document.documentElement.hasAttribute("data-offline-copy");
 const currentNav = ["archive", "series", "topics"].includes(view) || month ? "archive" :
   view === "start" ? "start" : "journal";
 for (const item of document.querySelectorAll(".mast nav a")) {
@@ -366,6 +367,7 @@ async function load() {
   content.setAttribute("aria-busy", "true");
   document.querySelector("#refresh-status")?.remove();
   try {
+    if (content.dataset.prerendered && content.dataset.refreshPending === undefined && offline()) return;
     await start();
     if (view !== "review") await loadNoteImages(content, publicImage);
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
@@ -373,20 +375,21 @@ async function load() {
     if (content.dataset.prerendered) {
       const status = document.createElement("div");
       status.id = "refresh-status";
+      status.className = "unexpected-error";
       content.after(status);
-      showFailure(status, "The latest updates could not load. You can still read this published copy.", load);
+      showFailure(status, "The latest updates could not load. You can still read this published copy.", load, "Try again", () => status.remove());
     } else showFailure(content, navigator.onLine ? "The journal could not load. Check your connection and try again." :
-      "This page hasn’t been saved on this device. Reconnect to open it.", load);
+      "This page hasn’t been saved on this device. Reconnect to open it.", load, "Try again", true);
   } finally {
     delete content.dataset.refreshPending;
     content.setAttribute("aria-busy", "false");
   }
 }
 
-if (isJournal) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {
+if (isJournal && !offline()) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {
   document.querySelector("#photo-caption")?.removeAttribute("aria-busy");
   const status = document.querySelector("#featured-photo-status");
   status.hidden = false;
-  showFailure(status, "Featured Photo could not start.", () => location.reload(), "Reload");
+  showFailure(status, "Featured Photo could not start.", () => location.reload(), "Reload", () => { status.hidden = true; });
 });
 void load();
