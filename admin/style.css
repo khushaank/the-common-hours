@@ -36,6 +36,12 @@ small { display: block; }
 #status:not(:empty) { padding: 10px 14px; border: 1px solid var(--line); box-shadow: 0 5px 24px #26382718; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 13px; padding: 20px; min-width: 0; }
 .login { max-width: 430px; margin: min(12vh, 110px) auto 0; }
+.desk-startup { display: grid; justify-items: center; gap: 12px; padding: 28px 12px; text-align: center; color: var(--muted); }
+.desk-spinner { width: 26px; height: 26px; border: 2px solid var(--line); border-block-start-color: var(--accent); border-radius: 50%; animation: desk-spin .85s linear infinite; }
+@keyframes desk-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .desk-spinner { animation: none; } }
+@media (scripting: none) { #desk-loading { display: none; } }
+.shell:has(#desk-loading:not([hidden])) #status { visibility: hidden; }
 #desk { margin-top: 24px; }
 .desk-nav:popover-open { display: grid; gap: 4px; }
 .desk-nav { position: fixed; inset: 72px auto auto max(30px, calc((100vw - 1500px) / 2)); margin: 0; padding: 8px; width: 206px;

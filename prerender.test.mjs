@@ -77,6 +77,19 @@ test("a failed live refresh preserves the published copy and exposes retry", asy
   assert.equal(typeof retry, "function");
 });
 
+test("a successful refresh keeps the published marker when the published DOM is retained", async () => {
+  const source = await readFile(new URL("./blog/journal.js", import.meta.url), "utf8");
+  const load = source.slice(source.indexOf("async function load()"), source.indexOf("\nif (isJournal)"));
+  for (const retained of [true, false]) {
+    const content = { dataset: { prerendered: "true" }, querySelector: () => retained, setAttribute(name, value) { this[name] = value; } };
+    await runInNewContext(load + "\nload()", {
+      content, location: { search: "" }, document: { querySelector: () => null }, start: async () => {},
+    });
+    assert.equal(content.dataset.prerendered, retained ? "true" : undefined);
+    assert.equal(content["aria-busy"], "false");
+  }
+});
+
 test("offline navigation does not display the homepage as an entry or intercept private reviews", async () => {
   const source = (await readFile(new URL("./blog/static-cache.js", import.meta.url), "utf8")).replace('"__OFFLINE_ASSETS__"', '["index.html"]');
   const handlers = {};

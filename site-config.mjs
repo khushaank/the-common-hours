@@ -7,7 +7,7 @@ export const blogFiles = [
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const adminFiles = [
-  "index.html", "favicon.svg", "style.css", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
+  "index.html", "favicon.svg", "style.css", "desk-start.js", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
   "visual-editor.js", "pdf-thumbnail.js", "turndown.js", "pdf-engine.js", "pdf-worker.js", "LICENSE-turndown.txt", "LICENSE-pdfjs.txt",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];

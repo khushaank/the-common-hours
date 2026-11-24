@@ -74,7 +74,8 @@ html[data-interactive] #script-notice { display: none; }
 .route-skeleton { display: none; }
 .published-copy { display: contents; }
 html[data-journal-page] #content[data-refresh-pending] > .published-copy { display: none; }
-#content[data-prerendered]:not([data-refresh-pending]) > :is(.route-skeleton, .loading) { display: none; }
+#content[aria-busy="false"] > :is(.route-skeleton, .loading),
+#content:not([data-refresh-pending]):has(> .published-copy) > :is(.route-skeleton, .loading) { display: none; }
 html[data-journal-page] .layout:has(#content[data-refresh-pending]) > #sidebar { visibility: hidden; }
 html[data-journal-page="journal"] [data-skeleton="journal"],
 html[data-journal-page="article"] [data-skeleton="article"],

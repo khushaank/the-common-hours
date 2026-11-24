@@ -352,7 +352,7 @@ async function load() {
   document.querySelector("#refresh-status")?.remove();
   try {
     await start();
-    delete content.dataset.prerendered;
+    if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
     if (content.dataset.prerendered) {
       const status = document.createElement("div");

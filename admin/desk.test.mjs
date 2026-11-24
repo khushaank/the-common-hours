@@ -252,6 +252,36 @@ test("layout keeps publishing settings opt-in and exposes one draft action", asy
   }
 });
 
+test("the Writing Desk shows one startup screen while checking a saved session", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  assert.match(html, /id="desk-loading"[^>]* role="status">/);
+  assert.match(html, /<form id="login"[^>]* hidden>/);
+  const source = deskSource.slice(deskSource.indexOf("async function initializeDesk()"), deskSource.indexOf('login.addEventListener("submit"'));
+  for (const saved of [null, { access_token: "test", refresh_token: "test", expires: Date.now() + 30000 }]) {
+    const signIn = { disabled: true };
+    const login = { hidden: true, querySelector: () => signIn };
+    const deskLoading = { hidden: false };
+    const status = {};
+    let rejectCheck;
+    const check = new Promise((_, reject) => { rejectCheck = reject; });
+    const loaded = runInNewContext(source + "\ninitializeDesk()", {
+      login, deskLoading, status, session: undefined, window: { isSecureContext: true },
+      getProjectOrigin() {}, sessionKey: () => "session", sessionStorage: { getItem: () => JSON.stringify(saved) },
+      openVerifiedDesk: () => check, resetLogin() { login.hidden = false; },
+    });
+    if (saved) {
+      assert.equal(login.hidden, true);
+      assert.equal(deskLoading.hidden, false);
+      rejectCheck(new Error("Your session expired."));
+    }
+    await loaded;
+    assert.equal(login.hidden, false);
+    assert.equal(signIn.disabled, false);
+    assert.equal(deskLoading.hidden, true);
+    if (saved) assert.equal(status.textContent, "Your session expired.");
+  }
+});
+
 test("a published entry can be copied to a draft and a saved draft is private by default", () => {
   const draftButton = element();
   const publishButton = element();

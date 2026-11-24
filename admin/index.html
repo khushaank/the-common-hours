@@ -10,7 +10,8 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="scrollbars.css">
-<script type="module" src="desk.js"></script>
+<link rel="modulepreload" href="desk.js">
+<script type="module" src="desk-start.js"></script>
 </head>
 <body>
 <main class="shell">
@@ -23,9 +24,16 @@
     </div>
   </header>
   <p id="status" role="status"></p>
-  <form id="login" class="card login" method="post">
+  <div id="desk-loading" class="desk-startup login" role="status">
+    <span class="desk-spinner" aria-hidden="true"></span>
+    <p id="desk-loading-message">Opening the Writing Desk…</p>
+  </div>
+  <div id="desk-start-error" class="desk-startup login" role="alert" hidden>
+    <p>The Writing Desk couldn’t load.</p><a href="">Reload the page</a>
+  </div>
+  <noscript><p class="card login">The Writing Desk needs JavaScript to sign in and edit.</p></noscript>
+  <form id="login" class="card login" method="post" hidden>
     <h1>Sign in</h1>
-    <p id="desk-script-notice" class="muted">The Writing Desk needs JavaScript to sign in and edit.</p>
     <label>Email<input name="email" type="email" autocomplete="username" required></label>
     <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
     <button class="primary" disabled>Sign in</button>

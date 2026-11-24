@@ -10,7 +10,8 @@ if (window.top !== window.self) {
 }
 
 const login = document.querySelector("#login");
-document.querySelector("#desk-script-notice").hidden = true;
+const deskLoading = document.querySelector("#desk-loading");
+const deskLoadingMessage = document.querySelector("#desk-loading-message");
 const mfa = document.querySelector("#mfa");
 const setupMfa = document.querySelector("#start-mfa-setup");
 const verifyMfa = mfa.querySelector('[type="submit"]');
@@ -939,6 +940,24 @@ function resetLogin() {
   login.hidden = false;
 }
 
+function showDeskLoading(message) {
+  deskLoadingMessage.textContent = message;
+  deskLoading.hidden = false;
+}
+
+async function runSignIn(button, message, action) {
+  if (busy) return;
+  const form = button.form;
+  form.hidden = true;
+  showDeskLoading(message);
+  await run(button, action);
+  deskLoading.hidden = true;
+  if (desk.hidden && login.hidden && mfa.hidden) {
+    form.hidden = false;
+    button.focus();
+  }
+}
+
 document.querySelector("#cancel-mfa").addEventListener("click", () => {
   if (busy) return;
   resetLogin();
@@ -949,44 +968,44 @@ mfa.addEventListener("submit", event => {
   if (!session || !factorId || busy) return;
   const code = authenticatorCode.value;
   authenticatorCode.value = "";
-  void run(event.submitter, async () => {
+  void runSignIn(event.submitter, "Verifying sign-in…", async () => {
     if (!verifiedSession(await sessionToken())) await verifyAuthenticator(code);
     await openDesk();
   });
 });
 
-try {
-  if (!window.isSecureContext) throw new Error("Use the HTTPS address to sign in.");
-  getProjectOrigin();
+async function initializeDesk() {
   const signIn = login.querySelector("button");
-  signIn.disabled = false;
-  let saved;
-  try { saved = JSON.parse(sessionStorage.getItem(sessionKey())); }
-  catch { /* Sign-in is still available if tab storage cannot be read. */ }
-  if (saved?.access_token && saved?.refresh_token && Number.isFinite(saved.expires)) {
-    session = saved;
-    login.hidden = true;
-    void run(signIn, async () => {
-      status.textContent = "Restoring your session…";
+  try {
+    if (!window.isSecureContext) throw new Error("Use the HTTPS address to sign in.");
+    getProjectOrigin();
+    signIn.disabled = false;
+    let saved;
+    try { saved = JSON.parse(sessionStorage.getItem(sessionKey())); }
+    catch { /* Sign-in is still available if tab storage cannot be read. */ }
+    if (saved?.access_token && saved?.refresh_token && Number.isFinite(saved.expires)) {
+      session = saved;
       try {
         await openVerifiedDesk();
-        status.textContent = "";
       } catch (error) {
         resetLogin();
-        throw error;
+        status.textContent = error.message;
       }
-    });
+    } else login.hidden = false;
+  } catch (error) {
+    status.textContent = window.isSecureContext
+      ? "The writing desk is not connected. Check its configuration and reload."
+      : error.message;
+    login.hidden = false;
+    signIn.disabled = true;
+  } finally {
+    deskLoading.hidden = true;
   }
-} catch (error) {
-  status.textContent = window.isSecureContext
-    ? "The writing desk is not connected. Check its configuration and reload."
-    : error.message;
-  login.querySelector("button").disabled = true;
 }
 
 login.addEventListener("submit", event => {
   event.preventDefault();
-  run(event.submitter, async () => {
+  void runSignIn(event.submitter, "Signing in…", async () => {
     const body = Object.fromEntries(new FormData(login));
     login.elements.namedItem("password").value = "";
     try {
@@ -1443,6 +1462,9 @@ document.querySelector("#desk-logout").addEventListener("click", event => {
   if (!canLeaveDraft()) return;
   if (deskNav.matches(":popover-open")) deskNav.hidePopover();
   void run(event.currentTarget, async () => {
+    desk.hidden = deskMenu.hidden = true;
+    document.body.classList.remove("desk-open", "writing");
+    showDeskLoading("Signing out…");
     try {
       const token = await sessionToken();
       session = undefined;
@@ -1457,3 +1479,5 @@ document.querySelector("#desk-logout").addEventListener("click", event => {
     }
   });
 });
+
+void initializeDesk();
