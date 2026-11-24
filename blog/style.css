@@ -61,6 +61,9 @@ img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 
 .featured-photo { margin: 34px 0 41px; }
 html:not(.home-page) .featured-photo, html:not([data-journal-page]) .featured-photo { display: none; }
+html:not([data-interactive]) .js-only, html[data-interactive] #script-notice { display: none; }
+#script-notice { margin: 18px 0; padding: 8px 12px; border-inline-start: 2px solid var(--line); color: var(--muted); font-size: 13px; }
+@media (scripting: enabled) { #script-notice { animation: appear 0s .35s both; } }
 .skeleton { background: var(--soft); border-radius: 5px; animation: skeleton-pulse 1.45s ease-in-out infinite alternate; }
 .skeleton-heading { width: min(55%, 380px); height: 32px; margin: 16px 0; }
 .skeleton-line { width: min(94%, 640px); height: 13px; margin: 10px 0; }
@@ -115,6 +118,8 @@ html[data-journal-page="photo"] [data-skeleton="photo"] { display: block; }
 .series-navigation { display: grid; gap: 8px; margin-top: 25px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); overflow-wrap: anywhere; }
 .series-navigation h2 { font: 600 14px/1.5 var(--sans); }
 .series-navigation a { justify-self: start; font-size: 14px; }
+.series-group { margin-block: 24px; scroll-margin-top: 20px; }
+.series-group:target > h2 { color: var(--accent); }
 .reader-prompt { white-space: pre-line; }
 .reader-prompt { margin: 0; padding: 12px 16px; background: var(--soft); border-radius: 4px; }
 .journal-note .note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -256,13 +261,15 @@ html:has(#content[aria-busy="true"]:not([data-prerendered])) .site-footer { visi
   .brand { font-size: 24px; }
 }
 
+html:not([data-interactive]) #script-notice + .layout { margin-top: 0; }
+
 @media print {
   @page { margin: 12mm 9mm; }
   .article-page:has(#content[aria-busy="true"]) :is(.site-header, .site-footer, .content-skeleton) { display: none; }
   .article-page:has(#content[aria-busy="true"]) .loading { position: static; width: auto; height: auto; clip-path: none; }
   body:has(.article) { display: block; min-height: 0; background: white; color: #171717; }
   body:has(.article) :is(.site-header, .site-footer, #sidebar, .back, .post-nav, .comments,
-    .series-navigation, .skip-link, .attachment-status, iframe, video, .video-play, .footnote-backref) { display: none !important; }
+    .series-navigation, .skip-link, #script-notice, .attachment-status, iframe, video, .video-play, .footnote-backref) { display: none !important; }
   body:has(.article) :is(main, .layout, #content, .article, .prose) { display: block; width: auto; max-width: none; min-height: 0; margin: 0; padding: 0; }
   body:has(.article) #content .article { max-width: 180mm; margin-inline: auto; padding: 8mm 11mm 9mm; }
   .article > h1 { font: bold 25pt/1.12 Georgia, serif; letter-spacing: -.02em; margin: 0; break-after: avoid; }

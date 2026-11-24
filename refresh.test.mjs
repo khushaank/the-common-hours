@@ -11,9 +11,10 @@ test("prebuilt pages keep readable copies and skeletons without painting the fal
   const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() });
   const home = pages.get("index.html");
   assert.doesNotMatch(home, /src="cover\.jpg"/);
-  assert.match(home, /aria-label="Photo of the Week" aria-busy="true"/);
+  assert.match(home, /aria-label="Featured Photo" aria-busy="true" hidden/);
   assert.match(home, /class="published-copy"/);
-  assert.match(home, /data-refresh-pending=""/);
+  assert.doesNotMatch(home, /data-refresh-pending=""/);
+  assert.match(home, /id="script-notice">JavaScript is unavailable/);
   assert.match(home, /data-skeleton="journal"/);
 });
 
@@ -32,9 +33,8 @@ function carousel(get) {
     matchMedia: () => ({ matches: true, addEventListener() {} }),
     publicData: () => { throw new Error("The featured list must not reuse a cached fallback"); },
     publicPhoto: photo => photo,
-    cover: { id: "cover", title: "Cover" }, archivePhotoWeek: "1900-01-01", weekOf: () => "2026-11-16",
-    missingFeature: error => ["42P01", "PGRST205"].includes(error?.code),
-    allRows: () => { throw new Error("Unexpected pagination"); }, weeklyFields: "id,week,media_id",
+    cover: { id: "cover", title: "Cover" },
+    allRows: (get, path) => get(path), weeklyFields: "id,week,media_id",
     getImage: async (_, photo) => ({ src: photo.id === "cover" ? "cover.jpg" : "live.jpg", width: 1200, height: 800 }),
     Image: class { async decode() {} }, clearTimeout() {}, setTimeout() {},
   });
@@ -45,12 +45,12 @@ test("hero stays a skeleton during a delayed request, then shows the real photo 
   let resolve;
   const pending = new Promise(done => { resolve = done; });
   const view = carousel(path => {
-    assert.match(path, /featured=eq\.true/);
+    assert.match(path, /week=is\.null&featured=eq\.true/);
     return pending;
   });
   const loading = view.run();
   assert.equal(view.attributes.has("src"), false);
-  resolve([{ id: "real", week: "2026-11-16", featured: true, title: "Real photograph" }]);
+  resolve([{ id: "real", week: null, title: "Real photograph" }]);
   await loading;
   assert.equal(view.attributes.get("src"), "live.jpg");
   assert.equal(view.caption.textContent, "Real photograph");

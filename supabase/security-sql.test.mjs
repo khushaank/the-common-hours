@@ -371,5 +371,36 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     assert.equal(notePreview.body, "Short note");
     await as("authenticated", admin);
     assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), true);
+    await as("postgres");
+    const oldPhoto = "88888888-8888-8888-8888-888888888888";
+    const futurePhoto = "99999999-9999-9999-9999-999999999999";
+    await db.exec(`
+      insert into public.qmargin_b74_media (id, encoded, width, height, alt)
+      values ('${image}', 'AAAA', 1, 1, 'Current photo'), ('${oldPhoto}', 'AAAA', 1, 1, 'Older photo'),
+             ('${futurePhoto}', 'AAAA', 1, 1, 'Scheduled photo');
+      insert into public.qmargin_b74_weekly_photos (id, week, media_id, title, alt)
+      select id, date_trunc('week', timezone('Asia/Kolkata', now()))::date + days, id, label, label
+      from (values ('${image}'::uuid, 0, 'Current photo'), ('${oldPhoto}'::uuid, -7, 'Older photo'),
+                   ('${futurePhoto}'::uuid, 7, 'Scheduled photo')) as photos(id, days, label);
+    `);
+    await run("upgrade-featured-photo.sql");
+    await run("upgrade-featured-photo.sql");
+    await as("anon");
+    const featured = await value("select public.qmargin_b74_home_photos()");
+    assert.deepEqual(featured.photos.map(photo => photo.id), [image]);
+    assert.equal(featured.image.alt, "Current photo");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_weekly_photos where id = '${oldPhoto}'`), 1);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${futurePhoto}'`), 0);
+    await as("authenticated", owner);
+    await denied(`insert into public.qmargin_b74_weekly_photos (week, media_id, title, alt) values (null, '${oldPhoto}', 'Photo', 'Alt text')`);
+    await as("authenticated", admin);
+    assert.equal(await value(`select public.qmargin_b74_delete_image('${image}')`), false);
+    await db.exec(`update public.qmargin_b74_weekly_photos set featured = false where id = '${image}'`);
+    await db.exec(`insert into public.qmargin_b74_weekly_photos (id, week, media_id, title, alt)
+      values ('${file}', null, '${oldPhoto}', 'New featured photo', 'Older photo')`);
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 1);
+    await as("anon");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 0);
+    assert.deepEqual((await value("select public.qmargin_b74_home_photos()")).photos.map(photo => photo.id), [file]);
   } finally { await db.close(); }
 });

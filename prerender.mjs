@@ -13,7 +13,7 @@ const missingColumn = error => ["42703", "PGRST204"].includes(error.code);
 const missingTable = error => ["42P01", "PGRST205"].includes(error.code);
 const date = value => new Date(value).toLocaleDateString("en", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });
 const href = values => escape(pageHref(values));
-const photoDate = photo => photo.week === "1900-01-01" ? photo.created_at.slice(0, 10) : photo.week || photo.month;
+const photoDate = photo => photo.week && photo.week !== "1900-01-01" ? photo.week : photo.month || photo.created_at?.slice(0, 10) || "";
 
 export async function loadPublicSnapshot(config) {
   const files = new Map();
@@ -165,13 +165,14 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article">${membership}<h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
   }
   for (const photo of photos) {
-    page({ view: "photo", photo: photo.id }, photo.title, `<a class="back" href="./#week-photo">← Photo of the Week</a><article class="photo-detail"><h1>${escape(photo.title)}</h1><p class="meta">${date(photoDate(photo))}</p><div class="photo-detail-image photo-ready">${picture(photo.media_id, photo.alt)}</div></article>`, photo.alt || photo.title);
+    const taken = photoDate(photo);
+    page({ view: "photo", photo: photo.id }, photo.title, `<a class="back" href="./#featured-photo">← Featured Photo</a><article class="photo-detail"><h1>${escape(photo.title)}</h1>${taken ? `<p class="meta">${date(taken)}</p>` : ""}<div class="photo-detail-image photo-ready">${picture(photo.media_id, photo.alt)}</div></article>`, photo.alt || photo.title);
   }
   pages.set("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + [...pages.keys()].filter(file => file.endsWith(".html")).map(file => `<url><loc>${escape(new URL(file === "index.html" ? "./" : file, home).href)}</loc></url>`).join("") + "</urlset>\n");
   pages.set("robots.txt", "User-agent: *\nAllow: /\nSitemap: " + home + "sitemap.xml\n");
   for (const name of ["collections.html", "photo-essays.html"]) {
     pages.set(name, '<!doctype html><html lang="en"><meta charset="utf-8"><title>Archive — The Common Hours</title><meta http-equiv="refresh" content="0; url=archive.html"><p><a href="archive.html">Browse the archive</a></p></html>');
   }
-  pages.set("photos.html", '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Photo of the Week</title><meta http-equiv="refresh" content="0; url=./#week-photo"><p><a href="./#week-photo">Photo of the Week</a></p></html>');
+  pages.set("photos.html", '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Featured Photo</title><meta http-equiv="refresh" content="0; url=./#featured-photo"><p><a href="./#featured-photo">Featured Photo</a></p></html>');
   return pages;
 }

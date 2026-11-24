@@ -407,7 +407,7 @@ test("Comments includes published and pending comments and filters them independ
   assert.equal(comments.children[0].children[2].textContent, "Pending comment");
 });
 
-test("weekly photos can be removed from the slideshow without touching media", async () => {
+test("the homepage selection features photos without dates and can unfeature them without touching media", async () => {
   const nodes = new Map();
   function photoNode(tagName) {
     const node = element();
@@ -427,10 +427,10 @@ test("weekly photos can be removed from the slideshow without touching media", a
   query("files").files = [];
   const paths = [];
   let saved;
-  const photo = { id: "photo", media_id: "media", title: "A real photograph", alt: "Trees by the river", description: "", week: "2026-11-09", featured: true };
+  let added;
+  const photo = { id: "photo", media_id: "media", title: "A real photograph", alt: "Trees by the river", week: null, featured: true };
   const setup = runInNewContext(photosSource.replace(/^import[^\n]+\n/gm, "").replaceAll("export ", "") + "\nsetupPhotoTools", {
-    document: { querySelector: query, createElement: photoNode }, window: {}, confirm: () => true,
-    archivePhotoWeek: "1900-01-01", weekOf: () => "2026-11-16", journalToday: () => "2026-11-16",
+    document: { querySelector: query, createElement: photoNode }, confirm: () => true, crypto: { randomUUID: () => "new-photo" },
     allRows: (api, path) => api(path), loadImage: async () => null, imageSource: () => "", photoText: () => true,
     missingColumn: () => false, missingFeature: () => false,
     FormData: class { get(name) { return query(name).value; } has(name) { return Boolean(query(name).checked); } },
@@ -438,15 +438,22 @@ test("weekly photos can be removed from the slideshow without touching media", a
   const tools = setup(async (path, options) => {
     paths.push(path);
     if (options?.method === "PATCH") { saved = options.body; return [{ ...photo, ...saved }]; }
+    if (options?.method === "POST") { added = options.body[0]; return; }
     return [photo];
-  });
+  }, pick => pick({ id: "new-media", title: "New photo", alt: "A green hill" }));
   await tools.loadPhoto();
-  assert.match(paths[0], /week=eq\.2026-11-16&featured=eq\.true/);
-  query("#weekly-photos").children[0].children[0].fire("click");
+  assert.match(paths[0], /week=is\.null&featured=eq\.true/);
+  query("#featured-photos").children[0].children[0].fire("click");
   await form.fire("submit");
   assert.equal(saved.featured, undefined);
-  query("#remove-week-photo").fire("click");
-  assert.match(paths.at(-1), /weekly_photos\?.*&id=eq\.photo/);
+  query("#pick-featured-photo").fire("click");
+  await form.fire("submit");
+  assert.equal(added.week, null);
+  assert.equal(added.featured, true);
+  assert.equal(added.media_id, "new-media");
+  query("#featured-photos").children[0].children[0].fire("click");
+  query("#remove-featured-photo").fire("click");
+  assert.match(paths.at(-1), /weekly_photos\?week=is\.null&featured=eq\.true&id=eq\.photo/);
   assert.equal(saved.featured, false);
   assert.ok(paths.every(path => path.startsWith("weekly_photos?")));
 });

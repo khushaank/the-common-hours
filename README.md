@@ -31,16 +31,18 @@ automatic series numbers, and deletion in Entries and Media. Apply
 [`supabase/upgrade-private-drafts.sql`](supabase/upgrade-private-drafts.sql)
 next to preserve comments when entries are removed and enable private preview links.
 
-**Publish journal** also generates HTML for the journal, archive, photo details, public
-entries, and policies, plus `sitemap.xml`. These pages can be read without
+**Publish journal** also generates HTML for the journal, archive, series, photo
+details, public entries with approved comments, and policies, plus `sitemap.xml`.
+These pages can be read without
 JavaScript. Legacy query links redirect in the browser; new links use separate
 HTML pages so search engines and link previews receive the right content.
 GitHub Pages cannot redirect query strings on the server: HTML-only visitors
 must use the `.html` links. The archive has 15 entries per page and separate
 pages for years, months, and topics, all browsable without JavaScript.
-Search, the Photo of the Week slideshow, comments, and the contact form use JavaScript.
+The Featured Photo slideshow, full-text search, comment submission, and the
+contact form use JavaScript. The privacy page includes an email link.
 The HTML copy refreshes with each workflow run, including the six-hour schedule;
-the app continues to load current public data. Unpublishing an entry or photo
+the app continues to load current public data. Unpublishing an entry, comment, or photo
 also requires a successful **Publish journal** run to remove its HTML/image copy.
 Published attachments are copied as binary downloads with their original link
 labels as filenames. Only files readable with the public key and referenced by
@@ -77,9 +79,11 @@ after the existing security and desk upgrades before deploying this version.
 The upgrade enables publishing notes and retires the old editorial photo fields.
 The **Reader prompt** field is still available in **Publish settings**.
 
-In **Writing Desk → Photos**, upload or choose an image from **Media** to add it to
-**Photo of the Week**. Removing it from the week keeps the file in **Media**.
-Select the file in **Media** to delete it when it’s no longer in use.
+Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
+after the Notes and live review upgrades. It carries the current homepage photos
+over to the Featured Photo selection. In **Writing Desk → Photos**, upload or
+choose images from **Media** to feature them. They stay on the homepage until
+you unfeature them. Unfeatured photos stay in **Media**.
 
 The confirmed sample cleanup and its optional undo are saved as
 [`supabase/remove-confirmed-samples.sql`](supabase/remove-confirmed-samples.sql)

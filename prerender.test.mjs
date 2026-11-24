@@ -19,6 +19,7 @@ const photo = { id: imageId, media_id: imageId, title: '$& "A photograph"', alt:
 test("static pages contain readable content, public links, safe formatting, and distinct metadata", () => {
   const pages = renderPublicPages(template, {
     posts: [post], photos: [photo], files: new Map(),
+    comments: [{ post_id: post.id, display_name: "Reader", body: "Approved & visible" }],
     images: new Map([[imageId, { src: "media-" + imageId + ".jpg", width: 800, height: 600 }]]),
   });
   const article = pages.get("entry-first-entry.html");
@@ -29,11 +30,13 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.match(article, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(article, /<script>alert/);
   assert.match(article, /href="entry-first-entry.html"/);
+  assert.match(article, /<h2>Comments<\/h2>[\s\S]+Approved &amp; visible/);
+  assert.doesNotMatch(article, /id="comment-form"/);
   for (const name of ["index", "archive", "start", "topics"]) assert.match(pages.get(name + ".html"), /href="entry-first-entry.html"/);
   assert.match(pages.get("privacy.html"), /<h1>Privacy<\/h1>/);
   assert.match(pages.get("privacy.html"), /What the journal collects/);
   assert.match(pages.get("terms.html"), /<h1>Terms<\/h1>/);
-  assert.match(pages.get("photos.html"), /url=\.\/#week-photo/);
+  assert.match(pages.get("photos.html"), /url=\.\/#featured-photo/);
   assert.doesNotMatch(pages.get("sitemap.xml"), /\/(photos|collections|photo-essays)\.html/);
   assert.doesNotMatch(pages.get("photo-" + imageId + ".html"), /The description/);
   const canonicals = [];
@@ -44,7 +47,7 @@ test("static pages contain readable content, public links, safe formatting, and 
     assert.match(html, /aria-busy="false" data-prerendered="true"/);
     const published = html.match(/<div class="published-copy">([\s\S]*?)<\/div>\s*<p class="loading/)[1];
     assert.doesNotMatch(published, /Loading (?:journal|photos|image)…/);
-    assert.match(html, /data-refresh-pending=""/);
+    assert.doesNotMatch(html, /data-refresh-pending=""/);
     assert.match(html, /data-skeleton="/);
     const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
     assert.equal(new Set(ids).size, ids.length, name + " has duplicate IDs");
@@ -62,6 +65,7 @@ test("a failed live refresh preserves the published copy and exposes retry", asy
   const content = { dataset: { prerendered: "true" }, setAttribute: (_, value) => { busy = value; }, after: value => { status = value; } };
   await runInNewContext(load + "\nload()", {
     content,
+    location: { search: "" },
     document: { querySelector: () => null, createElement: () => ({}) },
     start: async () => { throw new Error("Network unavailable"); },
     showFailure: (element, message, action) => { assert.equal(element, status); assert.match(message, /still read this published copy/); retry = action; },
@@ -197,9 +201,12 @@ test("series articles show membership before the title and keep links in part or
   const standalone = { ...post, id: "four", slug: "standalone" };
   const pages = renderPublicPages(template, { posts: [second, unnumbered, standalone, first], photos: [], images: new Map(), files: new Map() });
   const article = pages.get("entry-first-entry.html");
-  assert.match(article, /class="article-series">Part 1 of the series <a href="\.\/\?series=Making\+you\+dream\+big\+%26\+bold">Making you dream big &amp; bold<\/a><\/p><h1>/);
+  const [, seriesAnchor] = article.match(/class="article-series">Part 1 of the series <a href="series\.html#(series-[\w-]+)">Making you dream big &amp; bold<\/a><\/p><h1>/);
   assert.match(article, /href="entry-second-part\.html">Next in the series · Second part/);
-  assert.match(article, /href="\.\/\?series=Making\+you\+dream\+big\+%26\+bold">See the full series/);
+  assert.ok(article.includes('href="series.html#' + seriesAnchor + '">See the full series'));
+  const directory = pages.get("series.html");
+  assert.ok(directory.includes('id="' + seriesAnchor + '"'));
+  assert.ok(directory.indexOf("entry-first-entry.html") < directory.indexOf("entry-second-part.html"));
   assert.match(pages.get("entry-older-part.html"), /class="article-series">Part of the series/);
   assert.doesNotMatch(pages.get("entry-standalone.html"), /class="(?:article-series|series-navigation)"/);
 });
@@ -225,6 +232,7 @@ test("published attachments become binary direct downloads without exposing cred
       return new Response("Published PDF bytes");
     }
     if (address.includes("_posts?")) return Response.json([{ ...post, body: markdownMarker + '[Guide.pdf](attachment:' + imageId + ' "A guide")' }]);
+    if (address.includes("_comments?")) return Response.json([]);
     return Response.json({ code: "PGRST205" }, { status: 404 });
   });
   const snapshot = await loadPublicSnapshot({ origin: "https://example.com", key: "public" });
@@ -297,7 +305,7 @@ test("the initial route script matches its CSP hash and handles direct and legac
 
 test("legacy section URLs redirect to canonical pages while retaining filters and contact anchors", () => {
   const script = initialRouteScript;
-  for (const view of ["archive", "topics", "photos", "start", "privacy", "terms", "collections", "photo-essays", "review", "https://bad.example"]) {
+  for (const view of ["archive", "topics", "photos", "start", "series", "privacy", "terms", "collections", "photo-essays", "review", "https://bad.example"]) {
     const url = new URL("https://commonhours.qd.je/?view=" + encodeURIComponent(view) + "&year=2026#contact");
     let redirected;
     const location = { href: url.href, search: url.search, pathname: url.pathname, hash: url.hash, replace: address => { redirected = address; } };
@@ -316,12 +324,18 @@ test("the build only reads public data, paginates, supports older schemas, and f
       if (url.searchParams.get("select").includes("is_note")) return Response.json({ code: "42703" }, { status: 400 });
       return Response.json(Number(url.searchParams.get("offset")) === 0 ? Array.from({ length: 100 }, (_, id) => ({ ...post, id, body: "Plain text" })) : [{ ...post, body: "Plain text" }]);
     }
+    if (url.pathname.endsWith("_comments")) {
+      assert.equal(url.searchParams.get("approved"), "eq.true");
+      assert.equal(url.searchParams.get("select"), "post_id,display_name,body");
+      return Response.json([{ post_id: post.id, display_name: "Reader", body: "Approved comments" }]);
+    }
     return Response.json({ code: "PGRST205" }, { status: 404 });
   });
   const snapshot = await loadPublicSnapshot({ origin: "https://example.com", key: "public" });
   assert.equal(snapshot.posts.length, 101);
   assert.equal(snapshot.photos.length, 0);
-  assert.ok(calls.every(url => /_(posts|weekly_photos|photos)$/.test(url.pathname)));
+  assert.equal(snapshot.comments.length, 1);
+  assert.ok(calls.every(url => /_(posts|weekly_photos|photos|comments)$/.test(url.pathname)));
   t.mock.method(globalThis, "fetch", async () => Response.json({ code: "unavailable" }, { status: 503 }));
   await assert.rejects(loadPublicSnapshot({ origin: "https://example.com", key: "public" }), /Could not pre-render/);
 });

@@ -1,6 +1,7 @@
 -- Apply after upgrade-notes-and-photos.sql and live-review-links.sql.
 begin;
 set local lock_timeout = '5s';
+lock table public.qmargin_b74_weekly_photos in access exclusive mode;
 
 -- An undated row belongs to the homepage selection. Keep other dated photos at their old addresses.
 do $$
