@@ -188,7 +188,7 @@ test("entry type and status combine with search, and the Notes screen only shows
   assert.deepEqual(posts.map(post => post.id), ["one", "two", "three"]);
 });
 
-test("entry arrows move focus and save the selected row without intercepting form controls", () => {
+test("entry arrows and mouse movement share one saved selection without intercepting form controls", () => {
   const document = element();
   const panel = element();
   const stored = new Map();
@@ -199,10 +199,11 @@ test("entry arrows move focus and save the selected row without intercepting for
     focus() { document.activeElement = this; },
   }));
   document.querySelector = selector => selector === "#entries-panel" ? panel : null;
-  const postList = {
+  const postList = Object.assign(element(), {
     querySelector: () => rows.find(row => row["aria-current"]),
     querySelectorAll: () => rows,
-  };
+    contains: node => rows.includes(node),
+  });
   runInNewContext(deskSource.slice(deskSource.indexOf("function rememberEntry("), deskSource.indexOf("function entryIcon(")), {
     document, postList, draftOwner: "editor", selectedEntry: undefined, selectedEntryKey: () => "entry-selection",
     localStorage: { setItem: (key, value) => stored.set(key, value) },
@@ -216,6 +217,12 @@ test("entry arrows move focus and save the selected row without intercepting for
   assert.equal(document.activeElement, rows[1]);
   assert.equal(stored.get("entry-selection"), "second");
   press("ArrowUp", { matches: () => false, closest: () => true });
+  assert.equal(document.activeElement, rows[1]);
+  postList.dispatchEvent({ type: "pointermove", pointerType: "mouse", target: { closest: () => rows[2] } });
+  assert.equal(document.activeElement, rows[2]);
+  assert.equal(stored.get("entry-selection"), "third");
+  assert.deepEqual(rows.filter(row => row["aria-current"]), [rows[2]]);
+  press("ArrowUp");
   assert.equal(document.activeElement, rows[1]);
   press("ArrowUp");
   assert.equal(document.activeElement, rows[0]);
@@ -250,6 +257,7 @@ test("layout keeps publishing settings opt-in and exposes one draft action", asy
     assert.ok(html.includes('id="' + id + '"'), id);
   }
   assert.match(html, /<section[^>]+id="entry-details"[^>]+hidden>/);
+  assert.match(html, /id="entry-type"[^>]*><option value="articles" selected>Articles/);
   assert.equal(html.match(/value="draft" formnovalidate/g).length, 1);
   assert.match(html, /class="editor-mode[^"]*"[^>]*>[\s\S]*?id="preview-mode" aria-pressed="true"[\s\S]*?id="edit-entry-settings"/);
   assert.doesNotMatch(html, /name="(?:paired_photo|photo_essay|collection|collection_intro)"|id="entry-actions"/);

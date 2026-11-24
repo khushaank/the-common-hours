@@ -1,6 +1,6 @@
-import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage } from "./common.js";
+import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage, showFailure } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { photoText, publicPhoto } from "./photo-text.js";
+import { photoText, photoTitle, publicPhoto } from "./photo-text.js";
 
 const weeklyFields = "id,week,media_id,title,alt,created_at";
 const legacyFields = "month,media_id,alt,caption";
@@ -48,6 +48,7 @@ export async function startSlideshow(get, demo) {
   const figure = document.querySelector("#week-photo");
   const picture = figure.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
+  const status = document.querySelector("#featured-photo-status");
   const nextButton = figure.querySelector("#slide-next");
   const count = figure.querySelector("#slide-count");
   const slide = figure.querySelector(".slide");
@@ -59,12 +60,24 @@ export async function startSlideshow(get, demo) {
   let requestedIndex = 0;
   const images = new Map();
 
+  if (!photoTitle(caption.textContent)) {
+    caption.textContent = "";
+    caption.setAttribute("aria-busy", "true");
+  }
+  status.hidden = true;
+
+  function photoFailure(message, retry) {
+    figure.removeAttribute("aria-busy");
+    caption.removeAttribute("aria-busy");
+    status.hidden = false;
+    showFailure(status, message, retry);
+  }
+
   let photos;
   try {
     photos = demo ? [cover] : await featurePhotos(get);
   } catch {
-    figure.removeAttribute("aria-busy");
-    if (!picture.hasAttribute("src")) caption.textContent = "Photo could not load. Refresh to try again.";
+    photoFailure("Featured photos could not load.", () => startSlideshow(get, demo));
     return;
   }
   if (!photos.length) photos.push(cover);
@@ -91,9 +104,10 @@ export async function startSlideshow(get, demo) {
   async function show(next) {
     clearTimeout(timer);
     const loading = ++revision;
-    requestedIndex = (next + photos.length) % photos.length;
+    requestedIndex = (next % photos.length + photos.length) % photos.length;
     const target = requestedIndex;
     const photo = photos[target];
+    status.hidden = true;
     let data;
     try {
       data = await prepare(photo);
@@ -114,10 +128,9 @@ export async function startSlideshow(get, demo) {
       }
     } catch {
       if (loading !== revision) return;
-      if (picture.hasAttribute("src")) { schedule(); return; }
-      if (next < photos.length - 1) { await show(next + 1); return; }
-      figure.removeAttribute("aria-busy");
-      caption.textContent = "Photo could not load. Refresh to try again.";
+      if (!picture.hasAttribute("src") && next < photos.length - 1) { await show(next + 1); return; }
+      photoFailure("This photo could not load.", () => show(target));
+      nextButton.hidden = figure.hidden || photos.length < 2;
       return;
     }
     if (loading !== revision) return;
@@ -129,7 +142,8 @@ export async function startSlideshow(get, demo) {
     if (data.src !== picture.getAttribute("src")) picture.src = data.src;
     figure.hidden = false;
     figure.removeAttribute("aria-busy");
-    caption.textContent = details.title;
+    caption.removeAttribute("aria-busy");
+    caption.textContent = photoTitle(photo.title);
     count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
     nextButton.hidden = photos.length < 2;
     if (photos.length > 1) void prepare(photos[(index + 1) % photos.length]).catch(() => {});
@@ -191,10 +205,13 @@ async function showImage(get, picture, photo) {
     }
     frame.classList.add("photo-ready");
   } catch {
-    const unavailable = document.createElement("span");
+    const unavailable = document.createElement("div");
     unavailable.className = "photo-unavailable";
-    unavailable.textContent = "Photo unavailable";
     frame.replaceChildren(unavailable);
+    showFailure(unavailable, "This photo could not load.", () => {
+      frame.replaceChildren(picture);
+      return showImage(get, picture, photo);
+    });
   }
 }
 

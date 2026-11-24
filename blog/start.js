@@ -1,3 +1,9 @@
+import { showFailure, watchUnexpectedErrors } from "./feedback.js";
+import { setupShortcuts } from "./keyboard.js";
+import { pageHref, pageParams } from "./page-url.js";
+
+watchUnexpectedErrors("Part of the journal ran into a problem. You can keep reading or reload the page.");
+
 document.addEventListener("contextmenu", event => {
   if (event.target.closest("img")) event.preventDefault();
 });
@@ -5,8 +11,6 @@ document.addEventListener("contextmenu", event => {
 document.addEventListener("dragstart", event => {
   if (event.target.closest("a, img")) event.preventDefault();
 });
-
-import { pageHref, pageParams } from "./page-url.js";
 
 const route = pageParams();
 if (location.search) {
@@ -20,19 +24,21 @@ import("./journal.js").catch(() => {
   if (!content) return;
   delete content.dataset.refreshPending;
   content.setAttribute("aria-busy", "false");
-  const message = document.createElement("p");
-  message.setAttribute("role", "alert");
-  message.textContent = "The journal could not start. Reload to try again.";
-  const retry = document.createElement("button");
-  retry.type = "button";
-  retry.className = "quiet-button";
-  retry.textContent = "Reload";
-  retry.addEventListener("click", () => location.reload());
-  if (content.dataset.prerendered) content.append(message, retry);
-  else content.replaceChildren(message, retry);
+  const status = document.createElement("div");
+  if (content.dataset.prerendered) content.append(status);
+  else content.replaceChildren(status);
+  showFailure(status, "The journal could not start. Reload to try again.", () => location.reload(), "Reload");
 });
 
 setupSearch();
+const activate = selector => () => document.querySelector(selector).click();
+setupShortcuts("Journal shortcuts", [
+  ["Alt + K", "Open journal search", activate("#search-link")],
+  ["Alt + J", "Go to the journal", activate("#journal-link")],
+  ["Alt + A", "Browse the archive", activate("#archive-link")],
+  ["Alt + T", "Back to top", activate(".back-to-top")],
+  ["← / →", "Change photos while the carousel is focused"],
+]);
 document.documentElement.setAttribute("data-interactive", "");
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
   const register = () => void navigator.serviceWorker.register("./static-cache.js", { updateViaCache: "none" }).catch(() => {});
@@ -78,7 +84,7 @@ function setupSearch() {
         const entries = await findEntries(term);
         if (current === revision) results.innerHTML = searchCards(entries);
       } catch {
-        if (current === revision) results.textContent = "Search is unavailable. Try again.";
+        if (current === revision) showFailure(results, "Search could not load.", () => updateSearch(0));
       } finally {
         if (current === revision) results.removeAttribute("aria-busy");
       }

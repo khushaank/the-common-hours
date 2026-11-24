@@ -1,4 +1,4 @@
-import { allRows, imageSource, missingFeature } from "./common.js";
+import { allRows, imageSource, missingFeature, showFailure } from "./common.js";
 import { loadImage, uploadImage } from "./editor-tools.js";
 import { photoText } from "./photo-text.js";
 
@@ -81,6 +81,7 @@ export function setupPhotoTools(api, openLibrary) {
     const loading = ++revision;
     clear.disabled = true;
     if (!preserve) edit();
+    status.textContent = "";
     ready = false;
     count.textContent = "Loading…";
     list.setAttribute("aria-busy", "true");
@@ -118,7 +119,7 @@ export function setupPhotoTools(api, openLibrary) {
       if (loading !== revision) return;
       list.replaceChildren();
       count.textContent = "";
-      status.textContent = missingFeature(error) ? upgradeMessage : error.message;
+      showFailure(status, missingFeature(error) ? upgradeMessage : "Featured photos could not load.", () => loadPhoto({ preserve: true }));
     } finally {
       if (loading === revision) {
         list.removeAttribute("aria-busy");

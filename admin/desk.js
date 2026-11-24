@@ -3,6 +3,7 @@ import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker
 import { entryTags } from "./text.js";
 import { entryExcerpt, isSupportedImage, setupEditorTools, uploadImage } from "./editor-tools.js";
 import { setupPhotoTools } from "./photo-tools.js";
+import { setupShortcuts } from "./keyboard.js";
 
 if (window.top !== window.self) {
   document.body.replaceChildren();
@@ -23,6 +24,7 @@ const editor = document.querySelector("#editor");
 const desk = document.querySelector("#desk");
 const status = document.querySelector("#status");
 const postList = document.querySelector("#posts");
+const entryStatus = document.querySelector("#entry-status");
 const comments = document.querySelector("#comments");
 const refreshComments = document.querySelector("#refresh-comments");
 const newPost = document.querySelector("#new-post");
@@ -362,7 +364,7 @@ async function run(button, action) {
     await action();
     if (status.textContent === "Working…") status.textContent = "";
   } catch (error) {
-    status.textContent = error.code === "23505" ? "That URL slug is already in use." : error.message;
+    status.textContent = error?.code === "23505" ? "That URL slug is already in use." : error?.message || "The action could not be completed. Try again.";
   } finally {
     busy = false;
     editor.inert = false;
@@ -436,6 +438,26 @@ function rememberEntry(id) {
   try { localStorage.setItem(selectedEntryKey(), id || ""); } catch { /* Selection also works without storage. */ }
 }
 
+function selectEntry(button) {
+  if (!button || selectedEntry === button.dataset.entryId) return;
+  rememberEntry(button.dataset.entryId);
+  for (const row of postList.querySelectorAll(".entry-open")) {
+    if (row === button) row.setAttribute("aria-current", "true");
+    else row.removeAttribute("aria-current");
+    row.tabIndex = row === button ? 0 : -1;
+  }
+}
+
+postList.addEventListener("focusin", event => selectEntry(event.target.closest(".entry-open")));
+postList.addEventListener("pointermove", event => {
+  const button = event.pointerType === "mouse" && event.target.closest(".entry-open");
+  if (!button || selectedEntry === button.dataset.entryId) return;
+  selectEntry(button);
+  if (postList.contains(document.activeElement) && document.activeElement.matches(".entry-open")) {
+    button.focus({ preventScroll: true });
+  }
+});
+
 document.addEventListener("keydown", event => {
   if (document.querySelector("#entries-panel").hidden || event.defaultPrevented || event.altKey || event.ctrlKey ||
       event.metaKey || event.shiftKey || !["ArrowDown", "ArrowUp"].includes(event.key)) return;
@@ -445,16 +467,11 @@ document.addEventListener("keydown", event => {
   const rows = [...postList.querySelectorAll(".entry-open")];
   if (!rows.length) return;
   event.preventDefault();
-  const index = rows.indexOf(target.matches(".entry-open") ? target : postList.querySelector(".entry-open[aria-current]"));
+  const index = rows.findIndex(row => row.dataset.entryId === selectedEntry);
   const next = index === -1 ? (event.key === "ArrowDown" ? 0 : rows.length - 1) :
     Math.max(0, Math.min(rows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)));
   const button = rows[next];
-  rememberEntry(button.dataset.entryId);
-  for (const row of rows) {
-    if (row === button) row.setAttribute("aria-current", "true");
-    else row.removeAttribute("aria-current");
-    row.tabIndex = row === button ? 0 : -1;
-  }
+  selectEntry(button);
   button.focus({ preventScroll: true });
   button.scrollIntoView({ block: "nearest" });
 });
@@ -531,6 +548,7 @@ function shareEntry(post, button) {
 
 function editEntry(post, button) {
   if (busy || !canLeaveDraft()) return;
+  if (button?.dataset.entryId) selectEntry(button);
   run(button, async () => {
     if (post.id !== editingId()) {
       if (post.local) {
@@ -783,15 +801,26 @@ async function loadPosts() {
   renderPostList();
 }
 
+async function refreshEntries() {
+  try {
+    await loadPosts();
+    entryStatus.replaceChildren();
+  } catch {
+    if (listVisible()) showFailure(entryStatus, "The entry list could not refresh.", refreshEntries);
+    return false;
+  }
+  return true;
+}
+
 document.querySelector("#refresh-entries").addEventListener("click", event => run(event.currentTarget, async () => {
-  await loadPosts();
+  if (!await refreshEntries()) return;
   const button = selectedEntryButton();
   button?.focus({ preventScroll: true });
   button?.scrollIntoView({ block: "nearest" });
 }));
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && session && !busy) void loadPosts().catch(() => {});
+  if (!document.hidden && session && !busy) void refreshEntries();
 });
 
 async function loadComments() {
@@ -1207,42 +1236,68 @@ const referenceForm = document.querySelector("#reference-form");
 const referenceList = document.querySelector("#reference-list");
 const referenceStatus = document.querySelector("#reference-status");
 const referenceEmpty = document.querySelector("#reference-empty");
+const addReference = document.querySelector("#add-reference");
 const cancelReference = document.querySelector("#cancel-reference");
 const saveReference = referenceForm.querySelector('[type="submit"]');
 let editingReference;
-document.querySelector("#first-reference").addEventListener("click", () => referenceForm.elements.namedItem("alias").focus());
 
-function editReference(reference) {
+function referenceUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:" && !url.username && !url.password) return url;
+  } catch { /* Invalid URLs remain plain text in the list. */ }
+}
+
+function editReference(reference, open = Boolean(reference)) {
   editingReference = reference;
   referenceForm.reset();
+  referenceForm.hidden = !open;
+  addReference.setAttribute("aria-expanded", String(open));
+  document.querySelector("#reference-form-title").textContent = reference ? "Edit reference" : "New reference";
   referenceForm.elements.namedItem("alias").readOnly = Boolean(reference);
   if (reference) {
     for (const name of ["alias", "label", "url"]) referenceForm.elements.namedItem(name).value = reference[name];
-    referenceForm.elements.namedItem("label").focus();
   }
-  cancelReference.hidden = !reference;
+  if (open) referenceForm.elements.namedItem(reference ? "label" : "alias").focus();
 }
-cancelReference.addEventListener("click", () => editReference());
+addReference.addEventListener("click", () => {
+  if (referenceForm.hidden) editReference(undefined, true);
+  else referenceForm.elements.namedItem(editingReference ? "label" : "alias").focus();
+});
+cancelReference.addEventListener("click", () => { editReference(); addReference.focus(); });
 
 async function loadReferences() {
   const revision = ++referencesRevision;
   try {
     const rows = await allRows(api, "references?select=alias,label,url&order=alias");
-    if (revision !== referencesRevision) return;
+    if (revision !== referencesRevision) return false;
     references = rows;
     referenceStatus.textContent = "";
     referenceEmpty.hidden = references.length > 0;
     referenceList.replaceChildren(...references.map(reference => {
       const item = document.createElement("li");
       const label = document.createElement("strong");
-      const url = document.createElement("small");
-      label.textContent = "@" + reference.alias + " · " + reference.label;
+      const alias = document.createElement("code");
+      const details = document.createElement("div");
+      details.className = "reference-details";
+      label.textContent = reference.label;
+      alias.textContent = "@" + reference.alias;
+      const address = referenceUrl(reference.url);
+      const url = document.createElement(address ? "a" : "small");
+      if (address) {
+        url.href = address.href;
+        url.target = "_blank";
+        url.rel = "noopener noreferrer";
+      }
       url.textContent = reference.url;
+      details.append(label, alias, url);
       const edit = document.createElement("button");
       const remove = document.createElement("button");
       edit.type = remove.type = "button";
       edit.textContent = "Edit";
       remove.textContent = "Delete";
+      edit.setAttribute("aria-label", "Edit @" + reference.alias);
+      remove.setAttribute("aria-label", "Delete @" + reference.alias);
       edit.addEventListener("click", () => editReference(reference));
       remove.addEventListener("click", () => {
         if (!confirm("Delete @" + reference.alias + " from References?")) return;
@@ -1252,14 +1307,19 @@ async function loadReferences() {
           await loadReferences();
         });
       });
-      item.append(label, url, edit, remove);
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actions.append(edit, remove);
+      item.append(details, actions);
       return item;
     }));
+    return true;
   } catch (error) {
     if (revision === referencesRevision) {
       referenceEmpty.hidden = true;
-      referenceStatus.textContent = missingFeature(error) ? "Apply the writing desk workflow SQL to enable References." : "References could not load.";
+      showFailure(referenceStatus, missingFeature(error) ? "Apply the writing desk workflow SQL to enable References." : "References could not load.", loadReferences);
     }
+    return false;
   }
 }
 
@@ -1267,9 +1327,10 @@ referenceForm.addEventListener("submit", async event => {
   event.preventDefault();
   const fields = Object.fromEntries(new FormData(referenceForm));
   saveReference.disabled = cancelReference.disabled = true;
+  referenceForm.inert = true;
   try {
-    const url = new URL(fields.url.trim());
-    if (url.protocol !== "https:" || url.username || url.password) throw new Error("Enter an HTTPS URL.");
+    const url = referenceUrl(fields.url.trim());
+    if (!url) throw new Error("Enter an HTTPS URL.");
     const body = { label: fields.label.trim(), url: url.href };
     const alias = fields.alias.trim().toLowerCase();
     if (!body.label) throw new Error("Enter link text.");
@@ -1278,11 +1339,11 @@ referenceForm.addEventListener("submit", async event => {
       body: editingReference ? body : { ...body, alias },
     });
     editReference();
-    await loadReferences();
-    referenceStatus.textContent = "Reference saved.";
+    addReference.focus();
+    if (await loadReferences()) referenceStatus.textContent = "Reference saved.";
   } catch (error) {
-    referenceStatus.textContent = error.code === "23505" ? "That shortcut already exists. Select Edit to change it." : error.message;
-  } finally { saveReference.disabled = cancelReference.disabled = false; }
+    referenceStatus.textContent = error?.code === "23505" ? "That shortcut already exists. Select Edit to change it." : error?.message || "The reference could not be saved. Try again.";
+  } finally { referenceForm.inert = saveReference.disabled = cancelReference.disabled = false; }
 });
 
 search.addEventListener("input", renderPostList);
@@ -1424,7 +1485,7 @@ async function openStats() {
     stats ??= setupStats(api, () => posts, editEntry);
     await stats.load();
   } catch {
-    document.querySelector("#stats-status").textContent = "Dashboard could not open. Try again.";
+    showFailure(document.querySelector("#stats-status"), "The dashboard could not open.", openStats);
   }
 }
 
@@ -1450,7 +1511,7 @@ async function openMedia() {
     });
     await media.load();
   } catch {
-    document.querySelector("#media-status").textContent = "Media could not open. Try again.";
+    showFailure(document.querySelector("#media-status"), "Media could not open.", openMedia);
   }
 }
 
@@ -1504,6 +1565,18 @@ for (const button of sections) {
     openSection(section, true);
   });
 }
+
+const listVisible = () => !document.querySelector("#entries-panel").hidden;
+setupShortcuts("Writing Desk shortcuts", [
+  ["Alt + I", "Go to Entries", () => document.querySelector('[data-section="entries"]').click()],
+  ["Alt + O", "Go to Notes", () => document.querySelector('[data-section="notes"]').click()],
+  ["Alt + N", "New article from Entries", () => newPost.click(), () => listVisible() && !newPost.hidden],
+  ["Alt + M", "New note from the list", () => newNote.click(), listVisible],
+  ["Alt + K", "Search the current list", () => search.focus(), listVisible],
+  ["Alt + S", "Save the current draft", () => draftButton.click(), () => document.body.classList.contains("writing") && !draftButton.disabled],
+  ["↑ / ↓, then Enter", "Select and open an entry from the list"],
+  ["/ or @", "Find insert commands or references in the article editor"],
+], () => !desk.hidden && !busy, deskMenu);
 
 document.querySelector("#desk-logout").addEventListener("click", event => {
   if (busy) return;

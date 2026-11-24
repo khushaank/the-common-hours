@@ -372,5 +372,10 @@ async function load() {
   }
 }
 
-if (isJournal) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {});
+if (isJournal) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {
+  document.querySelector("#photo-caption")?.removeAttribute("aria-busy");
+  const status = document.querySelector("#featured-photo-status");
+  status.hidden = false;
+  showFailure(status, "Featured Photo could not start.", () => location.reload(), "Reload");
+});
 void load();

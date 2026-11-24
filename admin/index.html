@@ -10,6 +10,7 @@
 <link rel="icon" href="logo.png" type="image/png" sizes="256x256">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="scrollbars.css">
+<link rel="stylesheet" href="interface.css">
 <link rel="modulepreload" href="desk.js">
 <script type="module" src="desk-start.js"></script>
 </head>
@@ -62,6 +63,7 @@
       <button type="button" aria-pressed="false" data-section="references" aria-label="References" title="References"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7m2.2 6.8a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span class="nav-label">References</span></button>
       <button type="button" aria-pressed="false" data-section="comments" aria-label="Comments" title="Comments"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Comments</span></button>
       <button type="button" aria-pressed="false" data-section="inbox" aria-label="Inbox" title="Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Inbox</span></button>
+      <button type="button" id="keyboard-shortcuts" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-controls="shortcut-dialog" aria-keyshortcuts="Control+/ Meta+/" title="Keyboard shortcuts (Ctrl+/)" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1-1.3 1.9m0 3h.01"/></svg><span class="nav-label">Shortcuts</span></button>
       <button type="button" id="desk-logout" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M8 12h13m-5-5 5 5-5 5"/></svg><span class="nav-label">Log out</span></button>
       <svg class="rail-landscape" viewBox="0 0 220 250" fill="none" stroke="currentColor" stroke-width=".8" aria-hidden="true">
         <path d="M-10 180Q43 164 90 183T230 178M-10 187Q43 171 90 190T230 185M-10 194Q43 178 90 197T230 192M-10 201Q43 185 90 204T230 199M-10 208Q43 192 90 211T230 206M-10 215Q43 199 90 218T230 213M-10 222Q43 206 90 225T230 220M-10 229Q43 213 90 232T230 227M-10 236Q43 220 90 239T230 234M80 184q8-54 1-106m-1 70-30-38m32 22 35-44M81 115 65 80m16 21 22-32M79 139l-13-37m18 48 24-32"/>
@@ -80,11 +82,12 @@
             <div class="entry-list-tools">
               <input id="find-entry" type="search" aria-label="Find an entry" placeholder="Search entries…" autocomplete="off">
               <div class="entry-list-filters">
-                <select id="entry-type" aria-label="Filter by type"><option value="all">All types</option><option value="articles">Articles</option><option value="notes">Notes</option></select>
+                <select id="entry-type" aria-label="Filter by type"><option value="articles" selected>Articles</option><option value="all">All types</option><option value="notes">Notes</option></select>
                 <select id="entry-filter" aria-label="Filter by status"><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Drafts</option></select>
               </div>
               <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh</button></div>
             </div>
+            <div id="entry-status"></div>
             <ul id="posts" aria-label="Entries"></ul>
           </div>
         </div>
@@ -192,7 +195,7 @@
               <button type="button" id="remove-featured-photo">Unfeature photo</button>
             </div>
           </div>
-          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Feature photos</button><p id="photo-status" role="status"></p></div>
+          <div class="actions"><button class="primary" type="submit" id="save-photo" disabled>Feature photos</button><div id="photo-status" role="status"></div></div>
           </div>
           <section class="featured-selection" aria-labelledby="featured-selection-title">
             <div class="body-heading"><div class="help-row"><h2 id="featured-selection-title">On the homepage</h2><span class="field-help"><button type="button" aria-label="Help with featured photos" aria-describedby="photo-remove-help">i</button><span id="photo-remove-help" role="tooltip">Photos stay featured until you remove them. Unfeatured photos stay in Media.</span></span></div><div class="actions"><small id="featured-count"></small><button type="button" id="clear-slideshow" disabled>Clear selection</button></div></div>
@@ -210,24 +213,28 @@
               <option value="pdf">PDFs</option><option value="document">Documents</option><option value="file">Other files</option>
             </select></label>
           </div>
-          <p id="media-status" role="status"></p>
+          <div id="media-status" role="status"></div>
           <div id="media-results" class="library-grid"></div>
           <button type="button" id="media-more" hidden>Show more</button>
         </div>
       </section>
       <section id="references-panel" data-desk-panel hidden>
-        <div class="section-heading"><div class="help-row"><h1>References</h1><span class="field-help"><button type="button" aria-label="Help with References" aria-describedby="reference-help">i</button><span id="reference-help" role="tooltip">Save links to external sites or specific public pages. Type @ in the entry body to find a saved shortcut or published entry.</span></span></div></div>
-        <form id="reference-form" class="card">
+        <div class="section-heading"><div class="help-row"><h1>References</h1><span class="field-help"><button type="button" aria-label="Help with References" aria-describedby="reference-help">i</button><span id="reference-help" role="tooltip">Save links to external sites or specific public pages. Type @ in the entry body to find a saved shortcut or published entry.</span></span></div><button type="button" class="primary" id="add-reference" aria-controls="reference-form" aria-expanded="false">Add reference</button></div>
+        <form id="reference-form" class="card reference-editor" aria-labelledby="reference-form-title" hidden>
+          <h2 id="reference-form-title">New reference</h2>
           <div class="fields">
-            <label>Shortcut <input name="alias" placeholder="harvey" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
-            <label>Link text <input name="label" placeholder="Harvey" maxlength="120" required></label>
+            <label>Shortcut <input name="alias" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
+            <label>Link text <input name="label" maxlength="120" required></label>
             <label>Link URL <input name="url" type="url" placeholder="https://" maxlength="2000" required></label>
           </div>
-          <div class="actions"><button type="submit" class="primary">Save reference</button><button type="button" id="cancel-reference" hidden>Cancel edit</button></div>
+          <div class="actions"><button type="submit" class="primary">Save reference</button><button type="button" id="cancel-reference">Cancel</button></div>
         </form>
-        <p id="reference-status" role="status"></p>
-        <div id="reference-empty" class="reference-empty" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7m2.2 6.8a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><h2>Add your first reference</h2><button type="button" id="first-reference">Add a shortcut</button></div>
-        <ul id="reference-list"></ul>
+        <div id="reference-status" role="status"></div>
+        <section class="card reference-directory" aria-labelledby="saved-references-title">
+          <h2 id="saved-references-title">Saved references</h2>
+          <p id="reference-empty" class="muted" hidden>Add a reference to use it in the editor.</p>
+          <ul id="reference-list"></ul>
+        </section>
       </section>
       <section id="stats-panel" data-desk-panel hidden>
         <div class="section-heading">
@@ -239,7 +246,7 @@
           <section class="card stats-metric"><span>Days since publishing</span><strong id="publishing-age">-</strong><small id="publishing-note"></small></section>
           <section class="card stats-metric"><span>Busiest day</span><strong id="active-day">-</strong><small id="active-day-note">Loading activity…</small></section>
         </div>
-        <p id="stats-status" role="status"></p>
+        <div id="stats-status" role="status"></div>
         <div id="stats-report"></div>
       </section>
       <section id="comments-panel" data-desk-panel hidden>

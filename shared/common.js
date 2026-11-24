@@ -95,19 +95,4 @@ export async function listAttachments(token) {
 // Monday and display their actual upload date instead.
 export const archivePhotoWeek = "1900-01-01";
 
-export function showFailure(element, message, retry) {
-  const text = document.createElement("p");
-  text.setAttribute("role", "alert");
-  text.textContent = message;
-  element.replaceChildren(text);
-  if (!retry) return;
-  const button = document.createElement("button");
-  button.className = "quiet-button";
-  button.type = "button";
-  button.textContent = "Try again";
-  button.addEventListener("click", () => {
-    button.disabled = true;
-    retry();
-  });
-  element.append(button);
-}
+export { showFailure } from "./feedback.js";

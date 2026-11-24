@@ -5,7 +5,7 @@ import { notice, terms } from "./blog/legal-content.js";
 import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, renderTopics } from "./shared/archive.js";
 import { seriesDirectory, seriesMembership, seriesNavigation } from "./shared/series.js";
 import { startIntroduction, startEmpty } from "./blog/reading-copy.js";
-import { photoText, publicPhoto } from "./shared/photo-text.js";
+import { photoText, photoTitle, publicPhoto } from "./shared/photo-text.js";
 
 const home = "https://commonhours.qd.je/";
 export const generatedFile = /^(?:(?:archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html|media-[0-9a-f-]{36}\.jpg|attachment-[0-9a-f-]{36}\.bin|sitemap\.xml|robots\.txt)$/i;
@@ -137,10 +137,11 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     }
     if (file === "index.html" && featured) {
       const photo = publicPhoto(featured.first, images.get(featured.first.media_id)?.alt);
+      const caption = photoTitle(photos.find(row => row.id === featured.first.id && row.media_id === featured.first.media_id)?.title) || photoTitle(featured.first.title);
       html = html.replace('aria-label="Featured Photo" aria-busy="true" hidden', 'aria-label="Featured Photo"')
         .replace('<img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">',
-          () => `<img src="featured.webp?v=${escape(featured.version)}" width="${featured.width}" height="${featured.height}" alt="${escape(photo.alt)}" draggable="false" decoding="async" fetchpriority="high">`)
-        .replace('<span id="photo-caption"></span>', () => `<span id="photo-caption">${escape(photo.title)}</span>`);
+          () => `<img src="featured.webp?v=${escape(featured.version)}" width="${featured.width}" height="${featured.height}" alt="${escape(photo.alt)}" draggable="false" decoding="async" fetchpriority="high">`);
+      if (caption) html = html.replace('<span id="photo-caption" aria-busy="true"></span>', () => `<span id="photo-caption">${escape(caption)}</span>`);
     }
     pages.set(file, html.replace(/<a(?= )/g, '<a draggable="false"'));
   }

@@ -1,4 +1,4 @@
-import { allRows, escape, journalToday, missingFeature } from "./common.js";
+import { allRows, escape, journalToday, missingFeature, showFailure } from "./common.js";
 
 const number = new Intl.NumberFormat();
 const date = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -126,8 +126,8 @@ export function setupStats(api, getPosts, editEntry) {
       if (revision === loading) render(days, rows, selectedPeriod);
     } catch (error) {
       if (revision !== loading) return;
-      status.textContent = missingFeature(error) ? "Apply the Supabase traffic upgrade to enable stats." :
-        "Traffic could not load. Reopen Dashboard or choose another period to retry.";
+      showFailure(status, missingFeature(error) ? "Apply the Supabase traffic upgrade to enable stats." :
+        "Traffic could not load.", load);
       document.querySelector("#active-day-note").textContent = "Daily activity could not load";
     }
   }
