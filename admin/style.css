@@ -368,7 +368,9 @@ dialog .actions { justify-content: flex-end; }
 .entry-list :is(.entry-open, .entry-number) { -webkit-user-select: none; user-select: none; }
 .entry-number { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .entry-list li small { margin: 0; }
-#back-entries { padding: 3px 0; min-height: 32px; border: 0; background: transparent; text-decoration: underline; text-underline-offset: 4px; font: 14px/1.4 Georgia, serif; white-space: nowrap; }
+#back-entries { display: grid; place-items: center; padding: 0; width: 44px; min-height: 44px; border: 0; background: transparent; }
+#back-entries:hover { background: var(--soft); }
+#back-entries svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .eyebrow { color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 .dashboard-overview { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
 .dashboard-latest { display: grid; align-content: start; gap: 10px; }
@@ -402,10 +404,11 @@ dialog .actions { justify-content: flex-end; }
 #editor[data-note] .entry-only, #editor[data-note] #edit-entry-title { display: none; }
 #editor[data-note] .editor-workspace { grid-template-rows: minmax(0, 1fr); }
 #editor[data-note] .editor-body { grid-row: 1; overflow: auto; }
-#editor[data-note] #entry-text { font: 19px/1.6 "DM Sans", sans-serif; height: 12rem; min-height: 0; padding-bottom: 10px; }
-#note-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px clamp(10px, 3vw, 22px); }
-#note-extras small { color: var(--muted); }
-#note-attachments { display: grid; gap: 6px; flex-basis: 100%; margin: 0; padding: 0; list-style: none; }
+#editor[data-note] #entry-text { font: 18px/1.55 "DM Sans", sans-serif; min-height: 6rem; max-height: 16rem; height: 8rem; padding-bottom: 10px; }
+@supports (field-sizing: content) {
+  #editor[data-note] #entry-text { height: auto; field-sizing: content; }
+}
+#note-attachments { display: grid; gap: 6px; max-width: 38rem; margin: 8px clamp(10px, 3vw, 22px); padding: 0; list-style: none; }
 #note-attachments:empty { display: none; }
 #note-attachments li { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
 #note-attachments img { width: 44px; height: 36px; object-fit: cover; border-radius: 4px; background: var(--soft); }

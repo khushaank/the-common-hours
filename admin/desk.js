@@ -1443,7 +1443,7 @@ function showSection(section, navigate = false) {
     newNote.classList.toggle("primary", notes);
     renderPostList();
   }
-  document.querySelector("#back-entries").textContent = listScreen === "notes" ? "← Notes" : "← Entries";
+  document.querySelector("#back-entries").setAttribute("aria-label", listScreen === "notes" ? "Back to Notes" : "Back to Entries");
   updateDeskAddress(section, navigate);
   window.scrollTo(0, isListScreen(section) ? entryListScroll : 0);
 }

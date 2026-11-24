@@ -193,12 +193,14 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     const range = previewPanel.hidden ? null : visual.range();
     const end = range ? range.startOffset : body.selectionStart;
     const before = range ? range.startContainer.nodeValue?.slice(0, end) || "" : body.value.slice(0, end);
-    const match = note ? /(?:^|[^\S\n])([/])([^/\n]*)$/u.exec(before) :
+    const match = note ? /(?:^|\s)(@)([a-z]*)$/i.exec(before) || /(?:^|\s)(\/)([^/\n]*)$/u.exec(before) :
       /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(before);
     if ((range ? !range.collapsed : body.selectionEnd !== end) || !match) { closeMenu(); return; }
     const [, trigger, value] = match;
     const query = value.toLowerCase();
-    if (note) {
+    if (note && trigger === "@") {
+      matches = "image".startsWith(query) ? [["@image", "Open Media Library"]] : [];
+    } else if (note) {
       matches = getEntries().filter(entry => entry.published && !entry.is_note &&
         [entry.slug, entry.title].some(field => field.toLowerCase().includes(query.trim())))
         .slice(0, 12).map(entry => [entry.slug, entry.title, entry]);
@@ -213,9 +215,9 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
     }
     if (range) {
-      range.setStart(range.startContainer, end - query.length - 1);
+      range.setStart(range.startContainer, end - value.length - 1);
       command = { start: range };
-    } else command = { start: end - query.length - 1, end };
+    } else command = { start: end - value.length - 1, end };
     active = 0;
     renderMenu();
   }
@@ -244,12 +246,9 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     });
   }
 
-  const notePanel = document.querySelector("#note-extras");
   const noteAttachments = document.querySelector("#note-attachments");
-  const addNotePhoto = document.querySelector("#add-note-photo");
 
   function renderNoteAssets() {
-    addNotePhoto.disabled = noteAssets.photos.length >= notePhotoLimit;
     const items = [];
     for (const assets of [noteAssets.photos, noteAssets.references]) {
       for (const asset of assets) {
@@ -263,7 +262,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
           assets.splice(assets.indexOf(asset), 1);
           renderNoteAssets();
           body.dispatchEvent(new Event("input", { bubbles: true }));
-          (asset.id ? addNotePhoto : body).focus();
+          body.focus();
         });
         if (asset.id) {
           const thumbnail = document.createElement("img");
@@ -283,17 +282,21 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     noteAttachments.replaceChildren(...items);
   }
 
-  addNotePhoto.addEventListener("click", () => {
+  function addNotePhoto(start, end) {
+    if (noteAssets.photos.length >= notePhotoLimit) {
+      status.textContent = "A note can have up to four photos.";
+      return;
+    }
     const revision = editorRevision;
+    const value = body.value;
     openImageLibrary(({ id, alt }) => {
-      if (revision !== editorRevision || !note) return;
+      if (revision !== editorRevision || value !== body.value || !note) return;
       if (noteAssets.photos.some(photo => photo.id === id)) throw new Error("This photo is already attached.");
-      if (noteAssets.photos.length >= notePhotoLimit) throw new Error("A note can have up to four photos.");
       noteAssets.photos.push({ id, alt: String(alt || "").slice(0, 300) });
       renderNoteAssets();
-      body.dispatchEvent(new Event("input", { bubbles: true }));
-    }, () => (addNotePhoto.disabled ? body : addNotePhoto).focus(), message => { status.textContent = message; });
-  });
+      replace("", start, end);
+    }, focus, message => { status.textContent = message; });
+  }
 
   blockFormat.addEventListener("change", () => {
     if (!previewPanel.hidden) {
@@ -316,6 +319,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     const { start, end } = command;
     closeMenu();
     if (note) {
+      if (type === "@image") { addNotePhoto(start, end); return; }
       if (noteAssets.references.some(reference => reference.slug === type)) {
         status.textContent = "This article is already referenced.";
         return;
@@ -663,7 +667,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     setNote(value, savedBody) {
       note = value;
       editor.toggleAttribute("data-note", note);
-      notePanel.hidden = !note;
+      noteAttachments.hidden = !note;
       if (note) {
         noteAssets = readNote(savedBody);
         body.value = noteAssets.text;
@@ -672,6 +676,8 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       body.maxLength = note ? 500 : 99960;
       body.placeholder = note ? "Write a note…" : "Start writing…";
       body.setAttribute("aria-label", note ? "Note text" : "Entry body in Markdown");
+      if (note) body.setAttribute("aria-description", "Type @image and press Enter to add photos. Type / to link a published article.");
+      else body.removeAttribute("aria-description");
       setPreview(!note);
       refresh();
     },

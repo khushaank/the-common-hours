@@ -81,6 +81,7 @@ The **Reader prompt** field is still available in **Publish settings**.
 
 Apply [the note media and search upgrade](supabase/upgrade-note-media-and-search.sql)
 before publishing this version. Notes can include up to four photos.
+Type **@image** and press **Enter** to open the Media Library.
 Type **/** in a note to find and attach a published article link.
 
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)

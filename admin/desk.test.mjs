@@ -22,7 +22,7 @@ function element() {
   };
 }
 
-function editorTools(value, start = 0, end = value.length, getReferences, getEntries = () => []) {
+function editorTools(value, start = 0, end = value.length, getReferences, getEntries = () => [], openLibrary) {
   const nodes = new Map();
   const query = selector => { if (!nodes.has(selector)) nodes.set(selector, element()); return nodes.get(selector); };
   const body = Object.assign(element(), {
@@ -39,9 +39,12 @@ function editorTools(value, start = 0, end = value.length, getReferences, getEnt
   query("#insert-form").reset = () => {};
   query("#insert-dialog").showModal = () => { query("#insert-dialog").open = true; };
   query("#entry-preview").hidden = true;
-  const setup = runInNewContext(source.slice(source.indexOf("const markdownLabel")).replaceAll("export ", "") + "\nsetupEditorTools", {
+  const editorSource = source.slice(source.indexOf("const markdownLabel")).replaceAll("export ", "")
+    .replace('import("./image-library.js")', "loadLibrary()");
+  const setup = runInNewContext(editorSource + "\nsetupEditorTools", {
     document: { querySelector: query, createElement: element }, Event, URL,
-    allowedImages: new Set(), readMediaImage() {}, createVisualEditor: () => ({}), renderText() {},
+    allowedImages: new Set(), async readMediaImage() {}, imageSource() {}, createVisualEditor: () => ({}), renderText() {},
+    loadLibrary: async () => ({ setupImageLibrary: () => openLibrary }),
     notePhotoLimit, noteReferenceLimit, readNote, writeNote,
   });
   const tools = setup(editor, () => {}, {}, getEntries, getReferences);
@@ -150,6 +153,23 @@ test("the note slash picker links published articles without using the note's ch
   view.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
   assert.equal(view.body.value, "A quick thought. ");
   assert.deepEqual(readNote(view.tools.noteBody()).references, [{ slug: "field-notes", title: "Field Notes" }]);
+});
+
+test("Enter on the note @image command opens Media Library and replaces the command with an attachment", async () => {
+  const text = "A quick thought.\n@image";
+  const image = { id: "12345678-1234-1234-1234-123456789abc", alt: "River" };
+  let choosePhoto;
+  const view = editorTools(text, text.length, text.length, undefined, undefined, pick => { choosePhoto = pick; });
+  view.tools.setNote(true, text);
+  view.body.dispatchEvent({ type: "input" });
+  assert.equal(view.query("#command-menu").children[0].dataset.command, "@image");
+  let prevented = false;
+  view.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() { prevented = true; } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(prevented, true);
+  choosePhoto(image);
+  assert.equal(view.body.value, "A quick thought.\n");
+  assert.deepEqual(readNote(view.tools.noteBody()).photos, [image]);
 });
 
 test("entry type and status combine with search, and the Notes screen only shows notes", () => {
