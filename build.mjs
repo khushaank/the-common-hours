@@ -50,20 +50,19 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   }
   const versioned = new Set([...browserAssets, "config.js", "logo.png"]);
   release.update(await readFile(assetSource(app, "logo.png")));
-  if (app === "blog") {
-    versioned.add("footer-landscape.jpg");
-    release.update(await readFile(assetSource(app, "footer-landscape.jpg")));
-  }
   const revision = release.digest("hex").slice(0, 16);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
   if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); }
+  const retiredAssets = app === "blog" ? ["favicon.svg", "footer-landscape.jpg", "photo-shell.js"] : ["favicon.svg"];
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
-    : !entry.isFile() || !(allowedFiles.has(entry.name) || entry.name === "favicon.svg" || app === "blog" && (generatedFile.test(entry.name) || entry.name === "photo-shell.js")))) {
+    : !entry.isFile() || !(allowedFiles.has(entry.name) || retiredAssets.includes(entry.name) || app === "blog" && generatedFile.test(entry.name)))) {
     throw new Error("Clear the extra files from " + destination + " before building.");
   }
-  if (existing.some(entry => entry.name === "favicon.svg")) await unlink(new URL("favicon.svg", output));
+  for (const name of retiredAssets) {
+    if (existing.some(entry => entry.name === name)) await unlink(new URL(name, output));
+  }
 
   let publicPages;
   for (const file of assets) {
@@ -71,7 +70,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     const target = new URL(file, output);
     if (file === "index.html") {
       const html = withConnectSource(await readFile(source, "utf8"), config);
-      const document = html.replace(/\b(src|srcset|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`);
+      const document = html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`);
       if (snapshot) {
         publicPages = renderPublicPages(document, snapshot, featured);
         for (const [name, data] of publicPages) await writeFile(new URL(name, output), data);
@@ -104,7 +103,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     }
   }
   if (publicPages) for (const entry of existing) {
-    if (entry.isFile() && (generatedFile.test(entry.name) || entry.name === "photo-shell.js") && !publicPages.has(entry.name)) await unlink(new URL(entry.name, output));
+    if (entry.isFile() && generatedFile.test(entry.name) && !publicPages.has(entry.name)) await unlink(new URL(entry.name, output));
   }
   await writeFile(new URL("config.js", output), settings);
 }

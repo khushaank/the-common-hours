@@ -21,7 +21,7 @@ test("prebuilt pages render readable content without a page preloader or fallbac
   assert.doesNotMatch(home, /data-skeleton=/);
 });
 
-test("a built featured photo and footer are available in the initial homepage HTML", () => {
+test("the featured photo and footer navigation are available in the initial homepage HTML", () => {
   const featured = {
     first: { title: "Lake & mist", alt: "A quiet lake" }, width: 1000, height: 600, version: "0123456789abcdef",
     markup: '<template id="featured-snapshot"></template>',
@@ -35,7 +35,9 @@ test("a built featured photo and footer are available in the initial homepage HT
   assert.doesNotMatch(untitled, /Unnamed photo|Untitled photograph/);
   for (const file of ["index.html", "archive.html"]) {
     const html = pages.get(file);
-    assert.match(html, /<footer class="site-footer">\s*<picture class="footer-landscape"><source media="\(min-width: 761px\)" srcset="footer-landscape\.jpg"[\s\S]+class="back-to-top" href="#top"/);
+    const footer = html.match(/<footer class="site-footer">[\s\S]+?<\/footer>/)[0];
+    assert.match(footer, /class="back-to-top" href="#top"/);
+    assert.doesNotMatch(footer, /<(?:img|picture)\b/);
     assert.doesNotMatch(html.match(/<header[\s\S]+?<\/header>/)[0], /Featured Photo|#featured-photo/);
   }
   assert.doesNotMatch(pages.get("archive.html"), /featured\.webp|id="featured-snapshot"/);
