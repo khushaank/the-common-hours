@@ -107,7 +107,7 @@ async function offlineScreen(url) {
     '<p><a class="back" href="' + escapeAttribute(url.href) + '">Try again</a></p></main></html>';
   return new Response(page, { status: 503, headers: {
     "Content-Type": "text/html; charset=utf-8",
-    "Content-Security-Policy": "default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'",
+    "Content-Security-Policy": "default-src 'none'; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'",
   } });
 }
 

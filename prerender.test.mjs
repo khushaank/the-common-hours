@@ -235,15 +235,19 @@ test("the first online visit saves recent articles and offers them on the offlin
     let result;
     handlers.fetch({ request: { url: "https://example.com" + path, method: "GET", ...options },
       waitUntil() {}, respondWith: task => { result = task; } });
-    return (await result).text();
+    return result;
   }
-  const home = await request("/", { mode: "navigate" });
+  const offlineHome = await request("/", { mode: "navigate" });
+  const policy = offlineHome.headers.get("content-security-policy");
+  assert.match(policy, /default-src 'none';.*font-src 'self'/);
+  assert.doesNotMatch(policy, /unsafe-eval|script-src/);
+  const home = await offlineHome.text();
   assert.match(home, /You’re offline/);
   assert.match(home, /Available offline/);
   assert.match(home, /href="https:\/\/example\.com\/entry-first-entry\.html">Saved &amp; readable/);
   assert.match(home, /href="https:\/\/example\.com\/entry-read-first\.html"/);
-  assert.match(await request("/" + entry, { mode: "navigate" }), /<html data-offline-copy>.*Original article/);
-  assert.equal(await request(new URL(imageUrl).pathname, { destination: "image" }), "Photo");
+  assert.match(await (await request("/" + entry, { mode: "navigate" })).text(), /<html data-offline-copy>.*Original article/);
+  assert.equal(await (await request(new URL(imageUrl).pathname, { destination: "image" })).text(), "Photo");
 });
 
 test("archives have accessible pagination and static year, month, and Unicode topic routes", () => {
