@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
+import { writeNote } from "../shared/note.js";
 
 test("security migrations enforce RLS, profile privileges, submission budgets, and review expiry", async () => {
   const db = new PGlite();
@@ -402,5 +403,32 @@ test("security migrations enforce RLS, profile privileges, submission budgets, a
     await as("anon");
     assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${image}'`), 0);
     assert.deepEqual((await value("select public.qmargin_b74_home_photos()")).photos.map(photo => photo.id), [file]);
+
+    await as("postgres");
+    await run("upgrade-note-media-and-search.sql");
+    await run("upgrade-note-media-and-search.sql");
+    const photoNote = writeNote("", { photos: [{ id: futurePhoto, alt: "Draft photo" }], references: [] });
+    const longNote = writeNote(("First line. ".repeat(14) + "A quiet footbridge at dawn. " + "Last line. ".repeat(10)).trim(), {
+      photos: [{ id: futurePhoto, alt: "Draft photo" }], references: [],
+    });
+    await as("authenticated", admin);
+    await db.query("update public.qmargin_b74_working_drafts set fields = $1 where slot = $2",
+      [JSON.stringify({ is_note: "true", body: photoNote }), orphan]);
+    const photoToken = "9".repeat(64);
+    assert.ok(await value(`select public.qmargin_b74_create_draft_preview('${orphan}', '${photoToken}') is not null`));
+    await as("anon");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${futurePhoto}'`), 0);
+    assert.equal((await value(`select public.qmargin_b74_read_review('${photoToken}', '${futurePhoto}')`)).alt, "Scheduled photo");
+    await as("authenticated", admin);
+    await db.query("update public.qmargin_b74_posts set body = $1 where slug = 'short-note'", [photoNote]);
+    await db.query("update public.qmargin_b74_posts set body = $1 where slug = 'short-note'", [longNote]);
+    await denied("update public.qmargin_b74_posts set body = repeat('x', 501) where slug = 'short-note'", "23514");
+    await db.exec(`insert into public.qmargin_b74_posts (slug, title, tag, excerpt, body)
+      values ('private-footbridge', 'Private', 'Notes', 'Private', 'A quiet footbridge')`);
+    await as("anon");
+    assert.equal(await value(`select count(*) from public.qmargin_b74_media where id = '${futurePhoto}'`), 1);
+    assert.equal(await value("select count(*) from public.qmargin_b74_search_previews('footbridge')"), 1);
+    assert.match(await value("select snippet from public.qmargin_b74_search_previews('FOOTBRIDGE')"), /^…[^…]+quiet footbridge at dawn[^…]+…$/);
+    assert.equal(await value("select count(*) from public.qmargin_b74_search_previews('Draft photo')"), 0);
   } finally { await db.close(); }
 });

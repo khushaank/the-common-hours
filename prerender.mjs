@@ -1,5 +1,6 @@
 import { entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
+import { noteExtras, readNote } from "./shared/note.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
 import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, renderTopics } from "./shared/archive.js";
@@ -56,9 +57,15 @@ export async function loadPublicSnapshot(config) {
     .sort((a, b) => photoDate(b).localeCompare(photoDate(a)));
   const ids = new Set(photos.map(photo => photo.media_id));
   const downloads = new Set();
-  for (const post of posts.filter(post => !post.is_note)) for (const reference of mediaReferences(post.body)) {
-    if (reference.kind === "image") ids.add(reference.id);
-    else if (reference.kind === "file") downloads.add(reference.id);
+  for (const post of posts) {
+    if (post.is_note) {
+      for (const photo of readNote(post.body).photos) ids.add(photo.id);
+      continue;
+    }
+    for (const reference of mediaReferences(post.body)) {
+      if (reference.kind === "image") ids.add(reference.id);
+      else if (reference.kind === "file") downloads.add(reference.id);
+    }
   }
   for (const id of ids) {
     if (!mediaId.test(id || "")) continue;
@@ -103,12 +110,17 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     ...archivePages.map(pageHref), ...attachments.values(),
   ]);
   const tagLinks = post => entryTags(post.tag).map(tag => `<a class="tag" href="${href({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ");
-  const cards = entries => entries.map(post => post.is_note ? noteCard(post, date) : `<article class="entry"><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)}</p><h2 class="entry-title"><a href="${href({ post: post.slug })}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>";
+  const cards = entries => entries.map(post => post.is_note ? noteCard(post, date, notePicture) : `<article class="entry"><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)}</p><h2 class="entry-title"><a href="${href({ post: post.slug })}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>";
   const picture = (id, escapedAlt, eager = false) => {
     const image = images.get(id);
     const alt = photoText(escapedAlt) || escape(photoText(image?.alt));
     return image ? `<img src="${escape(image.src)}" width="${Number(image.width)}" height="${Number(image.height)}" alt="${alt || "Photograph"}" draggable="false" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">` : `<span class="photo-unavailable">${alt || "Photo unavailable"}</span>`;
   };
+  const zoomPicture = (id, alt) => {
+    const image = images.get(id);
+    return image ? `<a class="zoom-image" href="${escape(image.src)}" aria-label="Enlarge photo: ${photoText(alt) || escape(photoText(image.alt)) || "Photograph"}">${picture(id, alt)}</a>` : picture(id, alt);
+  };
+  const notePicture = ({ id, alt }) => `<span class="media-slot">${zoomPicture(id, escape(alt))}</span>`;
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topicCounts = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   function page(values, title, content, description, classes = "wide-page") {
@@ -149,7 +161,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   page({}, "An independent journal", heading("Latest entries") + cards(posts.slice(0, 5)) + '<p><a class="back" href="archive.html">Browse all entries →</a></p>', "An independent journal by Ellis Vale.", "home-page");
   for (const values of archivePages) {
     const selection = [values.year, values.month, values.tag, values.page && "Page " + values.page].filter(Boolean).join(" · ");
-    page(values, archiveTitle(new URLSearchParams(values)), renderArchive(posts, new URLSearchParams(values)), "Browse the journal archive" + (selection ? " · " + selection : " by year, month, or topic") + ".");
+    page(values, archiveTitle(new URLSearchParams(values)), renderArchive(posts, new URLSearchParams(values), notePicture), "Browse the journal archive" + (selection ? " · " + selection : " by year, month, or topic") + ".");
   }
   const starters = posts.filter(post => post.start_here);
   page({ view: "start" }, "Start here", heading("Start here") + startIntroduction + (starters.length ? cards(starters) : `<p>${startEmpty}</p>`), "Selected entries to begin reading The Common Hours.");
@@ -171,14 +183,16 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;
     const postRevision = publicationRevision([post], true);
     if (post.is_note) {
-      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note" data-publication="${postRevision}">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body"><p class="note-text">${escape(post.body)}</p></div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
+      const { text } = readNote(post.body);
+      const body = (text ? `<p class="note-text">${escape(text)}</p>` : "") + noteExtras(post.body, notePicture);
+      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note" data-publication="${postRevision}">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt || post.title, "article-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>
       [reference.id, (reference.title || "Attachment").replace(/[\x00-\x1f\x7f/\\]/g, "").slice(0, 200)]));
     let body = post.body.startsWith(markdownMarker) ? renderMarkup(post.body) : post.body.split(/\n\s*\n/).map(text => `<p>${escape(text)}</p>`).join("");
     body = body.replace(/<span class="media-slot"[^>]*data-image="([^"]+)" data-alt="([^"]*)"><\/span>/g, (_, id, alt) =>
-      `<span class="media-slot">${picture(id, alt)}</span>`)
+      `<span class="media-slot">${zoomPicture(id, alt)}</span>`)
       .replace(/<a\b[^>]*\bdata-attachment="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, (_, id, label) => {
         if (!attachments.has(id)) return label + " (attachment unavailable)";
         return `<a class="attachment" href="${attachments.get(id)}" download="${escape(attachmentNames.get(id) || "Attachment")}">${label}</a>`;

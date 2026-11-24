@@ -1,6 +1,4 @@
 export function setupShortcuts(title, commands, enabled = () => true, fallbackFocus) {
-  const trigger = document.querySelector("#keyboard-shortcuts");
-  if (!trigger) return;
   const dialog = document.createElement("dialog");
   dialog.id = "shortcut-dialog";
   dialog.className = "shortcut-dialog";
@@ -25,13 +23,11 @@ export function setupShortcuts(title, commands, enabled = () => true, fallbackFo
     list.append(row);
   }
   document.body.append(dialog);
-  trigger.hidden = false;
 
   function toggle() {
     if (dialog.open) dialog.close();
     else if (!document.querySelector("dialog[open]")) dialog.showModal();
   }
-  trigger.addEventListener("click", toggle);
   document.addEventListener("keydown", event => {
     if (event.defaultPrevented || event.isComposing || event.repeat || !enabled()) return;
     const openDialog = document.querySelector("dialog[open]");

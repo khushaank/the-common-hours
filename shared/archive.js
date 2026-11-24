@@ -1,5 +1,6 @@
 import { entryTags, escape } from "./text.js";
 import { pageHref } from "./page-url.js";
+import { noteExtras, readNote } from "./note.js";
 
 export const archivePageSize = 15;
 
@@ -7,7 +8,7 @@ export function publicationRevision(posts, detail = false) {
   const values = JSON.stringify(posts.map(post => [
     post.id, post.slug, post.title, post.tag, post.excerpt, post.published_on,
     post.series || "", post.series_order ?? null, Boolean(post.start_here), Boolean(post.is_note),
-    detail ? post.body : null,
+    detail || post.is_note ? post.body ?? null : null,
   ]));
   let hash = 2166136261;
   for (let index = 0; index < values.length; index++) {
@@ -45,8 +46,9 @@ export function renderSidebar(months, topics, month, tag) {
     ${topics.length > 10 ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
 }
 
-export function noteCard(post, dateLabel) {
-  return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">Note · <time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p><p class="note-text">${escape(post.excerpt)}</p></article>`;
+export function noteCard(post, dateLabel, picture) {
+  const text = post.body === undefined ? post.excerpt : readNote(post.body).text;
+  return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">Note · <time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>${text ? `<p class="note-text">${escape(text)}</p>` : ""}${noteExtras(post.body, picture)}</article>`;
 }
 
 export function renderTopics(topicCounts) {
@@ -66,7 +68,7 @@ export function archiveEntries(posts, params) {
     (!params.get("tag") || entryTags(post.tag).includes(params.get("tag"))));
 }
 
-export function renderArchive(posts, params) {
+export function renderArchive(posts, params, picture) {
   const entries = archiveEntries(posts, params);
   const totalPages = Math.max(1, Math.ceil(entries.length / archivePageSize));
   const page = Math.min(totalPages, Math.max(1, Number.parseInt(params.get("page"), 10) || 1));
@@ -83,7 +85,7 @@ export function renderArchive(posts, params) {
         <h2>Topic</h2><div>${links("tag", unique(posts.flatMap(post => entryTags(post.tag))).sort((a, b) => a.localeCompare(b)))}</div>
       </details>
     </nav>${selection ? `<p class="status">Showing ${escape(selection)}</p>` : ""}
-    ${entries.slice((page - 1) * archivePageSize, page * archivePageSize).map(post => post.is_note ? noteCard(post, value => value) : `<article class="entry">
+    ${entries.slice((page - 1) * archivePageSize, page * archivePageSize).map(post => post.is_note ? noteCard(post, value => value, picture) : `<article class="entry">
       <p class="meta"><time datetime="${escape(post.published_on)}">${escape(post.published_on)}</time>${entryTags(post.tag).map(tag => `<a href="${href({ tag })}">${escape(tag)}</a>`).join(" · ")}</p>
       <h2 class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>"}
     ${totalPages > 1 ? `<nav class="pagination" aria-label="Archive pages">

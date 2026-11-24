@@ -63,7 +63,6 @@
       <button type="button" aria-pressed="false" data-section="references" aria-label="References" title="References"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7m2.2 6.8a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span class="nav-label">References</span></button>
       <button type="button" aria-pressed="false" data-section="comments" aria-label="Comments" title="Comments"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Comments</span></button>
       <button type="button" aria-pressed="false" data-section="inbox" aria-label="Inbox" title="Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11a9 9 0 0 1-13 8l-5 2 1-6A9 9 0 1 1 21 11Z"/></svg><span class="nav-label">Inbox</span></button>
-      <button type="button" id="keyboard-shortcuts" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-controls="shortcut-dialog" aria-keyshortcuts="Control+/ Meta+/" title="Keyboard shortcuts (Ctrl+/)" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1-1.3 1.9m0 3h.01"/></svg><span class="nav-label">Shortcuts</span></button>
       <button type="button" id="desk-logout" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M8 12h13m-5-5 5 5-5 5"/></svg><span class="nav-label">Log out</span></button>
       <svg class="rail-landscape" viewBox="0 0 220 250" fill="none" stroke="currentColor" stroke-width=".8" aria-hidden="true">
         <path d="M-10 180Q43 164 90 183T230 178M-10 187Q43 171 90 190T230 185M-10 194Q43 178 90 197T230 192M-10 201Q43 185 90 204T230 199M-10 208Q43 192 90 211T230 206M-10 215Q43 199 90 218T230 213M-10 222Q43 206 90 225T230 220M-10 229Q43 213 90 232T230 227M-10 236Q43 220 90 239T230 234M80 184q8-54 1-106m-1 70-30-38m32 22 35-44M81 115 65 80m16 21 22-32M79 139l-13-37m18 48 24-32"/>
@@ -88,7 +87,7 @@
               <div class="entry-list-meta"><small id="entry-count" role="status"></small><button type="button" id="refresh-entries">Refresh</button></div>
             </div>
             <div id="entry-status"></div>
-            <ul id="posts" aria-label="Entries"></ul>
+            <ul id="posts" aria-label="Entries" tabindex="-1"></ul>
           </div>
         </div>
       </section>
@@ -159,6 +158,11 @@
               </div>
               <div class="editor-body" id="write-panel" hidden>
                 <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
+                <div id="note-extras" hidden>
+                  <button type="button" id="add-note-photo">Add photo</button>
+                  <small id="note-reference-help">Type / to link a published article.</small>
+                  <ul id="note-attachments" aria-label="Note attachments"></ul>
+                </div>
               </div>
               <section class="editor-preview" id="entry-preview" aria-label="Entry preview">
                 <p id="preview-meta" class="muted"></p>
@@ -245,6 +249,17 @@
           <section class="card dashboard-latest"><span class="eyebrow">Last published entry</span><button type="button" id="last-published-entry" disabled>No published entries yet</button><p id="last-published-date" class="muted"></p></section>
           <section class="card stats-metric"><span>Days since publishing</span><strong id="publishing-age">-</strong><small id="publishing-note"></small></section>
           <section class="card stats-metric"><span>Busiest day</span><strong id="active-day">-</strong><small id="active-day-note">Loading activity…</small></section>
+        </div>
+        <div class="dashboard-queue">
+          <section class="card" aria-labelledby="recent-drafts-heading">
+            <h2 id="recent-drafts-heading">Recent drafts</h2>
+            <p id="recent-drafts-empty" class="muted">No drafts yet.</p>
+            <ul id="recent-drafts"></ul>
+          </section>
+          <section class="card" aria-labelledby="moderation-heading">
+            <h2 id="moderation-heading">Comments awaiting moderation</h2>
+            <button type="button" id="moderation-queue" aria-labelledby="moderation-heading pending-comment-count"><span id="pending-comment-count" aria-live="polite">Checking…</span> <span aria-hidden="true">↗</span></button>
+          </section>
         </div>
         <div id="stats-status" role="status"></div>
         <div id="stats-report"></div>

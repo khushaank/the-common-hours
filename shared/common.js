@@ -8,7 +8,7 @@ export class RequestError extends Error {
   }
 }
 
-export async function request(path, { method = "GET", body, token, prefer, timeout = 12000, download = false, keepalive = false } = {}) {
+export async function request(path, { method = "GET", body, token, prefer, timeout = 12000, download = false, keepalive = false, count = false } = {}) {
   const headers = { apikey: publishableKey };
   if (token) headers.Authorization = "Bearer " + token;
   if (prefer) headers.Prefer = prefer;
@@ -28,6 +28,11 @@ export async function request(path, { method = "GET", body, token, prefer, timeo
   if (download && response.ok) return response.blob();
   const data = response.headers.get("content-type")?.includes("json") ? await response.json().catch(() => null) : null;
   if (!response.ok) throw new RequestError(response.status, data?.code || data?.error_code || data?.error);
+  if (count) {
+    const total = /\/(\d+)$/.exec(response.headers.get("content-range") || "")?.[1];
+    if (total === undefined) throw new Error("The service did not return a total.");
+    return Number(total);
+  }
   if (response.status === 204) return null;
   if (method === "GET" && data === null) throw new Error("The service returned an unexpected response. Try again.");
   return data;

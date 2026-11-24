@@ -5,10 +5,11 @@ import { runInNewContext } from "node:vm";
 import { test } from "node:test";
 import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerender.mjs";
 import { pageHref, pageParams } from "./shared/page-url.js";
-import { markdownMarker } from "./shared/text.js";
+import { escape, markdownMarker, searchExcerpt } from "./shared/text.js";
 import { renderFeed } from "./feed.mjs";
 import { archiveEntries, archivePageSize, renderArchive } from "./shared/archive.js";
 import { photoText, publicPhoto } from "./shared/photo-text.js";
+import { writeNote } from "./shared/note.js";
 
 const template = await readFile(new URL("./blog/index.html", import.meta.url), "utf8");
 const initialRouteScript = template.match(/<script>(.*?)<\/script>/is)[1];
@@ -27,6 +28,7 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.match(article, /<strong>Hello<\/strong>/);
   assert.doesNotMatch(article, /A caption|Paired photo/);
   assert.match(article, /src="media-12345678-1234-1234-1234-123456789abc.jpg"/);
+  assert.match(article, /class="zoom-image" href="media-12345678-1234-1234-1234-123456789abc.jpg"/);
   assert.match(article, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(article, /<script>alert/);
   assert.match(article, /href="entry-first-entry.html"/);
@@ -91,10 +93,21 @@ test("a successful refresh keeps the published marker when the published DOM is 
     const content = { dataset: { prerendered: "true" }, querySelector: () => retained, setAttribute(name, value) { this[name] = value; } };
     await runInNewContext(load + "\nload()", {
       content, location: { search: "" }, document: { querySelector: () => null }, start: async () => {},
+      view: null, loadNoteImages: async () => {}, publicImage() {},
     });
     assert.equal(content.dataset.prerendered, retained ? "true" : undefined);
     assert.equal(content["aria-busy"], "false");
   }
+});
+
+test("search highlights the matching context and escapes the entire excerpt", async () => {
+  const source = await readFile(new URL("./blog/reading.js", import.meta.url), "utf8");
+  const render = runInNewContext(source.slice(source.indexOf("function searchCards"), source.indexOf("export async function renderReview")) +
+    "\nsearchCards", { escape, searchExcerpt, entryHref: slug => pageHref({ post: slug }) });
+  const results = render([{ slug: "field-notes", title: "Along the valley", excerpt: "A different excerpt",
+    snippet: "…near the <quiet> footbridge (old) at dawn…" }], "footbridge (old)");
+  assert.match(results, /&lt;quiet&gt; <mark>footbridge \(old\)<\/mark> at dawn/);
+  assert.doesNotMatch(results, /A different excerpt/);
 });
 
 test("offline navigation does not display the homepage as an entry or intercept private reviews", async () => {
@@ -211,6 +224,23 @@ test("notes render without an entry title and preserve their lines as text", () 
     assert.match(pages.get(name + ".html"), /class="note-text">First line\n&lt;script&gt;Second line&lt;\/script&gt;/);
   }
   assert.match(pages.get("entry-short-note.html"), /<h1>Note<\/h1>/);
+});
+
+test("note photos and article references appear inline on both archive and standalone pages", () => {
+  const second = "22345678-1234-1234-1234-123456789abc";
+  const photos = [{ id: imageId, alt: "First & best" }, { id: second, alt: "Second" }];
+  const references = [{ slug: post.slug, title: "Related <article>" }];
+  const note = { ...post, id: "note", slug: "photo-note", title: "Photo note", excerpt: "Photo note", is_note: true,
+    body: writeNote("", { photos, references }) };
+  const images = new Map(photos.map(({ id }) => [id, { src: "media-" + id + ".jpg", width: 800, height: 600 }]));
+  const pages = renderPublicPages(template, { posts: [note, post], photos: [], images, files: new Map() });
+  for (const file of ["index.html", "archive.html", "entry-photo-note.html"]) {
+    const html = pages.get(file);
+    assert.match(html, /class="note-gallery" data-count="2"/);
+    assert.match(html, /class="zoom-image" href="media-12345678-1234-1234-1234-123456789abc\.jpg" aria-label="Enlarge photo: First &amp; best"/);
+    assert.match(html, /href="entry-first-entry\.html">Related &lt;article&gt;/);
+    assert.doesNotMatch(html, /common-hours-note-extras/);
+  }
 });
 
 test("series articles show membership before the title and keep links in part order", () => {

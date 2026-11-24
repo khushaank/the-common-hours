@@ -79,6 +79,10 @@ after the existing security and desk upgrades before deploying this version.
 The upgrade enables publishing notes and retires the old editorial photo fields.
 The **Reader prompt** field is still available in **Publish settings**.
 
+Apply [the note media and search upgrade](supabase/upgrade-note-media-and-search.sql)
+before publishing this version. Notes can include up to four photos.
+Type **/** in a note to find and attach a published article link.
+
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
 after the Notes and live review upgrades. It carries the current homepage photos
 over to the Featured Photo selection. In **Writing Desk → Photos**, upload or

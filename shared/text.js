@@ -5,6 +5,16 @@ export const escape = value => String(value).replace(/[&<>"']/g, char => ({
 export const mediaId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 export const markdownMarker = "<!-- common-hours-markdown -->\n";
 
+export function searchExcerpt(value, term) {
+  if (!term) return "";
+  const text = String(value ?? "").replaceAll(markdownMarker, "").replace(/\s+/gu, " ").trim();
+  const index = text.toLowerCase().indexOf(term.toLowerCase());
+  if (index < 0) return "";
+  const start = Math.max(0, index - 55);
+  const end = Math.min(text.length, index + term.length + 75);
+  return (start ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+}
+
 export function entryTags(value = "") {
   const tags = new Map();
   for (const part of value.split(",")) {

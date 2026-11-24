@@ -1,4 +1,5 @@
-import { attachmentLimit, missingFeature, readMediaImage, videoFrom } from "./common.js";
+import { attachmentLimit, imageSource, missingFeature, readMediaImage, videoFrom } from "./common.js";
+import { notePhotoLimit, noteReferenceLimit, readNote, writeNote } from "./note.js";
 import { renderText } from "./rich.js";
 import { createVisualEditor, visualMarkdown } from "./visual-editor.js";
 
@@ -129,6 +130,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   let previousBody;
   let displayMarkdown = true;
   let note = false;
+  let noteAssets = { photos: [], references: [] };
   let editorRevision = 0;
   let uploadRange;
   const previewImages = new Map();
@@ -188,15 +190,19 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   }
 
   function updateMenu() {
-    if (note) return;
     const range = previewPanel.hidden ? null : visual.range();
     const end = range ? range.startOffset : body.selectionStart;
     const before = range ? range.startContainer.nodeValue?.slice(0, end) || "" : body.value.slice(0, end);
-    const match = /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(before);
+    const match = note ? /(?:^|[^\S\n])([/])([^/\n]*)$/u.exec(before) :
+      /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(before);
     if ((range ? !range.collapsed : body.selectionEnd !== end) || !match) { closeMenu(); return; }
     const [, trigger, value] = match;
     const query = value.toLowerCase();
-    if (trigger === "@") {
+    if (note) {
+      matches = getEntries().filter(entry => entry.published && !entry.is_note &&
+        [entry.slug, entry.title].some(field => field.toLowerCase().includes(query.trim())))
+        .slice(0, 12).map(entry => [entry.slug, entry.title, entry]);
+    } else if (trigger === "@") {
       const saved = getReferences().filter(ref => ref.alias.startsWith(query) || ref.label.toLowerCase().startsWith(query));
       const entries = getEntries().filter(entry => entry.published && query &&
         (entry.slug.startsWith(query) || entry.title.toLowerCase().startsWith(query)) &&
@@ -238,6 +244,57 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     });
   }
 
+  const notePanel = document.querySelector("#note-extras");
+  const noteAttachments = document.querySelector("#note-attachments");
+  const addNotePhoto = document.querySelector("#add-note-photo");
+
+  function renderNoteAssets() {
+    addNotePhoto.disabled = noteAssets.photos.length >= notePhotoLimit;
+    const items = [];
+    for (const assets of [noteAssets.photos, noteAssets.references]) {
+      for (const asset of assets) {
+        const label = asset.alt || asset.title || "Photo";
+        const item = document.createElement("li");
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Remove";
+        remove.setAttribute("aria-label", "Remove " + label);
+        remove.addEventListener("click", () => {
+          assets.splice(assets.indexOf(asset), 1);
+          renderNoteAssets();
+          body.dispatchEvent(new Event("input", { bubbles: true }));
+          (asset.id ? addNotePhoto : body).focus();
+        });
+        if (asset.id) {
+          const thumbnail = document.createElement("img");
+          thumbnail.alt = "";
+          item.append(thumbnail);
+          void image(asset.id).then(result => {
+            const src = imageSource(result);
+            if (thumbnail.isConnected && src) thumbnail.src = src;
+          }).catch(() => {});
+        }
+        const title = document.createElement("span");
+        title.textContent = label;
+        item.append(title, remove);
+        items.push(item);
+      }
+    }
+    noteAttachments.replaceChildren(...items);
+  }
+
+  addNotePhoto.addEventListener("click", () => {
+    const revision = editorRevision;
+    openImageLibrary(({ id, alt }) => {
+      if (revision !== editorRevision || !note) return;
+      if (noteAssets.photos.some(photo => photo.id === id)) throw new Error("This photo is already attached.");
+      if (noteAssets.photos.length >= notePhotoLimit) throw new Error("A note can have up to four photos.");
+      noteAssets.photos.push({ id, alt: String(alt || "").slice(0, 300) });
+      renderNoteAssets();
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+    }, () => (addNotePhoto.disabled ? body : addNotePhoto).focus(), message => { status.textContent = message; });
+  });
+
   blockFormat.addEventListener("change", () => {
     if (!previewPanel.hidden) {
       visual.format("formatBlock", blockFormat.value ? "h" + blockFormat.value : "p");
@@ -258,6 +315,20 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   function choose([type, name, template], selected = "") {
     const { start, end } = command;
     closeMenu();
+    if (note) {
+      if (noteAssets.references.some(reference => reference.slug === type)) {
+        status.textContent = "This article is already referenced.";
+        return;
+      }
+      if (noteAssets.references.length >= noteReferenceLimit) {
+        status.textContent = "A note can reference up to eight articles.";
+        return;
+      }
+      noteAssets.references.push({ slug: type, title: name });
+      renderNoteAssets();
+      replace("", start, end);
+      return;
+    }
     if (type.startsWith("@")) {
       try {
         let href = template;
@@ -388,8 +459,9 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   }
   previewBody.addEventListener("keydown", commandKey);
   body.addEventListener("keydown", event => {
-    if (event.isComposing || note) return;
+    if (event.isComposing) return;
     if (menu.hidden) {
+      if (note) return;
       if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
         const { value, selectionStart: start, selectionEnd: end } = body;
         if (start !== end) return;
@@ -464,6 +536,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     finally { uploadButton.disabled = false; }
   });
   body.addEventListener("paste", event => {
+    if (note) return;
     const raw = event.clipboardData?.getData("text/plain").trim();
     if (!raw || !videoFrom(raw)) return;
     const { selectionStart: start, selectionEnd: end, value } = body;
@@ -587,15 +660,22 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       previewBody.replaceChildren();
       if (!previewPanel.hidden) void renderPreview();
     },
-    setNote(value) {
+    setNote(value, savedBody) {
       note = value;
       editor.toggleAttribute("data-note", note);
+      notePanel.hidden = !note;
+      if (note) {
+        noteAssets = readNote(savedBody);
+        body.value = noteAssets.text;
+        renderNoteAssets();
+      }
       body.maxLength = note ? 500 : 99960;
       body.placeholder = note ? "Write a note…" : "Start writing…";
       body.setAttribute("aria-label", note ? "Note text" : "Entry body in Markdown");
       setPreview(!note);
       refresh();
     },
+    noteBody: () => writeNote(body.value, noteAssets),
     bodyControl,
     focus,
     openImageLibrary,

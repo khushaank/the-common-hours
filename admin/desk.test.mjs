@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+import { notePhotoLimit, noteReferenceLimit, readNote, writeNote } from "../shared/note.js";
 
 const source = await readFile(new URL("./editor-tools.js", import.meta.url), "utf8");
 const deskSource = await readFile(new URL("./desk.js", import.meta.url), "utf8");
@@ -21,7 +22,7 @@ function element() {
   };
 }
 
-function editorTools(value, start = 0, end = value.length, getReferences) {
+function editorTools(value, start = 0, end = value.length, getReferences, getEntries = () => []) {
   const nodes = new Map();
   const query = selector => { if (!nodes.has(selector)) nodes.set(selector, element()); return nodes.get(selector); };
   const body = Object.assign(element(), {
@@ -33,6 +34,7 @@ function editorTools(value, start = 0, end = value.length, getReferences) {
     setSelectionRange(from, to) { this.selectionStart = from; this.selectionEnd = to; },
   });
   const editor = Object.assign(element(), { elements: { namedItem: name => name === "body" ? body : query(name) } });
+  editor.toggleAttribute = () => {};
   query("#insert-form").elements = { namedItem: query };
   query("#insert-form").reset = () => {};
   query("#insert-dialog").showModal = () => { query("#insert-dialog").open = true; };
@@ -40,8 +42,9 @@ function editorTools(value, start = 0, end = value.length, getReferences) {
   const setup = runInNewContext(source.slice(source.indexOf("const markdownLabel")).replaceAll("export ", "") + "\nsetupEditorTools", {
     document: { querySelector: query, createElement: element }, Event, URL,
     allowedImages: new Set(), readMediaImage() {}, createVisualEditor: () => ({}), renderText() {},
+    notePhotoLimit, noteReferenceLimit, readNote, writeNote,
   });
-  const tools = setup(editor, () => {}, {}, () => [], getReferences);
+  const tools = setup(editor, () => {}, {}, getEntries, getReferences);
   const format = key => query(".format-tools").dispatchEvent({ type: "click", target: { closest: () => ({ dataset: { format: key } }) } });
   return { body, query, tools, format };
 }
@@ -132,6 +135,21 @@ test("an @ shortcut inserts the saved label and URL at the caret", () => {
   assert.equal(view.query("#command-menu").children[0].dataset.command, "@harvey");
   view.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
   assert.equal(view.body.value, "See [Harvey](<https://example.test/harvey>)");
+});
+
+test("the note slash picker links published articles without using the note's character limit", () => {
+  const text = "A quick thought. /field notes";
+  const view = editorTools(text, text.length, text.length, undefined, () => [
+    { slug: "field-notes", title: "Field Notes", published: true },
+    { slug: "next", title: "More Field Notes", published: false },
+    { slug: "short-note", title: "Field Notes follow-up", is_note: true, published: true },
+  ]);
+  view.tools.setNote(true, text);
+  view.body.dispatchEvent({ type: "input" });
+  assert.equal(view.query("#command-menu").children.length, 1);
+  view.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
+  assert.equal(view.body.value, "A quick thought. ");
+  assert.deepEqual(readNote(view.tools.noteBody()).references, [{ slug: "field-notes", title: "Field Notes" }]);
 });
 
 test("entry type and status combine with search, and the Notes screen only shows notes", () => {
@@ -330,7 +348,7 @@ test("a published entry can be copied to a draft and a saved draft is private by
 
 test("publish validation reports each invalid field and accepts a blank generated excerpt", () => {
   const validate = runInNewContext(deskSource.slice(deskSource.indexOf("function validateEntry("), deskSource.indexOf('editor.addEventListener("submit"')) + "\nvalidateEntry", {
-    entryTags: value => value.split(",").map(tag => tag.trim()), mediaId: /^valid$/,
+    entryTags: value => value.split(",").map(tag => tag.trim()), mediaId: /^valid$/, readNote,
   });
   const invalid = { title: "", body: "", tag: "", published_on: "", slug: "bad slug" };
   assert.deepEqual([...validate(invalid).keys()], ["title", "body", "tag", "published_on", "slug"]);

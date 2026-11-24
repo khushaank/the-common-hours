@@ -2,6 +2,9 @@ import { pageHref } from "./page-url.js";
 import { escape, request } from "./common.js";
 import { cachedEntries } from "./public-cache.js";
 import { noteCard } from "./archive.js";
+import { noteExtras, readNote } from "./note.js";
+import { loadNoteImages } from "./image-viewer.js";
+import { searchExcerpt } from "./text.js";
 
 const entryHref = slug => pageHref({ post: slug });
 
@@ -32,7 +35,12 @@ export async function findEntries(query) {
   if (!url) return [];
   if (!navigator.onLine) return cachedEntries(query);
   try {
-    return await request("/rest/v1/rpc/qmargin_b74_search_posts", { method: "POST", body: { p_query: query } });
+    const options = { method: "POST", body: { p_query: query } };
+    try { return await request("/rest/v1/rpc/qmargin_b74_search_previews", options); }
+    catch (error) {
+      if (!["PGRST202", "42883"].includes(error.code)) throw error;
+      return await request("/rest/v1/rpc/qmargin_b74_search_posts", options);
+    }
   } catch (error) {
     if (!error.status || error.status >= 500) {
       const entries = await cachedEntries(query);
@@ -42,8 +50,20 @@ export async function findEntries(query) {
   }
 }
 
-export function searchCards(entries) {
-  return entries.length ? cards(entries) : "<p>No matching entries.</p>";
+export function searchCards(entries, query) {
+  if (!entries.length) return "<p>No matching entries.</p>";
+  const term = query.trim();
+  const escaped = term.replace(/[$^.*+?{}()|[\]\\]/g, "\\$&");
+  const pattern = escaped ? new RegExp("(" + escaped + ")", "giu") : null;
+  const highlight = text => pattern ? String(text).split(pattern).map((part, index) =>
+    index % 2 ? "<mark>" + escape(part) + "</mark>" : escape(part)).join("") : escape(text);
+  return entries.map(post => {
+    const context = post.snippet || searchExcerpt(post.excerpt, term) || searchExcerpt(post.tag, term);
+    const excerpt = context && context !== post.title ? context : post.excerpt;
+    const title = post.is_note ? "Note · " + post.published_on : post.title;
+    return '<article class="entry"><a class="entry-title" href="' + entryHref(post.slug) + '">' + highlight(title) + "</a>" +
+      (excerpt ? '<p class="search-snippet">' + highlight(excerpt) + "</p>" : "") + "</article>";
+  }).join("");
 }
 
 export async function renderReview(content) {
@@ -69,9 +89,11 @@ export async function renderReview(content) {
     return;
   }
   if (draft.is_note) {
-    content.innerHTML = '<article class="article journal-note"><p class="meta">Private draft review</p><h1>Note</h1><p class="note-text">' +
-      escape(draft.body || "") + '</p>' +
+    const { text } = readNote(draft.body);
+    content.innerHTML = '<article class="article journal-note"><p class="meta">Private draft review</p><h1>Note</h1>' +
+      (text ? '<p class="note-text">' + escape(text) + '</p>' : '') + noteExtras(draft.body) +
       (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
+    await loadNoteImages(content, read);
     return;
   }
   const { renderText } = await import("./rich.js");
@@ -81,6 +103,7 @@ export async function renderReview(content) {
     (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
   renderText(content.querySelector("#entry-body"), draft.body || "", read, {
     markdown: true,
+    enlargeImages: true,
     loadAttachment: id => request("/functions/v1/review-attachment", {
       method: "POST", body: { token, id }, download: true, timeout: 120000,
     }),

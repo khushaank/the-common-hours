@@ -1,6 +1,7 @@
 import { getProjectOrigin } from "./config.js";
 import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, mediaId, missingColumn, missingFeature, readMediaImage, removeAttachment, request, showFailure, table, uploadAttachment } from "./common.js";
 import { entryTags } from "./text.js";
+import { readNote, writeNote } from "./note.js";
 import { entryExcerpt, isSupportedImage, setupEditorTools, uploadImage } from "./editor-tools.js";
 import { setupPhotoTools } from "./photo-tools.js";
 import { setupShortcuts } from "./keyboard.js";
@@ -215,7 +216,10 @@ function entryFields() {
   const fields = Object.fromEntries(new FormData(editor));
   fields.tag = entryTags([fields.tag, tagInput.value].filter(Boolean).join(",")).join(", ");
   fields.start_here = String(editor.elements.namedItem("start_here").checked);
-  if (isNote) fields.is_note = "true";
+  if (isNote) {
+    fields.is_note = "true";
+    fields.body = editorTools.noteBody();
+  }
   return fields;
 }
 const snapshot = () => {
@@ -231,12 +235,14 @@ const selectedEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() +
 const draftPath = id => "working_drafts?slot=eq." + id;
 const slugFromTitle = title => title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
-const noteTitle = body => [...(body?.trim().split(/\r?\n/, 1)[0] || "Untitled note")].slice(0, 180).join("");
+function noteTitle({ text, photos }) {
+  return [...(text.trim().split(/\r?\n/, 1)[0] || (photos.length ? "Photo note" : "Untitled note"))].slice(0, 180).join("");
+}
 
 function draftEntry(row) {
   const source = posts.find(post => post.id === (row.fields.source_post || row.slot));
   const is_note = [true, "true"].includes(row.fields.is_note) || Boolean(source?.is_note);
-  const title = is_note ? noteTitle(row.fields.body) : row.fields.title?.trim() || "Untitled";
+  const title = is_note ? noteTitle(readNote(row.fields.body)) : row.fields.title?.trim() || "Untitled";
   const slug = source?.slug || slugFromTitle(row.fields.slug || title) || "untitled";
   return { ...row, id: (row.local ? "local:" : "draft:") + row.slot, source, title, slug, is_note, tag: row.fields.tag || "",
     published: false, published_on: row.saved_at.slice(0, 10) };
@@ -318,6 +324,7 @@ function recoverDraft() {
   tagInput.value = "";
   renderTagChips();
   updatePart();
+  if (isNote) editorTools.setNote(true, chosen.fields.body);
   if (!dirty()) {
     removeBackup();
     return;
@@ -463,7 +470,8 @@ document.addEventListener("keydown", event => {
       event.metaKey || event.shiftKey || !["ArrowDown", "ArrowUp"].includes(event.key)) return;
   const target = event.target;
   if (document.querySelector("dialog[open]") ||
-      !target.matches(".entry-open, #refresh-entries") && target.closest("input, select, textarea, button, a, [contenteditable]")) return;
+      !target.matches(".entry-open, #refresh-entries, [data-section=entries], [data-section=notes], #desk-menu") &&
+      target.closest("input, select, textarea, button, a, [contenteditable]")) return;
   const rows = [...postList.querySelectorAll(".entry-open")];
   if (!rows.length) return;
   event.preventDefault();
@@ -764,12 +772,12 @@ function openEditor(post, draft, note = false, localSlot = note ? "new-note" : "
   document.querySelector("#editor-state").textContent = post?.published ? "Published" : "Draft";
   document.querySelector("#editor-state").dataset.published = String(Boolean(post?.published));
   document.querySelector("#draft-address").textContent = draft && !isNote ? " · " + draft.slug + "/draft" : "";
+  editorTools.refresh(!post || originalBody.startsWith(markdownMarker));
+  editorTools.setNote(isNote, originalBody);
   baseline = snapshot();
   backupStored = false;
   updatePublishActions();
   showDraftStatus("");
-  editorTools.refresh(!post || originalBody.startsWith(markdownMarker));
-  editorTools.setNote(isNote);
   if (!document.querySelector("#compose-panel").hidden) updateDeskAddress("compose");
   updateExitWarning();
   renderPostList();
@@ -799,6 +807,7 @@ async function loadPosts() {
   editorialFields = supportsEditorial;
   setSeries(seriesField.value);
   renderPostList();
+  if (!document.querySelector("#stats-panel").hidden) renderDraftQueue();
 }
 
 async function refreshEntries() {
@@ -820,14 +829,16 @@ document.querySelector("#refresh-entries").addEventListener("click", event => ru
 }));
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && session && !busy) void refreshEntries();
+  if (document.hidden || !session || busy) return;
+  void refreshEntries();
+  if (!document.querySelector("#stats-panel").hidden) void loadModerationCount();
 });
 
 async function loadComments() {
   const revision = ++commentsRevision;
   const filter = document.querySelector("#comment-filter").value;
   const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id,deleted_entry_title&order=approved.asc,created_at.desc,id.desc" +
-    (filter === "all" ? "" : "&approved=eq." + (filter === "published")));
+    (filter === "all" ? "" : filter === "pending" ? "&approved=eq.false&post_id=not.is.null" : "&approved=eq.true"));
   if (revision !== commentsRevision) return;
   comments.replaceChildren();
   if (!rows.length) comments.textContent = filter === "all" ? "No comments yet." : "No " + filter + " comments.";
@@ -1076,6 +1087,7 @@ login.addEventListener("submit", event => {
 function newComposition(button, note) {
   if (busy || !canLeaveDraft()) return;
   run(button, () => {
+    if (note) listScreen = "notes";
     openEditor(undefined, undefined, note, "new-" + crypto.randomUUID());
     showSection("compose");
   }).then(() => { if (!busy && !current) editorTools.focus(); });
@@ -1130,8 +1142,11 @@ function showPublishErrors(errors) {
 function validateEntry(record) {
   const errors = new Map();
   if (!record.title) errors.set("title", "Enter a title.");
-  if (!record.body) errors.set("body", record.is_note ? "Write a note before publishing." : "Write something in the entry body.");
-  else if (record.is_note && [...record.body].length > 500) errors.set("body", "Use 500 characters or fewer for the note.");
+  if (record.is_note) {
+    const { text, photos } = readNote(record.body);
+    if (!text.trim() && !photos.length) errors.set("body", "Write a note or add a photo before publishing.");
+    else if ([...text.trim()].length > 500) errors.set("body", "Use 500 characters or fewer for the note.");
+  } else if (!record.body) errors.set("body", "Write something in the entry body.");
   if (!record.tag) errors.set("tag", "Add at least one tag.");
   else if ([...record.tag].length > 400 || entryTags(record.tag).some(tag => [...tag].length > 40)) {
     errors.set("tag", "Use up to 40 characters per tag and 400 characters across all tags.");
@@ -1149,10 +1164,11 @@ editor.addEventListener("submit", event => {
   if (busy || !event.submitter || event.submitter.disabled) return;
   clearPublishErrors();
   const fields = entryFields();
-  if (isNote) {
-    fields.title = noteTitle(fields.body);
+  const note = isNote ? readNote(fields.body) : null;
+  if (note) {
+    fields.title = noteTitle(note);
     fields.tag ||= "Notes";
-    fields.excerpt = fields.body.trim();
+    fields.excerpt = note.text.trim() || (note.photos.length ? fields.title : "");
   }
   if (event.submitter.value === "draft") {
     const source = activeDraft?.source || activePost;
@@ -1167,6 +1183,7 @@ editor.addEventListener("submit", event => {
     return;
   }
   const record = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
+  if (note) record.body = writeNote(note.text.trim(), note);
   const knownTags = new Map(entryTags(posts.map(post => post.tag).join(",")).map(tag => [tag.toLowerCase(), tag]));
   record.tag = entryTags(record.tag).map(tag => knownTags.get(tag.toLowerCase()) || tag).join(", ");
   record.slug ||= activeDraft?.source?.slug || slugFromTitle(record.title);
@@ -1177,7 +1194,7 @@ editor.addEventListener("submit", event => {
   }
   let fieldError;
   void run(event.submitter, async () => {
-    if (!record.excerpt) {
+    if (!record.excerpt && !record.is_note) {
       record.excerpt = await entryExcerpt(record.body, record.title, record.body !== originalBody || originalBody.startsWith(markdownMarker));
     }
     if (record.is_note) record.is_note = true;
@@ -1478,7 +1495,57 @@ async function openComments() {
 }
 document.querySelector("#comment-filter").addEventListener("change", openComments);
 
+const moderationQueue = document.querySelector("#moderation-queue");
+const pendingCount = document.querySelector("#pending-comment-count");
+const pendingComments = "comments?select=id&approved=eq.false&post_id=not.is.null";
+let moderationRevision = 0;
+
+moderationQueue.addEventListener("click", () => {
+  if (busy || !canLeaveDraft()) return;
+  document.querySelector("#comment-filter").value = "pending";
+  openSection("comments", true);
+  document.querySelector("#comment-filter").focus({ preventScroll: true });
+});
+
+function renderDraftQueue() {
+  const recent = [...localDrafts(), ...drafts].map(row => {
+    const backup = row.local ? null : readBackup("draft:" + row.slot);
+    return { row, updatedAt: backup?.saved_at > row.saved_at ? backup.saved_at : row.saved_at };
+  }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
+  document.querySelector("#recent-drafts-empty").hidden = recent.length > 0;
+  document.querySelector("#recent-drafts").replaceChildren(...recent.map(({ row: draft, updatedAt }) => {
+    const post = draftEntry(draft);
+    const row = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = post.title;
+    button.addEventListener("click", () => {
+      if (busy || !canLeaveDraft()) return;
+      listScreen = post.is_note ? "notes" : "entries";
+      editEntry(post, button);
+    });
+    const time = document.createElement("time");
+    time.dateTime = updatedAt;
+    time.textContent = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+    row.append(button, time);
+    return row;
+  }));
+}
+
+async function loadModerationCount() {
+  const revision = ++moderationRevision;
+  pendingCount.textContent = "Checking…";
+  try {
+    const count = await api(pendingComments, { method: "HEAD", prefer: "count=exact", count: true });
+    if (revision === moderationRevision) pendingCount.textContent = String(count);
+  } catch {
+    if (revision === moderationRevision) pendingCount.textContent = "View pending comments";
+  }
+}
+
 async function openStats() {
+  renderDraftQueue();
+  void loadModerationCount();
   try {
     const { setupStats } = await import("./stats.js");
     if (!session || document.querySelector("#stats-panel").hidden) return;
@@ -1563,6 +1630,7 @@ for (const button of sections) {
     const section = button.dataset.section;
     if (button.getAttribute("aria-pressed") === "true" && !document.body.classList.contains("writing")) return;
     openSection(section, true);
+    if (isListScreen(section)) postList.focus({ preventScroll: true });
   });
 }
 

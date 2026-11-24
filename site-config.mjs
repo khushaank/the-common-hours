@@ -2,7 +2,7 @@ import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
   "manifest.webmanifest", "logo.png", "app-192.png", "app-512.png", "app-maskable.png",
-  "index.html", "404.html", "style.css", "route.js", "start.js", "journal.js", "legal.js", "legal-content.js", "photos.js", "reading.js", "reading-copy.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js", "public-cache.js",
+  "index.html", "404.html", "style.css", "route.js", "start.js", "journal.js", "legal.js", "legal-content.js", "photos.js", "reading.js", "reading-copy.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js", "public-cache.js", "image-viewer.js",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
@@ -11,7 +11,7 @@ export const adminFiles = [
   "visual-editor.js", "pdf-thumbnail.js", "turndown.js", "pdf-engine.js", "pdf-worker.js", "LICENSE-turndown.txt", "LICENSE-pdfjs.txt",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
-export const sharedFiles = ["scrollbars.css", "interface.css", "keyboard.js", "feedback.js", "common.js", "text.js", "photo-text.js", "page-url.js", "archive.js", "series.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
+export const sharedFiles = ["scrollbars.css", "interface.css", "keyboard.js", "feedback.js", "common.js", "text.js", "note.js", "photo-text.js", "page-url.js", "archive.js", "series.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
   "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt"];
 export const securityHeaders = {
   "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'none'; object-src 'none'",

@@ -6,6 +6,8 @@ import { archiveTitle, commentCards, grouped, noteCard, publicationRevision, ren
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { entryTags } from "./text.js";
+import { noteExtras, readNote } from "./note.js";
+import { loadNoteImages } from "./image-viewer.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
@@ -46,6 +48,7 @@ document.head.append(canonical);
 
 const get = (path, options) => request(table(path), options);
 const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
+const publicImage = id => publicData("image:" + id, () => readMediaImage(get, id));
 
 async function loadPublicPosts() {
   if (demo) return [];
@@ -56,7 +59,13 @@ async function fetchPublicPosts() {
   const fields = "id,slug,title,tag,excerpt,published_on";
   const filter = "&published=eq.true&order=published_on.desc,id.desc";
   for (const extra of [",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""]) {
-    try { return await allRows(get, "posts?select=" + fields + extra + filter); }
+    try {
+      const posts = await allRows(get, "posts?select=" + fields + extra + filter);
+      if (!posts.some(post => post.is_note)) return posts;
+      const notes = await allRows(get, "posts?select=id,body&published=eq.true&is_note=eq.true&order=id.asc");
+      const bodies = new Map(notes.map(note => [note.id, note.body]));
+      return posts.map(post => post.is_note ? { ...post, body: bodies.get(post.id) } : post);
+    }
     catch (error) { if (!extra || !missingColumn(error)) throw error; }
   }
 }
@@ -189,9 +198,10 @@ async function renderPost(posts, index, firstBody) {
       void import("./rich.js").then(({ enhanceVideos }) => enhanceVideos(bodyElement)).catch(() => {});
     }
   } else if (post.is_note) {
-    bodyElement.innerHTML = `<p class="note-text">${escape(post.body)}</p>`;
+    const { text } = readNote(post.body);
+    bodyElement.innerHTML = (text ? `<p class="note-text">${escape(text)}</p>` : "") + noteExtras(post.body);
   } else if (renderer) {
-    renderer.renderText(bodyElement, post.body, id => publicData("image:" + id, () => readMediaImage(get, id)), { loadAttachment: fetchAttachment, preparePrint: true });
+    renderer.renderText(bodyElement, post.body, publicImage, { loadAttachment: fetchAttachment, preparePrint: true, enlargeImages: true });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
   } else {
@@ -357,6 +367,7 @@ async function load() {
   document.querySelector("#refresh-status")?.remove();
   try {
     await start();
+    if (view !== "review") await loadNoteImages(content, publicImage);
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
     if (content.dataset.prerendered) {

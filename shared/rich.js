@@ -126,7 +126,7 @@ export function mediaReferences(body) {
 
 export const renderMarkup = (body, environment) => md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body, environment);
 
-export function loadImageSlot(slot, loadImage) {
+export function loadImageSlot(slot, loadImage, enlarge = false) {
   return Promise.resolve().then(() => loadImage(slot.dataset.image)).then(image => {
     const src = imageSource(image);
     if (!src) throw new Error();
@@ -136,7 +136,14 @@ export function loadImageSlot(slot, loadImage) {
     picture.decoding = "async";
     picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
     picture.src = src;
-    slot.replaceChildren(picture);
+    if (enlarge) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "zoom-image";
+      button.setAttribute("aria-label", "Enlarge photo: " + picture.alt);
+      button.append(picture);
+      slot.replaceChildren(button);
+    } else slot.replaceChildren(picture);
   }).catch(() => { slot.textContent = slot.dataset.alt || "Image unavailable"; })
     .finally(() => slot.removeAttribute("aria-busy"));
 }
@@ -159,7 +166,7 @@ export function enhanceVideos(target, editable = false) {
   }
 }
 
-export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false, editable = false } = {}) {
+export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false, editable = false, enlargeImages = false } = {}) {
   if (!markdown) {
     target.replaceChildren(...body.split(/\n\s*\n/).filter(Boolean).map(text => {
       const p = document.createElement("p");
@@ -188,7 +195,7 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
     requested.add(slot);
     const id = slot.dataset.image;
     if (!images.has(id)) images.set(id, Promise.resolve().then(() => loadImage(id)));
-    void loadImageSlot(slot, () => images.get(id));
+    void loadImageSlot(slot, () => images.get(id), enlargeImages);
   }
   const slots = target.querySelectorAll("[data-image]");
   if (slots.length && typeof IntersectionObserver === "function") {

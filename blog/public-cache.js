@@ -1,5 +1,8 @@
 // Only call with anonymously readable data. Review links and the writing desk
 // never use this cache. Expired data can be used when the network is unavailable.
+import { readNote } from "./note.js";
+import { searchExcerpt } from "./text.js";
+
 const name = "common-hours-public-v1";
 const recent = new Map();
 const open = () => typeof caches === "undefined" ? null : caches.open(name).catch(() => null);
@@ -51,11 +54,13 @@ export async function cachedEntries(query) {
     try { return await (await cache.match(key(id)))?.json(); } catch { return null; }
   };
   const posts = await read("posts") || [];
-  const term = query.toLowerCase();
+  const term = query.trim();
+  if (!term) return [];
   const matches = await Promise.all(posts.map(async post => {
-    if ([post.title, post.tag, post.excerpt].some(value => value?.toLowerCase().includes(term))) return post;
     const entry = await read("post:" + post.slug);
-    return entry?.body?.toLowerCase().includes(term) ? post : null;
+    const body = post.is_note ? readNote(entry?.body ?? post.body).text : entry?.body;
+    const snippet = [body, post.excerpt, post.tag, post.title].map(value => searchExcerpt(value, term)).find(Boolean);
+    return snippet ? { ...post, snippet } : null;
   }));
   return matches.filter(Boolean).slice(0, 25);
 }

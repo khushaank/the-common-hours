@@ -1,6 +1,7 @@
 import { showFailure, watchUnexpectedErrors } from "./feedback.js";
 import { setupShortcuts } from "./keyboard.js";
 import { pageHref, pageParams } from "./page-url.js";
+import { setupImageViewer } from "./image-viewer.js";
 
 watchUnexpectedErrors("Part of the journal ran into a problem. You can keep reading or reload the page.");
 
@@ -31,6 +32,7 @@ import("./journal.js").catch(() => {
 });
 
 setupSearch();
+setupImageViewer();
 const activate = selector => () => document.querySelector(selector).click();
 setupShortcuts("Journal shortcuts", [
   ["Alt + K", "Open journal search", activate("#search-link")],
@@ -82,7 +84,7 @@ function setupSearch() {
       try {
         const { findEntries, searchCards } = await import("./reading.js");
         const entries = await findEntries(term);
-        if (current === revision) results.innerHTML = searchCards(entries);
+        if (current === revision) results.innerHTML = searchCards(entries, term);
       } catch {
         if (current === revision) showFailure(results, "Search could not load.", () => updateSearch(0));
       } finally {
