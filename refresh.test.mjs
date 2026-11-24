@@ -26,7 +26,9 @@ test("a built featured photo and footer are available in the initial homepage HT
   const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() }, featured);
   assert.match(pages.get("index.html"), /aria-label="Featured Photo">[\s\S]+src="featured\.webp\?v=0123456789abcdef" width="1000" height="600"/);
   assert.match(pages.get("index.html"), /id="photo-caption">Lake &amp; mist/);
-  assert.match(pages.get("index.html"), /class="site-footer"[\s\S]+footer-landscape\.jpg[\s\S]+class="back-to-top" href="#top"/);
+  for (const file of ["index.html", "archive.html"]) {
+    assert.match(pages.get(file), /<footer class="site-footer">[\s\S]+class="back-to-top" href="#top"[\s\S]+<\/div>\s*<img class="footer-landscape" src="footer-landscape\.jpg"[^>]*>\s*<\/footer>/);
+  }
   assert.doesNotMatch(pages.get("archive.html"), /featured\.webp|id="featured-snapshot"/);
 });
 

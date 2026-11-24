@@ -231,11 +231,10 @@ button:focus-visible { text-decoration: underline; text-underline-offset: .2em; 
 @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
 .comments > div > .status { margin-top: 8px; }
-.site-footer { position: relative; isolation: isolate; min-height: clamp(98px, 12vw, 182px); border-top: 1px solid var(--line); color: var(--ink); font-size: 13px; }
+.site-footer { border-top: 1px solid var(--line); color: var(--ink); font-size: 13px; }
 .home-page .layout { min-height: min(570px, 65vh); }
-.footer-landscape { aspect-ratio: 1440 / 182; }
-.footer-landscape { position: absolute; bottom: 0; width: 100%; height: auto; display: block; }
-.site-footer .wrap { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 0; }
+.footer-landscape { display: block; width: 100%; height: auto; }
+.site-footer .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 0; }
 .back-to-top { gap: 8px; white-space: nowrap; }
 .back-to-top svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
 .back-to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
