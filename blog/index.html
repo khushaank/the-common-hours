@@ -19,7 +19,6 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="scrollbars.css">
 <link rel="modulepreload" href="journal.js">
-<link rel="modulepreload" href="photos.js">
 <link rel="modulepreload" href="common.js">
 <link rel="modulepreload" href="public-cache.js">
 <link rel="modulepreload" href="config.js">
@@ -30,7 +29,7 @@
   <div class="wrap mast">
     <a class="brand" href="./">The Common Hours</a>
     <nav aria-label="Main navigation">
-      <a href="./" id="journal-link">Journal</a><a href="archive.html" id="archive-link">Archive</a><a class="js-only" href="./#featured-photo">Featured Photo</a>
+      <a href="./" id="journal-link">Journal</a><a href="archive.html" id="archive-link">Archive</a><a href="./#featured-photo">Featured Photo</a>
       <a href="start.html" id="start-link">Start here</a>
       <button id="search-link" class="search-icon js-only" type="button" aria-label="Search the journal" aria-expanded="false" aria-controls="nav-search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></button>
     </nav>
@@ -62,7 +61,7 @@
   </figure>
   </div>
   <!-- featured-snapshot -->
-  <p id="script-notice">JavaScript is unavailable. You can still read and browse the journal. Search and forms need JavaScript.</p>
+  <p id="script-notice">JavaScript is unavailable. You can still read and browse.</p>
   <div class="layout">
     <section id="content" tabindex="-1" aria-label="Journal content" aria-busy="true">
       <!-- public-content -->
@@ -98,7 +97,6 @@
   <img class="footer-landscape" src="footer-landscape.jpg" width="1440" height="182" alt="" decoding="async">
   <div class="wrap"><nav aria-label="Site policies and feed"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="feed.xml">RSS</a></nav><a class="back-to-top" href="#top">Back to top <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg></a></div>
 </footer>
-<script defer src="route.js"></script>
 <script type="module" src="start.js"></script>
 </body>
 </html>

@@ -2,12 +2,48 @@ import { entryTags, escape } from "./text.js";
 import { pageHref } from "./page-url.js";
 
 export const archivePageSize = 15;
+
+export function publicationRevision(posts, detail = false) {
+  const values = JSON.stringify(posts.map(post => [
+    post.id, post.slug, post.title, post.tag, post.excerpt, post.published_on,
+    post.series || "", post.series_order ?? null, Boolean(post.start_here), Boolean(post.is_note),
+    detail ? post.body : null,
+  ]));
+  let hash = 2166136261;
+  for (let index = 0; index < values.length; index++) {
+    hash = Math.imul(hash ^ values.charCodeAt(index), 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
 export function archiveTitle(params) {
   const selection = [params.get("year"), params.get("month"), params.get("tag"), params.get("page") && "Page " + params.get("page")].filter(Boolean).join(" · ");
   return "Archive" + (selection ? " · " + selection : "");
 }
 const href = values => escape(pageHref({ view: "archive", ...values }));
 const monthLabel = value => new Date(value + "-01T00:00:00Z").toLocaleDateString("en", { month: "long", year: "numeric", timeZone: "UTC" });
+
+export function grouped(posts, value) {
+  const groups = new Map();
+  for (const name of posts.flatMap(value)) groups.set(name, (groups.get(name) || 0) + 1);
+  return groups;
+}
+
+export function sideLinks(groups, key, label, selected) {
+  return [...groups].map(([name, count]) =>
+    `<li><a href="${href({ [key]: name })}" ${name === selected ? 'aria-current="page"' : ""}>${escape(label(name))}<span>${count}</span></a></li>`
+  ).join("");
+}
+
+export function renderSidebar(months, topics, month, tag) {
+  const archives = sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month);
+  return `<section class="side-section"><h2 class="side-title">Blog archive</h2>
+    <ul class="side-list">${archives}</ul>
+    ${months.size > 8 ? '<p><a class="back" href="archive.html">All months →</a></p>' : ""}
+    ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
+    ${topics.length ? `<section class="side-section sidebar-topics"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topics.slice(0, 10), "tag", name => name, tag)}</ul>
+    ${topics.length > 10 ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
+}
 
 export function noteCard(post, dateLabel) {
   return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">Note · <time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p><p class="note-text">${escape(post.excerpt)}</p></article>`;

@@ -139,20 +139,7 @@ export function loadImageSlot(slot, loadImage) {
     .finally(() => slot.removeAttribute("aria-busy"));
 }
 
-export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false, editable = false } = {}) {
-  if (!markdown) {
-    target.replaceChildren(...body.split(/\n\s*\n/).filter(Boolean).map(text => {
-      const p = document.createElement("p");
-      p.textContent = text;
-      return p;
-    }));
-    return;
-  }
-
-  target.innerHTML = renderMarkup(body, { editable });
-  if (editable) {
-    for (const item of target.querySelectorAll(".media-slot, .video, .footnote-ref, .footnotes")) item.contentEditable = "false";
-  }
+export function enhanceVideos(target, editable = false) {
   for (const poster of target.querySelectorAll(".video-poster")) {
     poster.addEventListener("error", () => poster.remove(), { once: true });
   }
@@ -168,6 +155,23 @@ export function renderText(target, body, loadImage, { markdown = body.startsWith
       frame.focus();
     });
   }
+}
+
+export function renderText(target, body, loadImage, { markdown = body.startsWith(markdownMarker), loadAttachment, preparePrint = false, preview = false, editable = false } = {}) {
+  if (!markdown) {
+    target.replaceChildren(...body.split(/\n\s*\n/).filter(Boolean).map(text => {
+      const p = document.createElement("p");
+      p.textContent = text;
+      return p;
+    }));
+    return;
+  }
+
+  target.innerHTML = renderMarkup(body, { editable });
+  if (editable) {
+    for (const item of target.querySelectorAll(".media-slot, .video, .footnote-ref, .footnotes")) item.contentEditable = "false";
+  }
+  enhanceVideos(target, editable);
   if (preview) {
     for (const link of target.querySelectorAll("a[href]:not([href^='#'])")) {
       if (link.getAttribute("href").startsWith("?post=")) link.setAttribute("href", "../" + link.getAttribute("href"));

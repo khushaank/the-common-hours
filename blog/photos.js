@@ -65,7 +65,7 @@ export async function startSlideshow(get, demo) {
     photos = (demo ? [cover] : await featurePhotos(get)).map(publicPhoto);
   } catch {
     figure.removeAttribute("aria-busy");
-    caption.textContent = "Photo could not load. Refresh to try again.";
+    if (!picture.hasAttribute("src")) caption.textContent = "Photo could not load. Refresh to try again.";
     return;
   }
   if (!photos.length) photos.push(publicPhoto(cover));
@@ -98,7 +98,7 @@ export async function startSlideshow(get, demo) {
     let data;
     try {
       data = await prepare(photo);
-      if (data.src !== picture.getAttribute("src")) {
+      if (data.src !== picture.getAttribute("src") || (picture.complete && !picture.naturalWidth)) {
         const ready = new Image();
         ready.src = data.src;
         try { await ready.decode(); }

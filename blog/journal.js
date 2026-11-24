@@ -2,7 +2,7 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, noteCard, renderArchive } from "./archive.js";
+import { archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, sideLinks } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { entryTags } from "./text.js";
@@ -113,20 +113,6 @@ function recordView(page, post = null) {
   else setTimeout(send, 0);
 }
 
-function grouped(posts, value) {
-  const groups = new Map();
-  for (const name of posts.flatMap(value)) {
-    groups.set(name, (groups.get(name) || 0) + 1);
-  }
-  return groups;
-}
-
-function sideLinks(groups, key, label, selected) {
-  return [...groups].map(([name, count]) =>
-    `<li><a href="${link({ view: "archive", [key]: name })}" ${name === selected ? 'aria-current="page"' : ""}>${escape(label(name))}<span>${count}</span></a></li>`
-  ).join("");
-}
-
 function metadata(post, byline = false) {
   return `<p class="meta"><time datetime="${escape(post.published_on)}">${dateLabel(post.published_on)}</time>
     ${entryTags(post.tag).map(tag => `<a class="tag" href="${link({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ")}${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
@@ -168,24 +154,40 @@ async function renderPost(posts, index, firstBody) {
     Object.assign(post, detail);
   }
   const hasFormatting = post.body.startsWith(markdownMarker);
-  const renderer = hasFormatting ? await import("./rich.js").catch(() => null) : null;
+  const published = content.querySelector(".published-copy .article");
+  const retain = content.dataset.refreshPending === undefined && published?.dataset.publication === publicationRevision([post], true);
+  const renderer = !retain && hasFormatting ? await import("./rich.js").catch(() => null) : null;
   document.title = post.title + " — The Common Hours";
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
-  content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article${post.is_note ? " journal-note" : ""}">
+  const previousNext = `<nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>`;
+  if (!retain) content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article${post.is_note ? " journal-note" : ""}">
     ${seriesMembership(post)}<h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     ${seriesNavigation(posts, post)}
-    <nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>
-    <section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div>
+    ${previousNext}<section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div></section>`;
+  else {
+    const navigation = seriesNavigation(posts, post);
+    const existingSeries = content.querySelector(".series-navigation");
+    if (existingSeries) existingSeries.outerHTML = navigation;
+    else if (navigation) published.insertAdjacentHTML("afterend", navigation);
+    content.querySelector(".comments").insertAdjacentHTML("beforebegin", previousNext);
+  }
+  const discussion = content.querySelector(".comments");
+  discussion.insertAdjacentHTML("beforeend", `
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
     ${post.reader_prompt ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
     <label>Display name <input name="display_name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
     <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy.html">Privacy</a>'}</p>
-    <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form></section>`;
+    <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form>`);
+  discussion.hidden = false;
   const bodyElement = document.querySelector("#entry-body");
-  if (post.is_note) {
+  if (retain) {
+    if (bodyElement.querySelector("[data-player], .video-poster")) {
+      void import("./rich.js").then(({ enhanceVideos }) => enhanceVideos(bodyElement)).catch(() => {});
+    }
+  } else if (post.is_note) {
     bodyElement.innerHTML = `<p class="note-text">${escape(post.body)}</p>`;
   } else if (renderer) {
     renderer.renderText(bodyElement, post.body, id => publicData("image:" + id, () => readMediaImage(get, id)), { loadAttachment: fetchAttachment, preparePrint: true });
@@ -194,7 +196,7 @@ async function renderPost(posts, index, firstBody) {
   } else {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
-  if (!post.is_note && (renderer || !hasFormatting)) {
+  if (!post.is_note && (retain || renderer || !hasFormatting)) {
     const walker = document.createTreeWalker(bodyElement, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, node => {
       if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
       return node.matches(".media-slot, .attachment, .attachment-status, .video, .footnote-backref") ?
@@ -264,7 +266,7 @@ async function renderPost(posts, index, firstBody) {
       ));
       showComments(comments);
     } catch {
-      showFailure(list, "Comments could not load.", loadComments);
+      if (!list.childElementCount) showFailure(list, "Comments could not load.", loadComments);
     } finally {
       list.setAttribute("aria-busy", "false");
     }
@@ -282,7 +284,7 @@ async function start() {
   if (isLegal) {
     const { renderLegal } = await import("./legal.js");
     document.title = (view === "privacy" ? "Privacy" : "Terms") + " — The Common Hours";
-    renderLegal(content, view, demo);
+    renderLegal(content, view, demo, content.dataset.prerendered && content.dataset.refreshPending === undefined);
     recordView(view);
     return;
   }
@@ -294,6 +296,15 @@ async function start() {
   }
   const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
+  const unchanged = content.dataset.refreshPending === undefined &&
+    document.querySelector("#public-pages")?.dataset.publication === publicationRevision(posts);
+  if (unchanged && !slug) {
+    if (isJournal) {
+      saveLatestForOffline(posts);
+      recordView("journal");
+    } else if (view === "archive") recordView("archive");
+    return;
+  }
   if (view === "series") {
     document.title = "Series — The Common Hours";
     content.innerHTML = seriesDirectory(posts);
@@ -311,14 +322,6 @@ async function start() {
   }
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topics = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
-  const topTopics = topics.slice(0, 10);
-  const archives = sideLinks(months, "month", monthLabel, month);
-  const sidebarMarkup = `<section class="side-section"><h2 class="side-title">Blog archive</h2>
-    <ul class="side-list">${sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month)}</ul>
-    ${months.size > 8 ? '<p><a class="back" href="archive.html">All months →</a></p>' : ""}
-    ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
-    ${topics.length ? `<section class="side-section sidebar-topics"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topTopics, "tag", name => name, tag)}</ul>
-    ${topics.length > topTopics.length ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
   if (view === "topics") {
     document.title = "All topics — The Common Hours";
     content.innerHTML = `<div class="section-head"><h1>All topics</h1><span class="section-note">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</span></div>` +
@@ -335,7 +338,7 @@ async function start() {
     if (isJournal) saveLatestForOffline(posts);
     recordView("journal");
   }
-  sidebar.innerHTML = sidebarMarkup;
+  if (!unchanged) sidebar.innerHTML = renderSidebar(months, topics, month, tag);
 }
 
 async function load() {

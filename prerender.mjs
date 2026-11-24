@@ -2,7 +2,7 @@ import { entryTags, escape, imageSource, markdownMarker, mediaId } from "./share
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
-import { archiveEntries, archivePageSize, archiveTitle, commentCards, noteCard, renderArchive } from "./shared/archive.js";
+import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar } from "./shared/archive.js";
 import { seriesDirectory, seriesMembership, seriesNavigation } from "./shared/series.js";
 import { startIntroduction, startEmpty } from "./blog/reading-copy.js";
 import { publicPhoto } from "./shared/photo-text.js";
@@ -84,8 +84,9 @@ export async function loadPublicSnapshot(config) {
   return { posts, photos, comments, files, images, attachments };
 }
 
-export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map() }) {
+export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map() }, featured) {
   const pages = new Map(files);
+  const revision = publicationRevision(posts);
   const loading = (template.match(/<!-- public-content -->([\s\S]*?)<!-- \/public-content -->/)?.[1] || "")
     .replace(/\bid="[^"]*"/g, "");
   photos = photos.map(publicPhoto);
@@ -106,7 +107,8 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const image = images.get(id);
     return image ? `<img src="${image.src}" width="${Number(image.width)}" height="${Number(image.height)}" alt="${escape(alt || image.alt || "")}" loading="lazy" decoding="async">` : `<span class="photo-unavailable">${escape(alt || "Photo unavailable")}</span>`;
   };
-  const sidebar = `<section class="side-section"><h2 class="side-title">Blog archive</h2><p><a href="archive.html">Browse all entries →</a></p></section>`;
+  const months = grouped(posts, post => post.published_on.slice(0, 7));
+  const topicCounts = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   function page(values, title, content, description, classes = "wide-page") {
     const address = pageHref(values);
     const file = address === "./" ? "index.html" : address;
@@ -118,9 +120,18 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
       .replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escape(description)}">`)
       .replace("</head>", () => `<link rel="canonical" href="${escape(canonical)}"><meta property="og:title" content="${escape(fullTitle)}"><meta property="og:description" content="${escape(description)}"><meta property="og:url" content="${escape(canonical)}"><meta property="og:type" content="${values.post ? "article" : "website"}"></head>`)
       .replace(/<!-- public-content -->[\s\S]*?<!-- \/public-content -->/, () => '<div class="published-copy">' + content + '</div>' + loading)
-      .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}"></template></body>`)
+      .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}" data-publication="${revision}"></template></body>`)
       .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true"')
-      .replace('<aside id="sidebar" aria-label="Blog archive"></aside>', `<aside id="sidebar" aria-label="Blog archive">${sidebar}</aside>`);
+      .replace('<aside id="sidebar" aria-label="Blog archive"></aside>', () =>
+        `<aside id="sidebar" aria-label="Blog archive">${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
+      .replace("<!-- featured-snapshot -->", file === "index.html" ? featured?.markup || "" : "");
+    if (file === "index.html" && featured) {
+      const photo = publicPhoto(featured.first);
+      html = html.replace('aria-label="Featured Photo" aria-busy="true" hidden', 'aria-label="Featured Photo"')
+        .replace('<img width="1200" height="800" alt="" draggable="false" decoding="async" fetchpriority="high">',
+          () => `<img src="featured.webp?v=${escape(featured.version)}" width="${featured.width}" height="${featured.height}" alt="${escape(photo.alt)}" draggable="false" decoding="async" fetchpriority="high">`)
+        .replace('<span id="photo-caption"></span>', () => `<span id="photo-caption">${escape(photo.title)}</span>`);
+    }
     pages.set(file, html);
   }
   const heading = title => `<div class="section-head"><h1>${escape(title)}</h1></div>`;
@@ -147,9 +158,10 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const membership = seriesMembership(post);
     const navigation = seriesNavigation(posts, post);
     const discussion = commentCards(commentsByPost.get(post.id) || []);
-    const commentsSection = discussion ? `<section class="comments"><h2>Comments</h2><div>${discussion}</div></section>` : "";
+    const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;
+    const postRevision = publicationRevision([post], true);
     if (post.is_note) {
-      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body"><p class="note-text">${escape(post.body)}</p></div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
+      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note" data-publication="${postRevision}">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body"><p class="note-text">${escape(post.body)}</p></div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>
@@ -162,7 +174,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
         return `<a class="attachment" href="${attachments.get(id)}" download="${escape(attachmentNames.get(id) || "Attachment")}">${label}</a>`;
       })
       .replace(/href="\?post=([a-z0-9-]+)"/g, (_, slug) => `href="${publicFiles.has("entry-" + slug + ".html") ? "entry-" + slug + ".html" : "./?post=" + slug}"`);
-    page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article">${membership}<h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
+    page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article" data-publication="${postRevision}">${membership}<h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
   }
   for (const photo of photos) {
     const taken = photoDate(photo);

@@ -18,6 +18,18 @@ test("prebuilt pages keep readable copies and skeletons without painting the fal
   assert.match(home, /data-skeleton="journal"/);
 });
 
+test("a built featured photo and footer are available in the initial homepage HTML", () => {
+  const featured = {
+    first: { title: "Lake & mist", alt: "A quiet lake" }, width: 1000, height: 600, version: "0123456789abcdef",
+    markup: '<template id="featured-snapshot"></template>',
+  };
+  const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() }, featured);
+  assert.match(pages.get("index.html"), /aria-label="Featured Photo">[\s\S]+src="featured\.webp\?v=0123456789abcdef" width="1000" height="600"/);
+  assert.match(pages.get("index.html"), /id="photo-caption">Lake &amp; mist/);
+  assert.match(pages.get("index.html"), /class="site-footer"[\s\S]+footer-landscape\.jpg[\s\S]+class="back-to-top" href="#top"/);
+  assert.doesNotMatch(pages.get("archive.html"), /featured\.webp|id="featured-snapshot"/);
+});
+
 function carousel(get) {
   const attributes = new Map();
   const element = () => ({ hidden: false, textContent: "", addEventListener() {}, setAttribute() {}, contains: () => false });

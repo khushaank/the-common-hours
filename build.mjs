@@ -23,7 +23,7 @@ async function featuredSnapshot(config) {
     const [first] = photos;
     if (!/^[0-9a-f-]{36}$/i.test(first.id)) return null;
     const data = JSON.stringify({ first: { id: first.id, media_id: first.media_id }, width: info.width, height: info.height, version });
-    return { bytes, version, markup: '<template id="featured-snapshot" data-value="' +
+    return { bytes, version, first, width: info.width, height: info.height, markup: '<template id="featured-snapshot" data-value="' +
       data.replace(/[&"<>]/g, char => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[char]) + '"></template>' };
   } catch { return null; }
 }
@@ -65,10 +65,9 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     const target = new URL(file, output);
     if (file === "index.html") {
       const html = withConnectSource(await readFile(source, "utf8"), config);
-      const document = html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`)
-        .replace("<!-- featured-snapshot -->", featured?.markup || "");
+      const document = html.replace(/\b(src|href)="([^"\s]+)"/g, (_, attr, path) => `${attr}="${version(path)}"`);
       if (snapshot) {
-        publicPages = renderPublicPages(document, snapshot);
+        publicPages = renderPublicPages(document, snapshot, featured);
         for (const [name, data] of publicPages) await writeFile(new URL(name, output), data);
       } else await writeFile(target, document);
     } else if (file.endsWith(".js") && sources.has(file)) {

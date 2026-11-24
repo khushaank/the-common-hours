@@ -2,8 +2,8 @@ import { missingFeature, request, table } from "./common.js";
 
 import { notice, terms } from "./legal-content.js";
 
-export function renderLegal(content, view, demo) {
-  content.innerHTML = `<article class="legal">${view === "privacy" ? notice : terms}</article>`;
+export function renderLegal(content, view, demo, retain = false) {
+  if (!retain) content.innerHTML = `<article class="legal">${view === "privacy" ? notice : terms}</article>`;
   if (view !== "privacy") return;
   const contact = content.querySelector("#contact");
   contact.insertAdjacentHTML("beforeend", `<form method="post"><label>Reply email <input type="email" name="email" required maxlength="254" autocomplete="email"></label>
