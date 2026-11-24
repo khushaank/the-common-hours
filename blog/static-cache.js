@@ -53,7 +53,7 @@ self.addEventListener("fetch", event => {
         const homepage = await caches.match(shell, { cacheName });
         if (homepage) return homepage;
       }
-      return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Offline — The Common Hours</title><h1>This page isn’t saved for offline reading</h1><p>Reconnect to open it, or <a href="' + scope.href + '">return to the journal</a>.</p></html>',
+      return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Offline - The Common Hours</title><h1>This page isn’t saved for offline reading</h1><p>Reconnect to open it, or <a href="' + scope.href + '">return to the journal</a>.</p></html>',
         { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
     }));
   } else if (urls.has(request.url)) {

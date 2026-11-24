@@ -213,11 +213,11 @@ export async function renderPhotoView(content, get, demo, id) {
 
   const photo = id === cover.id ? cover : demo ? undefined : await loadArchivePhoto(get, id);
   if (!photo) {
-    document.title = "Photo unavailable — The Common Hours";
+    document.title = "Photo unavailable - The Common Hours";
     content.innerHTML = backLink + "<h1>Photo unavailable</h1>";
     return;
   }
-  document.title = photo.title + " — The Common Hours";
+  document.title = photo.title + " - The Common Hours";
   const date = photoDate(photo);
   content.innerHTML = backLink + '<article class="photo-detail"><h1>' + escape(photo.title) + '</h1>' +
     (date ? '<p class="meta">' + escape(date) + '</p>' : '') +

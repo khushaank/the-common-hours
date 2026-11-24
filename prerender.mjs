@@ -114,7 +114,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const file = address === "./" ? "index.html" : address;
     if (file !== "index.html" && !generatedFile.test(file)) throw new Error("Invalid public page filename.");
     const canonical = new URL(address, home).href;
-    const fullTitle = title + " — The Common Hours";
+    const fullTitle = title + " - The Common Hours";
     let html = template.replace('<html lang="en">', () => `<html lang="en" class="${classes}" data-route="${escape(new URLSearchParams(values))}">`)
       .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escape(fullTitle)}</title>`)
       .replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escape(description)}">`)
@@ -183,7 +183,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   pages.set("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + [...pages.keys()].filter(file => file.endsWith(".html")).map(file => `<url><loc>${escape(new URL(file === "index.html" ? "./" : file, home).href)}</loc></url>`).join("") + "</urlset>\n");
   pages.set("robots.txt", "User-agent: *\nAllow: /\nSitemap: " + home + "sitemap.xml\n");
   for (const name of ["collections.html", "photo-essays.html"]) {
-    pages.set(name, '<!doctype html><html lang="en"><meta charset="utf-8"><title>Archive — The Common Hours</title><meta http-equiv="refresh" content="0; url=archive.html"><p><a href="archive.html">Browse the archive</a></p></html>');
+    pages.set(name, '<!doctype html><html lang="en"><meta charset="utf-8"><title>Archive - The Common Hours</title><meta http-equiv="refresh" content="0; url=archive.html"><p><a href="archive.html">Browse the archive</a></p></html>');
   }
   pages.set("photos.html", '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Featured Photo</title><meta http-equiv="refresh" content="0; url=./#featured-photo"><p><a href="./#featured-photo">Featured Photo</a></p></html>');
   return pages;

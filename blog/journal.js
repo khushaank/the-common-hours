@@ -138,7 +138,7 @@ function renderList(posts) {
       ${pages.map((number, i) => `${i && number - pages[i - 1] > 1 ? " … " : ""}<a href="${pageLink(number)}" aria-label="Page ${number}" ${number === page ? 'aria-current="page"' : ""}>${number}</a>`).join("")}
       ${page < totalPages ? `<a href="${pageLink(page + 1)}" rel="next" aria-label="Next page">→</a>` : ""}
       <span class="section-note">Page ${page} of ${totalPages}</span></nav>` : ""}`;
-  if (!isJournal) document.title = title + " — The Common Hours";
+  if (!isJournal) document.title = title + " - The Common Hours";
 }
 
 async function renderPost(posts, index, firstBody) {
@@ -157,7 +157,7 @@ async function renderPost(posts, index, firstBody) {
   const published = content.querySelector(".published-copy .article");
   const retain = content.dataset.refreshPending === undefined && published?.dataset.publication === publicationRevision([post], true);
   const renderer = !retain && hasFormatting ? await import("./rich.js").catch(() => null) : null;
-  document.title = post.title + " — The Common Hours";
+  document.title = post.title + " - The Common Hours";
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   const previousNext = `<nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>`;
@@ -283,7 +283,7 @@ async function start() {
   }
   if (isLegal) {
     const { renderLegal } = await import("./legal.js");
-    document.title = (view === "privacy" ? "Privacy" : "Terms") + " — The Common Hours";
+    document.title = (view === "privacy" ? "Privacy" : "Terms") + " - The Common Hours";
     renderLegal(content, view, demo, content.dataset.prerendered && content.dataset.refreshPending === undefined);
     recordView(view);
     return;
@@ -306,7 +306,7 @@ async function start() {
     return;
   }
   if (view === "series") {
-    document.title = "Series — The Common Hours";
+    document.title = "Series - The Common Hours";
     content.innerHTML = seriesDirectory(posts);
     if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
     return;
@@ -323,12 +323,12 @@ async function start() {
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topics = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   if (view === "topics") {
-    document.title = "All topics — The Common Hours";
+    document.title = "All topics - The Common Hours";
     content.innerHTML = `<div class="section-head"><h1>All topics</h1><span class="section-note">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</span></div>` +
       (topics.length ? `<ul class="side-list all-topics">${sideLinks(topics, "tag", name => name, tag)}</ul>` : "<p>No topics yet.</p>");
     return;
   } else if (view === "archive") {
-    document.title = archiveTitle(params) + " — The Common Hours";
+    document.title = archiveTitle(params) + " - The Common Hours";
     recordView("archive");
     content.innerHTML = renderArchive(posts, params);
   } else if (slug) {

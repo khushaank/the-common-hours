@@ -42,7 +42,7 @@ export function setupStats(api, getPosts, editEntry) {
     lastEntry.disabled = !last;
     document.querySelector("#last-published-date").textContent = last ?
       "Published " + new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(new Date(last.published_on + "T00:00:00Z")) : "Your next entry starts here.";
-    document.querySelector("#publishing-age").textContent = days === null ? "—" : number.format(days);
+    document.querySelector("#publishing-age").textContent = days === null ? "-" : number.format(days);
     document.querySelector("#publishing-note").textContent = days === null ? "No publications yet" : days === 0 ? "Published today" : "Based on the publication date";
   }
 
@@ -67,7 +67,7 @@ export function setupStats(api, getPosts, editEntry) {
     }
     const records = [...daily.values()];
     const peak = records.reduce((best, row) => row.views > (best?.views || 0) ? row : best, null);
-    document.querySelector("#active-day").textContent = peak ? formatDay(peak.day) : "—";
+    document.querySelector("#active-day").textContent = peak ? formatDay(peak.day) : "-";
     document.querySelector("#active-day-note").textContent = peak ? number.format(peak.views) + " page views" : "No daily activity recorded yet";
     const chartPeriod = selectedPeriod === "five-years" ? "Monthly" : selectedPeriod === "365" ? "Weekly" : "Daily";
     const buckets = new Map();
@@ -117,7 +117,7 @@ export function setupStats(api, getPosts, editEntry) {
     const selectedPeriod = period.value;
     const days = periodDays(selectedPeriod, journalToday());
     renderPublishing();
-    document.querySelector("#active-day").textContent = "—";
+    document.querySelector("#active-day").textContent = "-";
     document.querySelector("#active-day-note").textContent = "Loading activity…";
     status.textContent = "Loading traffic…";
     report.replaceChildren();

@@ -48,7 +48,8 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     release.update(JSON.stringify([snapshot.posts, snapshot.photos, snapshot.comments, [...snapshot.images]]));
     for (const [name, bytes] of snapshot.files) release.update(name).update(bytes);
   }
-  const versioned = new Set([...browserAssets, "config.js"]);
+  const versioned = new Set([...browserAssets, "config.js", "logo.png"]);
+  release.update(await readFile(assetSource(app, "logo.png")));
   if (app === "blog") {
     versioned.add("footer-landscape.jpg");
     release.update(await readFile(assetSource(app, "footer-landscape.jpg")));

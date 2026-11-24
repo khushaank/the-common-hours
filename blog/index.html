@@ -8,8 +8,8 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-39JKfICzE1b078PwYW8sadv7jjOVpLpIZl1sYeSi04o='; worker-src 'self'; manifest-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <script>const l=new URLSearchParams(location.search),w=l.get("view");if(["archive","topics","photos","start","series","privacy","terms","collections","photo-essays"].includes(w)){const t=new URL(w+".html",location.href);l.delete("view");l.delete("post");t.search=l.toString();t.hash=location.hash;location.replace(t.href)}const q=new URLSearchParams(document.documentElement.dataset.route),f=location.pathname.split("/").pop().replace(/\.html$/,"");if(!q.size&&f&&f!=="index"){if(f.startsWith("entry-"))q.set("post",f.slice(6));else if(f.startsWith("photo-")&&f!=="photo-essays"){q.set("view","photo");q.set("photo",f.slice(6))}else q.set("view",f)}for(const[k,v]of new URLSearchParams(location.search))q.set(k,v);const v=q.get("view"),p=q.get("post"),h=document.documentElement;h.classList.remove("article-page","home-page","wide-page","policy-page");if(p)h.classList.add("article-page");if(v==="search"||v==="saved"||!["view","post","month","tag","series","page"].some(k=>q.has(k)))h.classList.add("home-page");h.dataset.journalPage=({photos:"photos",photo:"photo",archive:"archive",topics:"archive",series:"archive",review:"article",privacy:"article",terms:"article"})[v]|| (p?"article":"journal");if(["photos","photo","review","start","series","topics"].includes(v)||q.get("series"))h.classList.add("wide-page");if(v==="privacy"||v==="terms")h.classList.add("policy-page");</script>
-<title>The Common Hours — An independent journal</title>
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>The Common Hours - An independent journal</title>
+<link rel="icon" href="logo.png" type="image/png" sizes="256x256">
 <link rel="apple-touch-icon" href="app-192.png">
 <link rel="manifest" href="manifest.webmanifest">
 <!-- public-api-connection -->
@@ -27,7 +27,7 @@
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="site-header" id="top" tabindex="-1">
   <div class="wrap mast">
-    <a class="brand" href="./">The Common Hours</a>
+    <a class="brand" href="./"><img class="brand-mark" src="logo.png" width="256" height="256" alt="" draggable="false">The Common Hours</a>
     <nav aria-label="Main navigation">
       <a href="./" id="journal-link">Journal</a><a href="archive.html" id="archive-link">Archive</a>
       <a href="start.html" id="start-link">Start here</a>

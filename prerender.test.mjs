@@ -23,7 +23,7 @@ test("static pages contain readable content, public links, safe formatting, and 
     images: new Map([[imageId, { src: "media-" + imageId + ".jpg", width: 800, height: 600 }]]),
   });
   const article = pages.get("entry-first-entry.html");
-  assert.match(article, /<title>\$&amp; &lt;a &quot;title&quot;&gt; — The Common Hours<\/title>/);
+  assert.match(article, /<title>\$&amp; &lt;a &quot;title&quot;&gt; - The Common Hours<\/title>/);
   assert.match(article, /<strong>Hello<\/strong>/);
   assert.doesNotMatch(article, /A caption|Paired photo/);
   assert.match(article, /src="media-12345678-1234-1234-1234-123456789abc.jpg"/);

@@ -40,7 +40,8 @@ img { max-width: 100%; -webkit-user-drag: none; user-select: none; }
 .skip-link:focus { translate: none; }
 .site-header { border-bottom: 1px solid var(--line); }
 .mast { position: relative; min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; padding-block: 10px; }
-.brand { font: 34px/1 var(--serif); letter-spacing: -.025em; }
+.brand { display: inline-flex; align-items: center; gap: .24em; font: 34px/1 var(--serif); letter-spacing: -.025em; }
+.brand-mark { width: .96em; height: .96em; flex: none; }
 .mast nav, .site-footer nav { display: flex; gap: 25px; color: var(--muted); font-size: 14px; }
 .mast nav { flex-wrap: wrap; }
 .mast nav a, .site-footer a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -159,7 +160,7 @@ h1, h2, h3 { font: 400 38px/1.08 var(--serif); margin: 0; overflow-wrap: anywher
 .section-note, .meta, .side-title, .post-nav span { color: var(--muted); font: 600 12px/1.5 var(--sans); }
 .section-note { white-space: nowrap; }
 .archive-browse { margin-block: 18px; overflow-wrap: anywhere; }
-.archive-browse summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
+.archive-browse summary { cursor: pointer; min-height: 44px; padding-block: 10px; -webkit-user-select: none; user-select: none; }
 .archive-browse h2 { font: 600 14px var(--sans); margin-top: 15px; }
 .archive-browse details a { display: inline-flex; align-items: center; min-height: 44px; margin-right: 16px; text-decoration: underline; }
 .start-introduction { margin-block: 22px; }

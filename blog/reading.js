@@ -11,7 +11,7 @@ function cards(posts) {
 }
 
 export function renderReadingList(content, title, entries, empty = "No entries here yet.") {
-  document.title = title + " — The Common Hours";
+  document.title = title + " - The Common Hours";
   content.innerHTML = '<div class="section-head"><h1>' + escape(title) + '</h1></div>' +
     (entries.length ? cards(entries) : '<p>' + escape(empty) + '</p>');
 }
@@ -47,7 +47,7 @@ export function searchCards(entries) {
 }
 
 export async function renderReview(content) {
-  document.title = "Draft review — The Common Hours";
+  document.title = "Draft review - The Common Hours";
   const robots = document.createElement("meta");
   robots.name = "robots";
   robots.content = "noindex, nofollow, noarchive";

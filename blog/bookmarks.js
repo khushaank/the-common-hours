@@ -46,7 +46,7 @@ export function addBookmarkButton(article, id) {
 }
 
 export function renderBookmarks(content, posts) {
-  document.title = "Read later — The Common Hours";
+  document.title = "Read later - The Common Hours";
   const heading = '<div class="section-head"><h1>Read later</h1></div>';
   function render() {
     try {

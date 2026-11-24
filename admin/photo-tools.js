@@ -154,7 +154,7 @@ export function setupPhotoTools(api, openLibrary) {
       const legend = document.createElement("legend");
       legend.textContent = entry.file?.name || entry.title || "Image from Media";
       group.append(legend);
-      for (const [name, title, maxLength] of [["title", "Photo title", 160], ["alt", "Alt text — describe what the image shows", 200]]) {
+      for (const [name, title, maxLength] of [["title", "Photo title", 160], ["alt", "Alt text - describe what the image shows", 200]]) {
         const label = document.createElement("label");
         const input = document.createElement("input");
         label.textContent = title;

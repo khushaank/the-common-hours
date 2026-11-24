@@ -1,13 +1,13 @@
 import { loadEnvFile } from "node:process";
 
 export const blogFiles = [
-  "manifest.webmanifest", "app-192.png", "app-512.png", "app-maskable.png",
+  "manifest.webmanifest", "logo.png", "app-192.png", "app-512.png", "app-maskable.png",
   "index.html", "favicon.svg", "404.html", "style.css", "route.js", "start.js", "journal.js", "legal.js", "legal-content.js", "photos.js", "reading.js", "reading-copy.js", "bookmarks.js", "cover.jpg", "footer-landscape.jpg", "static-cache.js", "public-cache.js",
   "serif.woff2", "serif-italic.woff2", "sans.woff2", "sans-semibold.woff2",
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const adminFiles = [
-  "index.html", "favicon.svg", "style.css", "desk-start.js", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
+  "index.html", "favicon.svg", "logo.png", "style.css", "desk-start.js", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "stats.js",
   "visual-editor.js", "pdf-thumbnail.js", "turndown.js", "pdf-engine.js", "pdf-worker.js", "LICENSE-turndown.txt", "LICENSE-pdfjs.txt",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
@@ -30,7 +30,7 @@ export const assetSource = (app, file) => {
     "LICENSE-pdfjs.txt": "pdfjs-dist/LICENSE",
   };
   if (app === "admin" && packages[file]) return new URL("./node_modules/" + packages[file], import.meta.url);
-  const folder = sharedFiles.includes(file) ? "shared" : /\.(?:woff2|txt)$/.test(file) || file === "favicon.svg" ? "blog" : app;
+  const folder = sharedFiles.includes(file) ? "shared" : /\.(?:woff2|txt)$/.test(file) || ["favicon.svg", "logo.png"].includes(file) ? "blog" : app;
   return new URL("./" + folder + "/" + file, import.meta.url);
 };
 
