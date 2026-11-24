@@ -7,7 +7,7 @@ import { renderPublicPages } from "./prerender.mjs";
 const template = await readFile(new URL("./blog/index.html", import.meta.url), "utf8");
 const photosSource = await readFile(new URL("./blog/photos.js", import.meta.url), "utf8");
 
-test("prebuilt pages keep readable copies and skeletons without painting the fallback hero", () => {
+test("prebuilt pages render readable content without a page preloader or fallback hero", () => {
   const pages = renderPublicPages(template, { posts: [], photos: [], images: new Map(), files: new Map() });
   const home = pages.get("index.html");
   assert.doesNotMatch(home, /src="cover\.jpg"/);
@@ -15,7 +15,7 @@ test("prebuilt pages keep readable copies and skeletons without painting the fal
   assert.match(home, /class="published-copy"/);
   assert.doesNotMatch(home, /data-refresh-pending=""/);
   assert.match(home, /id="script-notice">JavaScript is unavailable/);
-  assert.match(home, /data-skeleton="journal"/);
+  assert.doesNotMatch(home, /data-skeleton=/);
 });
 
 test("a built featured photo and footer are available in the initial homepage HTML", () => {
@@ -41,7 +41,7 @@ function carousel(get) {
     set src(value) { attributes.set("src", value); } };
   const caption = element();
   const items = { img: picture, "#photo-caption": caption, "#slide-next": element(), "#slide-count": element(), ".slide": element() };
-  const figure = { ...element(), querySelector: selector => items[selector], removeAttribute() {} };
+  const figure = { ...element(), hidden: true, querySelector: selector => items[selector], removeAttribute() {} };
   const source = photosSource.slice(photosSource.indexOf("async function optional"), photosSource.indexOf("\nasync function getImage")) +
     photosSource.slice(photosSource.indexOf("async function featurePhotos"), photosSource.indexOf("\nfunction photoDate"));
   const run = runInNewContext(source.replace("export ", "") + "\nstartSlideshow", {
@@ -57,7 +57,7 @@ function carousel(get) {
   return { run: () => run(get, false), attributes, figure, caption };
 }
 
-test("hero stays a skeleton during a delayed request, then shows the real photo directly", async () => {
+test("hero stays hidden during a delayed request, then shows the decoded photo directly", async () => {
   let resolve;
   const pending = new Promise(done => { resolve = done; });
   const view = carousel(path => {
@@ -66,9 +66,11 @@ test("hero stays a skeleton during a delayed request, then shows the real photo 
   });
   const loading = view.run();
   assert.equal(view.attributes.has("src"), false);
+  assert.equal(view.figure.hidden, true);
   resolve([{ id: "real", week: null, title: "Real photograph" }]);
   await loading;
   assert.equal(view.attributes.get("src"), "live.jpg");
+  assert.equal(view.figure.hidden, false);
   assert.equal(view.caption.textContent, "Real photograph");
 });
 
@@ -79,7 +81,7 @@ test("cover is used only after a successful empty result, never a request error"
   const failed = carousel(async () => { throw new Error("Network unavailable"); });
   await failed.run();
   assert.equal(failed.attributes.has("src"), false);
-  assert.equal(failed.figure.hidden, false);
+  assert.equal(failed.figure.hidden, true);
   assert.match(failed.caption.textContent, /Photo could not load/);
   const unavailable = carousel(async () => { throw Object.assign(new Error("Table unavailable"), { code: "PGRST205" }); });
   await unavailable.run();

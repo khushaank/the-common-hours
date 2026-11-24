@@ -134,21 +134,24 @@ test("an @ shortcut inserts the saved label and URL at the caret", () => {
   assert.equal(view.body.value, "See [Harvey](<https://example.test/harvey>)");
 });
 
-test("entry status filter combines with title and tag search without changing the source order", () => {
+test("entry type and status combine with search, and the Notes screen only shows notes", () => {
   const list = element();
   const count = element();
   const search = { value: "" };
   const filter = { value: "all" };
+  const type = { value: "all" };
   const posts = [
     { id: "one", title: "Market", tag: "Quiet pages", published: true, published_on: "2026-11-13" },
     { id: "two", title: "Elephant", tag: "Quiet pages", published: false, published_on: "2026-11-12" },
     { id: "three", title: "Footbridge", tag: "Walking", is_note: true, published: true, published_on: "2026-11-11" },
   ];
   const draft = { id: "draft:one", slot: "one", source: posts[0], title: "Untitled", slug: "market", tag: "Quiet pages", published: false, published_on: "2026-11-16" };
-  const render = runInNewContext(deskSource.slice(deskSource.indexOf("function renderPostList()"), deskSource.indexOf("\nasync function deleteEntry")) + "\nrenderPostList", {
-    postList: list, search, entryFilter: filter, posts, drafts: [draft], draftEntry: row => row, selectedEntry: "one",
+  const context = {
+    postList: list, search, entryFilter: filter, entryType: type, listScreen: "entries", posts, drafts: [draft], localDrafts: () => [],
+    draftEntry: row => row, selectedEntry: "one",
     document: { querySelector: () => count, createElement: element, addEventListener() {} },
-  });
+  };
+  const render = runInNewContext(deskSource.slice(deskSource.indexOf("function renderPostList()"), deskSource.indexOf("\nasync function deleteEntry")) + "\nrenderPostList", context);
   list.scrollTop = 240;
   render();
   assert.equal(list.children.length, 4);
@@ -165,14 +168,23 @@ test("entry status filter combines with title and tag search without changing th
   filter.value = "draft";
   render();
   assert.deepEqual(Array.from(list.children, row => row.children[1].textContent), ["Untitled", "Elephant"]);
-  filter.value = "notes";
+  type.value = "notes";
   search.value = "";
+  render();
+  assert.equal(list.children[0].textContent, "No matching entries.");
+  filter.value = "published";
   render();
   assert.equal(list.children[0].children[1].textContent, "Footbridge");
   search.value = "Missing";
   render();
   assert.equal(list.children[0].textContent, "No matching entries.");
   assert.equal(count.textContent, "0 of 4 entries");
+  context.listScreen = "notes";
+  type.value = "articles";
+  search.value = "";
+  render();
+  assert.equal(list.children[0].children[1].textContent, "Footbridge");
+  assert.equal(count.textContent, "1 note");
   assert.deepEqual(posts.map(post => post.id), ["one", "two", "three"]);
 });
 
@@ -320,10 +332,13 @@ test("publish validation reports each invalid field and accepts a blank generate
 
 test("Dashboard, Entries, and the editor are separate screens with the correct navigation state", () => {
   const panels = ["stats", "entries", "compose", "comments"].map(name => ({ id: name + "-panel", hidden: true }));
-  const nav = ["stats", "entries", "comments"].map(name => ({ dataset: { section: name }, setAttribute(key, value) { this[key] = value; } }));
+  const nav = ["stats", "entries", "notes", "comments"].map(name => ({ dataset: { section: name }, setAttribute(key, value) { this[key] = value; } }));
+  const title = element();
   let writing;
   const show = runInNewContext(deskSource.slice(deskSource.indexOf("function showSection("), deskSource.indexOf("async function loadPrivacyRequests")) + "\nshowSection", {
-    sections: nav, entryListScroll: 0, updateDeskAddress() {}, window: { scrollY: 240, scrollTo() {} }, document: { querySelector: () => panels[1], querySelectorAll: () => panels, body: { classList: { toggle(name, value) { writing = value; } } } },
+    sections: nav, listScreen: "entries", isListScreen: section => ["entries", "notes"].includes(section),
+    entryType: element(), entryFilter: element(), newPost: element(), newNote: element(), postList: element(), search: element(), renderPostList() {},
+    entryListScroll: 0, updateDeskAddress() {}, window: { scrollY: 240, scrollTo() {} }, document: { querySelector: selector => selector === "#entries-panel" ? panels[1] : title, querySelectorAll: () => panels, body: { classList: { toggle(name, value) { writing = value; } } } },
   });
   for (const screen of ["stats", "entries", "compose", "entries", "comments"]) {
     show(screen);
@@ -331,18 +346,23 @@ test("Dashboard, Entries, and the editor are separate screens with the correct n
     assert.equal(writing, screen === "compose");
     assert.equal(nav.find(button => button["aria-pressed"] === "true").dataset.section, screen === "compose" ? "entries" : screen);
   }
+  show("notes");
+  assert.equal(panels[1].hidden, false);
+  assert.equal(nav[2]["aria-pressed"], "true");
+  show("compose");
+  assert.equal(nav[2]["aria-pressed"], "true");
 });
 
 test("section links retain their screen on refresh and preserve private draft addresses", () => {
-  const sections = ["stats", "entries", "site", "media", "references", "comments", "inbox"].map(section => ({ dataset: { section } }));
+  const sections = ["stats", "entries", "notes", "site", "media", "references", "comments", "inbox"].map(section => ({ dataset: { section } }));
   const location = new URL("https://example.test/desk/");
   const navigations = [];
   const history = {
     pushState(_, __, url) { navigations.push("push"); location.href = url.href; },
     replaceState(_, __, url) { navigations.push("replace"); location.href = url.href; },
   };
-  const routes = runInNewContext(deskSource.slice(deskSource.indexOf("function sectionHash("), deskSource.indexOf("function showSection(")) +
-    "\n({ deskSection, composeAddress, updateDeskAddress })", { sections, location, history, URL, URLSearchParams,
+  const routes = runInNewContext(deskSource.slice(deskSource.indexOf("const isListScreen"), deskSource.indexOf("function showSection(")) +
+    "\n({ deskSection, composeAddress, updateDeskAddress })", { sections, location, history, URL, URLSearchParams, listScreen: "entries",
       activeDraft: { slot: "draft-id", slug: "my-post" } });
   assert.equal(routes.deskSection(), "stats");
   routes.updateDeskAddress("stats");
@@ -368,7 +388,7 @@ test("reopening the selected entry shows its editor without resetting unsaved co
   let requests = 0;
   let focused = false;
   const edit = runInNewContext(deskSource.slice(deskSource.indexOf("function editEntry("), deskSource.indexOf("const tags =")) + "\neditEntry", {
-    busy: false, current: "one", isNote: false, canLeaveDraft: () => true, rememberEntry() {}, renderPostList() {},
+    busy: false, editingId: () => "one", isNote: false, canLeaveDraft: () => true, rememberEntry() {}, renderPostList() {},
     run(button, action) { pending = Promise.resolve().then(action); return pending; },
     api() { requests++; throw new Error("The selected entry must stay in memory"); },
     showSection(value) { screen = value; }, editTitle: { focus() { focused = true; } },
@@ -378,6 +398,32 @@ test("reopening the selected entry shows its editor without resetting unsaved co
   assert.equal(screen, "compose");
   assert.equal(requests, 0);
   assert.equal(focused, true);
+});
+
+test("New entry and New note open fresh compositions and keep earlier local drafts accessible", () => {
+  const first = "new-12345678-1234-1234-1234-123456789abc";
+  const second = "new-12345678-1234-1234-1234-123456789abc".replace(/abc$/, "abd");
+  const opened = [];
+  const ids = [first.slice(4), second.slice(4)];
+  const backups = {
+    ["draft:" + first]: { saved_at: "2026-11-24T00:00:00Z", fields: { title: "Earlier entry" } },
+    "draft:new-note": { saved_at: "2026-11-23T00:00:00Z", fields: { body: "Earlier note", is_note: "true" } },
+    "draft:draft:server": { saved_at: "2026-11-23T00:00:00Z", fields: { title: "Server draft edit" } },
+  };
+  const functions = runInNewContext(deskSource.slice(deskSource.indexOf("const localSlotPattern"), deskSource.indexOf("const slot =")) +
+    deskSource.slice(deskSource.indexOf("function localDrafts()"), deskSource.indexOf("function removeBackup(")) +
+    deskSource.slice(deskSource.indexOf("function newComposition("), deskSource.indexOf("newPost.addEventListener")) +
+    "\n({ newComposition, localDrafts })", {
+    current: undefined, busy: false, draftOwner: "editor", canLeaveDraft: () => true,
+    crypto: { randomUUID: () => ids.shift() }, run: (_button, action) => Promise.resolve(action()),
+    showSection() {}, editorTools: { focus() {} }, recoverDraft() { throw new Error("New must start blank"); },
+    openEditor: (...args) => opened.push(args), backupKey: id => "draft:" + id, localStorage: backups,
+    readBackup: id => backups["draft:" + id],
+  });
+  functions.newComposition(element(), false);
+  functions.newComposition(element(), true);
+  assert.deepEqual(opened, [[undefined, undefined, false, first], [undefined, undefined, true, second]]);
+  assert.deepEqual(Array.from(functions.localDrafts(), row => row.slot), [first, "new-note"]);
 });
 
 test("publishing recency uses published dates, ignores future entries, and handles no publications", () => {

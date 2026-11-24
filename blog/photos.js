@@ -1,6 +1,6 @@
 import { allRows, archivePhotoWeek, escape, imageSource, mediaId, missingFeature, readMediaImage } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { publicPhoto } from "./photo-text.js";
+import { photoText, publicPhoto } from "./photo-text.js";
 
 const weeklyFields = "id,week,media_id,title,alt,created_at";
 const legacyFields = "month,media_id,alt,caption";
@@ -11,7 +11,7 @@ const cover = {
 const dateLabel = (date, options) => new Date(date + "T00:00:00Z").toLocaleDateString("en", { timeZone: "UTC", ...options });
 
 function legacyPhoto(photo) {
-  return publicPhoto({ ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" });
+  return { ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" };
 }
 
 async function optional(task) {
@@ -46,7 +46,6 @@ async function featurePhotos(get) {
 
 export async function startSlideshow(get, demo) {
   const figure = document.querySelector("#week-photo");
-  figure.hidden = false;
   const picture = figure.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
   const nextButton = figure.querySelector("#slide-next");
@@ -62,13 +61,13 @@ export async function startSlideshow(get, demo) {
 
   let photos;
   try {
-    photos = (demo ? [cover] : await featurePhotos(get)).map(publicPhoto);
+    photos = demo ? [cover] : await featurePhotos(get);
   } catch {
     figure.removeAttribute("aria-busy");
     if (!picture.hasAttribute("src")) caption.textContent = "Photo could not load. Refresh to try again.";
     return;
   }
-  if (!photos.length) photos.push(publicPhoto(cover));
+  if (!photos.length) photos.push(cover);
   if (photos.length > 1) {
     slide.tabIndex = 0;
     slide.setAttribute("aria-label", "Photo carousel. Use Left and Right arrow keys to change photos.");
@@ -123,12 +122,14 @@ export async function startSlideshow(get, demo) {
     }
     if (loading !== revision) return;
     index = target;
-    picture.alt = photo.alt || data.alt || "";
+    const details = publicPhoto(photo, data.alt);
+    picture.alt = details.alt;
     picture.width = data.width;
     picture.height = data.height;
     if (data.src !== picture.getAttribute("src")) picture.src = data.src;
+    figure.hidden = false;
     figure.removeAttribute("aria-busy");
-    caption.textContent = photo.title;
+    caption.textContent = details.title;
     count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
     nextButton.hidden = photos.length < 2;
     if (photos.length > 1) void prepare(photos[(index + 1) % photos.length]).catch(() => {});
@@ -173,7 +174,7 @@ async function showImage(get, picture, photo) {
   const frame = picture.parentElement;
   try {
     const data = await getImage(get, photo);
-    picture.alt = photo.alt || data.alt || "";
+    picture.alt = publicPhoto(photo, data.alt).alt;
     picture.width = data.width;
     picture.height = data.height;
     picture.src = data.src;
@@ -200,7 +201,7 @@ async function showImage(get, picture, photo) {
 async function loadArchivePhoto(get, id) {
   if (mediaId.test(id || "")) {
     const [photo] = await publicData("photo-detail:" + id, () => optional(get("weekly_photos?select=" + weeklyFields + "&id=eq." + id)), 0);
-    return photo && publicPhoto(photo);
+    return photo;
   }
   if (/^month-\d{4}-(0[1-9]|1[0-2])$/.test(id || "")) {
     const [photo] = await publicData("photo-detail:" + id, () => optional(get("photos?select=" + legacyFields + "&month=eq." + id.slice(6) + "-01")), 0);
@@ -211,16 +212,25 @@ async function loadArchivePhoto(get, id) {
 export async function renderPhotoView(content, get, demo, id) {
   const backLink = '<a class="back" href="./#featured-photo">← Featured Photo</a>';
 
-  const photo = id === cover.id ? cover : demo ? undefined : await loadArchivePhoto(get, id);
-  if (!photo) {
+  const record = id === cover.id ? cover : demo ? undefined : await loadArchivePhoto(get, id);
+  if (!record) {
     document.title = "Photo unavailable - The Common Hours";
     content.innerHTML = backLink + "<h1>Photo unavailable</h1>";
     return;
   }
+  const photo = publicPhoto(record);
   document.title = photo.title + " - The Common Hours";
+  const current = content.querySelector(".photo-detail");
+  const existing = current?.querySelector("img[src]");
+  if (existing && current.dataset.photoMedia === photo.media_id && content.dataset.refreshPending === undefined &&
+      (!existing.complete || existing.naturalWidth)) {
+    current.querySelector("h1").textContent = photo.title;
+    if (photoText(record.alt)) existing.alt = photo.alt;
+    return;
+  }
   const date = photoDate(photo);
-  content.innerHTML = backLink + '<article class="photo-detail"><h1>' + escape(photo.title) + '</h1>' +
+  content.innerHTML = backLink + '<article class="photo-detail" data-photo-media="' + escape(photo.media_id || "") + '"><h1>' + escape(photo.title) + '</h1>' +
     (date ? '<p class="meta">' + escape(date) + '</p>' : '') +
-    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" decoding="async" fetchpriority="high"></div></article>';
-  void showImage(get, content.querySelector(".photo-detail img"), photo);
+    '<div class="photo-detail-image"><img width="1200" height="800" alt="' + escape(photo.alt) + '" draggable="false" decoding="async" fetchpriority="high"></div></article>';
+  void showImage(get, content.querySelector(".photo-detail img"), record);
 }

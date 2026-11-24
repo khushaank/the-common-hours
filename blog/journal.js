@@ -2,7 +2,7 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, sideLinks } from "./archive.js";
+import { archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, renderTopics } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { entryTags } from "./text.js";
@@ -27,10 +27,11 @@ const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo";
-if (!isLegal && view !== "review") {
-  const currentNav = ["archive", "series", "topics"].includes(view) || month ? "archive" :
-    view === "start" ? "start" : "journal";
-  document.querySelector("#" + currentNav + "-link").setAttribute("aria-current", "page");
+const currentNav = ["archive", "series", "topics"].includes(view) || month ? "archive" :
+  view === "start" ? "start" : "journal";
+for (const item of document.querySelectorAll(".mast nav a")) {
+  if (!isLegal && view !== "review" && item.id === currentNav + "-link") item.setAttribute("aria-current", "page");
+  else item.removeAttribute("aria-current");
 }
 const canonical = document.querySelector('link[rel="canonical"]') || document.createElement("link");
 canonical.rel = "canonical";
@@ -308,7 +309,12 @@ async function start() {
   if (view === "series") {
     document.title = "Series - The Common Hours";
     content.innerHTML = seriesDirectory(posts);
-    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    const target = document.getElementById(location.hash.slice(1));
+    const group = target?.closest("details.series-group");
+    if (group) {
+      group.open = true;
+      group.scrollIntoView({ block: "nearest" });
+    }
     return;
   }
   if (view === "start" || series) {
@@ -324,8 +330,7 @@ async function start() {
   const topics = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   if (view === "topics") {
     document.title = "All topics - The Common Hours";
-    content.innerHTML = `<div class="section-head"><h1>All topics</h1><span class="section-note">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</span></div>` +
-      (topics.length ? `<ul class="side-list all-topics">${sideLinks(topics, "tag", name => name, tag)}</ul>` : "<p>No topics yet.</p>");
+    content.innerHTML = renderTopics(topics);
     return;
   } else if (view === "archive") {
     document.title = archiveTitle(params) + " - The Common Hours";

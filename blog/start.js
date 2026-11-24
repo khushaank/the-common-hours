@@ -2,6 +2,10 @@ document.addEventListener("contextmenu", event => {
   if (event.target.closest("img")) event.preventDefault();
 });
 
+document.addEventListener("dragstart", event => {
+  if (event.target.closest("a, img")) event.preventDefault();
+});
+
 import { pageHref, pageParams } from "./page-url.js";
 
 const route = pageParams();
@@ -11,9 +15,7 @@ if (location.search) {
   if (target.pathname !== location.pathname && target.pathname.endsWith(".html")) location.replace(target.href);
 }
 
-import("./journal.js").then(() => {
-  document.documentElement.setAttribute("data-interactive", "");
-}).catch(() => {
+import("./journal.js").catch(() => {
   const content = document.querySelector("#content");
   if (!content) return;
   delete content.dataset.refreshPending;
@@ -31,6 +33,7 @@ import("./journal.js").then(() => {
 });
 
 setupSearch();
+document.documentElement.setAttribute("data-interactive", "");
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
   const register = () => void navigator.serviceWorker.register("./static-cache.js", { updateViaCache: "none" }).catch(() => {});
   // Preparing the offline copy should not compete with the first visible page.

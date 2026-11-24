@@ -60,9 +60,10 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
-    : !entry.isFile() || !(allowedFiles.has(entry.name) || app === "blog" && (generatedFile.test(entry.name) || entry.name === "photo-shell.js")))) {
+    : !entry.isFile() || !(allowedFiles.has(entry.name) || entry.name === "favicon.svg" || app === "blog" && (generatedFile.test(entry.name) || entry.name === "photo-shell.js")))) {
     throw new Error("Clear the extra files from " + destination + " before building.");
   }
+  if (existing.some(entry => entry.name === "favicon.svg")) await unlink(new URL("favicon.svg", output));
 
   let publicPages;
   for (const file of assets) {

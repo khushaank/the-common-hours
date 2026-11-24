@@ -78,9 +78,9 @@ test("preview sends security headers and defaults to a disconnected sandbox", as
     child.stderr.once("data", bytes => reject(new Error(bytes.toString())));
     child.stdout.once("data", bytes => resolve(bytes.toString().trim()));
   });
-  for (const path of ["favicon.svg", "does-not-exist"]) {
+  for (const path of ["logo.png", "does-not-exist"]) {
     const response = await fetch(new URL(path, address));
-    assert.equal(response.status, path === "favicon.svg" ? 200 : 404);
+    assert.equal(response.status, path === "logo.png" ? 200 : 404);
     for (const [name, value] of Object.entries(securityHeaders)) assert.equal(response.headers.get(name), value);
     await response.arrayBuffer();
   }

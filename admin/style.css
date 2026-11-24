@@ -16,6 +16,7 @@
 * { box-sizing: border-box; }
 html { overflow-x: clip; }
 [hidden] { display: none !important; }
+:is(a, img) { -webkit-user-drag: none; }
 #mfa-enrollment { display: grid; gap: 8px; }
 #mfa-qr { max-width: 100%; height: auto; }
 #mfa-key { display: block; margin-top: 6px; overflow-wrap: anywhere; }
@@ -84,7 +85,8 @@ body.writing { overflow: hidden; }
 #new-post { padding-inline: 8px; font-size: 12px; white-space: nowrap; }
 #new-post span { font-size: 21px; font-weight: 400; vertical-align: -1px; }
 #find-entry { font-size: 12px; background: #fffcf780; padding-block: 9px; }
-#entry-filter { justify-self: start; max-width: 100%; border: 1px solid #d6d1c5; border-radius: 8px; padding: 9px 30px 9px 10px; background: transparent; color: var(--accent); font: inherit; }
+.entry-list-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.entry-list-filters select { width: auto; min-height: 40px; max-width: 100%; border: 1px solid #d6d1c5; border-radius: 8px; padding: 8px; background: var(--card); color: var(--accent); font: inherit; }
 .entry-list ul, #featured-photos { margin: 8px 0 0; padding: 3px; list-style: none; overflow-y: auto; }
 .entry-list ul { min-height: 0; overscroll-behavior: contain; }
 #featured-photos { max-height: none; }
@@ -105,8 +107,15 @@ body.writing { overflow: hidden; }
 .photo-workspace { gap: 20px; max-width: none; padding: 24px; grid-template-columns: minmax(0, 1fr) minmax(260px, .75fr); grid-template-areas: "main collection"; align-items: start; }
 #site-panel { max-width: 1200px; margin-inline: auto; }
 .photo-workspace [aria-pressed="true"] { background: var(--soft); }
-.photo-upload { padding: 16px; border: 1px dashed #a9b19f; border-radius: 9px; background: #f3f5ee; }
-.photo-upload input { border: 0; padding: 4px 0; background: transparent; font-size: 14px; }
+.photo-upload { display: grid; gap: 12px; padding: 16px; border: 1px solid #d6decc; border-radius: 9px; background: #f3f5ee; }
+.photo-source-actions { gap: 8px; }
+.photo-source-actions button, .photo-file-choice span { min-height: 44px; }
+.photo-file-choice { position: relative; }
+.photo-file-choice input { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; overflow: hidden; }
+.photo-file-choice span { display: inline-flex; align-items: center; padding: 8px 12px; border: 1px solid #a9b19f; border-radius: 7px; background: var(--card); color: var(--accent); cursor: pointer; }
+.photo-file-choice:is(:hover, :focus-within) span { background: var(--soft); }
+.photo-file-choice:focus-within span { outline: 2px solid var(--accent); outline-offset: 2px; }
+#photo-upload-details:empty { display: none; }
 input[type="file"]::file-selector-button { font: 600 14px/1.25 "DM Sans", system-ui, sans-serif; padding: 9px 12px; margin-inline-end: 10px; border: 1px solid #a9b19f; border-radius: 6px; background: var(--card); color: var(--accent); cursor: pointer; }
 input[type="file"]::file-selector-button:hover { background: var(--soft); }
 .photo-edit { display: grid; gap: 14px; }
@@ -323,7 +332,7 @@ dialog .actions { justify-content: flex-end; }
   .compose-footer { padding-inline: 4px; }
   #draft-status { font-size: 11px; }
   .card { padding: 14px; }
-  .desk-nav button, #new-post, #entry-filter, #refresh-entries { min-height: 44px; }
+  .desk-nav button, #new-post, #new-note, .entry-list-filters select, #refresh-entries { min-height: 44px; }
   .section-heading { margin-bottom: 10px; }
   .command-menu { left: 4px; width: min(290px, calc(100% - 8px)); }
   .fields { grid-template-columns: minmax(0, 1fr); }
@@ -367,6 +376,7 @@ dialog .actions { justify-content: flex-end; }
 @media (max-width: 1099px) { .compose-panel { height: auto; } }
 @media (max-width: 700px) {
   .entry-browser { padding: 14px; }
+  .entry-list-tools { grid-template-columns: minmax(0, 1fr); }
   .entry-list li .entry-open { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 12px 4px; font-size: 22px; }
   .dashboard-overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
   .dashboard-latest { grid-column: 1 / -1; }

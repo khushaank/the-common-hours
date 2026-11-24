@@ -1,6 +1,7 @@
 import "./markdown-it.min.js";
 import footnotes from "./markdown-it-footnote.js";
 import { escape, imageSource, markdownMarker, mediaId, videoFrom } from "./text.js";
+import { photoText } from "./photo-text.js";
 
 const md = globalThis.markdownit({ html: false, linkify: true, breaks: true }).use(footnotes);
 md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
@@ -94,7 +95,7 @@ md.renderer.rules.video = (tokens, index) => {
   const { src, href, label, title, poster } = tokens[index].meta;
   const player = label
     ? '<button class="video-play" type="button" data-player="' + escape(src) + '" aria-label="Play ' + escape(title || label + ' video') + '">' +
-      (poster && globalThis.navigator?.onLine ? '<img class="video-poster" src="' + escape(poster) + '" width="480" height="360" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') +
+      (poster && globalThis.navigator?.onLine ? '<img class="video-poster" src="' + escape(poster) + '" width="480" height="360" alt="" draggable="false" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') +
       '<span class="video-play-label"><span aria-hidden="true">▶</span> Play video</span></button>'
     : '<video controls playsinline preload="none" src="' + escape(src) + '"></video>';
   return '<div class="video">' + player + (title ? '<p class="video-caption">' + escape(title) + '</p>' : "") +
@@ -130,7 +131,8 @@ export function loadImageSlot(slot, loadImage) {
     const src = imageSource(image);
     if (!src) throw new Error();
     const picture = new Image(image.width, image.height);
-    picture.alt = image.alt || slot.dataset.alt;
+    picture.alt = photoText(slot.dataset.alt) || photoText(image.alt) || "Photograph";
+    picture.draggable = false;
     picture.decoding = "async";
     picture.addEventListener("error", () => { slot.textContent = picture.alt || "Image unavailable"; });
     picture.src = src;

@@ -33,6 +33,7 @@ const titleHeading = document.querySelector("#entry-heading");
 const titleInput = editor.elements.namedItem("title");
 const search = document.querySelector("#find-entry");
 const entryFilter = document.querySelector("#entry-filter");
+const entryType = document.querySelector("#entry-type");
 const inbox = document.querySelector("#privacy-requests");
 const draftStatus = document.querySelector("#draft-status");
 const deskMenu = document.querySelector("#desk-menu");
@@ -54,8 +55,8 @@ collapseRail.addEventListener("click", () => {
   collapseRail.setAttribute("aria-label", collapseRail.title);
 });
 document.querySelector("#back-entries").addEventListener("click", () => {
-  if (busy) return;
-  showSection("entries");
+  if (busy || !canLeaveDraft()) return;
+  showSection(listScreen);
   const selected = selectedEntryButton();
   (selected || document.querySelector("#entries-panel h1")).focus({ preventScroll: true });
 });
@@ -114,6 +115,7 @@ let session;
 let factorId;
 let refresh;
 let current;
+let compositionSlot;
 let selectedEntry;
 let isNote = false;
 let posts = [];
@@ -132,6 +134,7 @@ let entriesRevision = 0;
 let commentsRevision = 0;
 let referencesRevision = 0;
 let entryListScroll = 0;
+let listScreen = "entries";
 
 const sessionKey = () => "common-hours:desk-session:" + getProjectOrigin();
 
@@ -218,10 +221,11 @@ const snapshot = () => {
   return JSON.stringify(fields);
 };
 const dirty = () => snapshot() !== baseline;
-const slot = () => current || (isNote ? "new-note" : "new");
+const localSlotPattern = /^new(?:-note|-[0-9a-f-]{36})?$/;
+const slot = () => current || compositionSlot;
+const editingId = () => current || "local:" + compositionSlot;
 const backupKey = (id = slot()) => "common-hours:draft:" + getProjectOrigin() + ":" + draftOwner + ":" + id;
-const lastEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner;
-const selectedEntryKey = () => lastEntryKey() + ":selection";
+const selectedEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() + ":" + draftOwner + ":selection";
 const draftPath = id => "working_drafts?slot=eq." + id;
 const slugFromTitle = title => title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
@@ -232,7 +236,7 @@ function draftEntry(row) {
   const is_note = [true, "true"].includes(row.fields.is_note) || Boolean(source?.is_note);
   const title = is_note ? noteTitle(row.fields.body) : row.fields.title?.trim() || "Untitled";
   const slug = source?.slug || slugFromTitle(row.fields.slug || title) || "untitled";
-  return { ...row, id: "draft:" + row.slot, source, title, slug, is_note, tag: row.fields.tag || "",
+  return { ...row, id: (row.local ? "local:" : "draft:") + row.slot, source, title, slug, is_note, tag: row.fields.tag || "",
     published: false, published_on: row.saved_at.slice(0, 10) };
 }
 
@@ -254,9 +258,25 @@ function updatePublishActions() {
   shareButton.setAttribute("aria-label", label);
 }
 
-function readBackup() {
-  try { return JSON.parse(localStorage.getItem(backupKey()) || "null"); }
+function readBackup(id = slot()) {
+  try { return JSON.parse(localStorage.getItem(backupKey(id)) || "null"); }
   catch { return null; }
+}
+
+function localDrafts() {
+  if (!draftOwner) return [];
+  const prefix = backupKey("");
+  const rows = [];
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(prefix)) continue;
+      const id = key.slice(prefix.length);
+      if (!localSlotPattern.test(id)) continue;
+      const backup = readBackup(id);
+      if (backup?.fields && typeof backup.saved_at === "string") rows.push({ ...backup, slot: id, local: true });
+    }
+  } catch { /* Browser storage is optional. */ }
+  return rows.sort((a, b) => b.saved_at.localeCompare(a.saved_at));
 }
 
 function removeBackup() {
@@ -356,17 +376,23 @@ function renderPostList() {
   const restoreFocus = document.activeElement?.closest(".entry-open")?.dataset.entryId;
   postList.replaceChildren();
   const term = search.value.trim().toLowerCase();
-  const draftEntries = drafts.map(draftEntry);
+  const draftEntries = [...localDrafts(), ...drafts].map(draftEntry);
   const linkedDrafts = new Set(draftEntries.map(draft => draft.source?.id));
-  const entries = [...draftEntries, ...posts.filter(post => post.published || !linkedDrafts.has(post.id))];
+  const notesOnly = listScreen === "notes";
+  const entries = [...draftEntries, ...posts.filter(post => post.published || !linkedDrafts.has(post.id))]
+    .filter(post => !notesOnly || post.is_note);
+  const type = notesOnly ? "all" : entryType.value;
   const filtered = entries.filter(post =>
-    (entryFilter.value === "all" || (entryFilter.value === "notes" ? post.is_note : post.published === (entryFilter.value === "published"))) &&
+    (type === "all" || Boolean(post.is_note) === (type === "notes")) &&
+    (entryFilter.value === "all" || post.published === (entryFilter.value === "published")) &&
     (!term || post.title.toLowerCase().includes(term) || post.tag.toLowerCase().includes(term)));
   const tabStop = filtered.find(post => post.id === selectedEntry)?.id || filtered[0]?.id;
-  document.querySelector("#entry-count").textContent = (filtered.length !== entries.length ? filtered.length + " of " : "") + entries.length + (entries.length === 1 ? " entry" : " entries");
+  const label = notesOnly ? (entries.length === 1 ? " note" : " notes") : (entries.length === 1 ? " entry" : " entries");
+  document.querySelector("#entry-count").textContent = (filtered.length !== entries.length ? filtered.length + " of " : "") + entries.length + label;
   if (!filtered.length) {
     const item = document.createElement("li");
-    item.textContent = term || entryFilter.value !== "all" ? "No matching entries." : "No entries yet.";
+    const plural = notesOnly ? "notes" : "entries";
+    item.textContent = term || type !== "all" || entryFilter.value !== "all" ? `No matching ${plural}.` : `No ${plural} yet.`;
     postList.append(item);
   }
   for (const [index, post] of filtered.entries()) {
@@ -381,13 +407,15 @@ function renderPostList() {
     button.tabIndex = post.id === tabStop ? 0 : -1;
     const state = document.createElement("small");
     button.textContent = post.title;
-    state.textContent = (post.is_note ? "Note · " : "") + (post.published ? "Published" : "Draft") + " · " + post.published_on +
-      (post.slot && post.source ? " · " + post.slug + "/draft" : "");
+    state.textContent = (post.is_note && !notesOnly ? "Note · " : "") + (post.published ? "Published" : "Draft") + " · " + post.published_on +
+      (post.local ? " · On this device" : post.slot && post.source ? " · " + post.slug + "/draft" : "");
     state.dataset.published = String(post.published);
     button.append(state);
     if (post.id === selectedEntry) button.setAttribute("aria-current", "true");
     button.addEventListener("click", () => editEntry(post, button));
     const share = entryIcon(post.published ? "Share" : "Generate preview link for", post, "M12 15V3m-4 4 4-4 4 4M7 10H5v11h14V10h-2");
+    share.disabled = Boolean(post.local);
+    if (post.local) share.title = "Save this draft to share a preview link";
     share.addEventListener("click", () => shareEntry(post, share));
     const remove = entryIcon("Delete", post, "M4 7h16m-10 0V4h4v3M7 7l1 13h8l1-13m-6-9v4m2-4v4");
     remove.addEventListener("click", () => deleteEntry(post, remove));
@@ -444,15 +472,18 @@ function entryIcon(action, post, path) {
 async function deleteEntry(post, button) {
   if (!confirm('Permanently delete “' + post.title + '”?' + (post.published ? " Its comments will stay in the desk." : ""))) return;
   await run(button, async () => {
-    const [removed] = await api(post.slot ? draftPath(post.slot) : "posts?id=eq." + post.id,
-      { method: "DELETE", prefer: "return=representation" });
-    if (!removed) throw new Error("The entry could not be deleted.");
-    try { localStorage.removeItem(backupKey(post.id)); } catch { /* Browser storage is optional. */ }
-    if (post.slot) drafts = drafts.filter(draft => draft.slot !== post.slot);
-    else posts = posts.filter(entry => entry.id !== post.id);
+    if (post.local) localStorage.removeItem(backupKey(post.slot));
+    else {
+      const [removed] = await api(post.slot ? draftPath(post.slot) : "posts?id=eq." + post.id,
+        { method: "DELETE", prefer: "return=representation" });
+      if (!removed) throw new Error("The entry could not be deleted.");
+      try { localStorage.removeItem(backupKey(post.id)); } catch { /* Browser storage is optional. */ }
+      if (post.slot) drafts = drafts.filter(draft => draft.slot !== post.slot);
+      else posts = posts.filter(entry => entry.id !== post.id);
+    }
     if (selectedEntry === post.id) rememberEntry(undefined);
     entriesRevision++;
-    if (current === post.id) openEditor();
+    if (editingId() === post.id) openEditor();
     else renderPostList();
     status.textContent = "Entry deleted.";
   });
@@ -501,8 +532,11 @@ function shareEntry(post, button) {
 function editEntry(post, button) {
   if (busy || !canLeaveDraft()) return;
   run(button, async () => {
-    if (post.id !== current) {
-      if (post.slot) openEditor(undefined, post);
+    if (post.id !== editingId()) {
+      if (post.local) {
+        rememberEntry(post.id);
+        openEditor(undefined, undefined, post.is_note, post.slot);
+      } else if (post.slot) openEditor(undefined, post);
       else {
         const [record] = await api("posts?id=eq." + post.id);
         if (!record) throw new Error("This entry is unavailable.");
@@ -515,7 +549,7 @@ function editEntry(post, button) {
     }
     showSection("compose");
   }).then(() => {
-    if (busy || current !== post.id) return;
+    if (busy || editingId() !== post.id) return;
     if (isNote) editorTools.focus();
     else editTitle.focus({ preventScroll: true });
   });
@@ -683,17 +717,15 @@ function updateEditorTitle() {
 }
 new ResizeObserver(updateEditorTitle).observe(editorTitle.parentElement);
 
-function openEditor(post, draft, note = false) {
+function openEditor(post, draft, note = false, localSlot = note ? "new-note" : "new") {
   clearPublishErrors();
   showSettings(false);
   activeDraft = draft;
   activePost = post;
   current = draft?.id || post?.id;
+  compositionSlot = localSlot;
   isNote = Boolean(draft?.is_note || post?.is_note || note);
-  if (draftOwner) {
-    try { localStorage.setItem(lastEntryKey(), slot()); } catch { /* Entry switching also works without storage. */ }
-    if (current) rememberEntry(current);
-  }
+  if (draftOwner && current) rememberEntry(current);
   editor.reset();
   closeTags();
   tagInput.value = "";
@@ -822,27 +854,17 @@ async function openDesk() {
   await loadPosts();
   const section = deskSection();
   const address = composeAddress(section);
-  const explicit = Boolean(address.draft || address.post || address.compose);
-  let lastDraft = drafts.find(draft => draft.slot === address.draft);
-  let lastEntry;
-  let rememberedSelection;
-  let remembered;
-  try {
-    remembered = localStorage.getItem(lastEntryKey());
-    rememberedSelection = localStorage.getItem(selectedEntryKey());
-  } catch { /* A remembered entry is optional. */ }
-  if (!explicit) lastDraft = drafts.find(draft => "draft:" + draft.slot === remembered);
-  const postId = address.post || (!explicit && remembered);
-  if (!lastDraft && posts.some(post => post.id === postId)) {
-    try { [lastEntry] = await api("posts?id=eq." + postId); }
-    catch { status.textContent = "The last entry could not load."; }
+  if (isListScreen(section)) listScreen = section;
+  try { selectedEntry = localStorage.getItem(selectedEntryKey()); } catch { /* Selection is optional. */ }
+  const draft = drafts.find(row => row.slot === address.draft);
+  let post;
+  if (posts.some(row => row.id === address.post)) {
+    try { [post] = await api("posts?id=eq." + address.post); }
+    catch { status.textContent = "This entry could not load."; }
   }
-  openEditor(lastEntry, lastDraft && draftEntry(lastDraft), address.compose === "note" || (!explicit && remembered === "new-note"));
-  if (!explicit && rememberedSelection !== null && rememberedSelection !== undefined) {
-    rememberEntry(rememberedSelection);
-    renderPostList();
-  }
-  recoverDraft();
+  const restoreComposition = draft || post || address.compose;
+  openEditor(post, draft && draftEntry(draft), address.compose === "note", address.local);
+  if (restoreComposition) recoverDraft();
   storeSession();
   login.reset();
   login.hidden = true;
@@ -850,9 +872,8 @@ async function openDesk() {
   desk.hidden = false;
   document.body.classList.add("desk-open");
   deskMenu.hidden = false;
-  const restoreComposition = (lastDraft && address.draft) || (lastEntry && address.post) || address.compose;
   openSection(restoreComposition ? "compose" : section);
-  if (!restoreComposition && section === "entries" && selectedEntry) selectedEntryButton()?.scrollIntoView({ block: "nearest" });
+  if (!restoreComposition && isListScreen(section) && selectedEntry) selectedEntryButton()?.scrollIntoView({ block: "nearest" });
 }
 
 function verifiedSession(token) {
@@ -1026,8 +1047,7 @@ login.addEventListener("submit", event => {
 function newComposition(button, note) {
   if (busy || !canLeaveDraft()) return;
   run(button, () => {
-    openEditor(undefined, undefined, note);
-    recoverDraft();
+    openEditor(undefined, undefined, note, "new-" + crypto.randomUUID());
     showSection("compose");
   }).then(() => { if (!busy && !current) editorTools.focus(); });
 }
@@ -1267,6 +1287,7 @@ referenceForm.addEventListener("submit", async event => {
 
 search.addEventListener("input", renderPostList);
 entryFilter.addEventListener("change", renderPostList);
+entryType.addEventListener("change", renderPostList);
 titleInput.addEventListener("input", updateEditorTitle);
 editor.elements.namedItem("published_on").addEventListener("input", updateEditorTitle);
 editor.addEventListener("input", event => {
@@ -1275,8 +1296,10 @@ editor.addEventListener("input", event => {
   saveBackup();
 });
 
+const isListScreen = section => section === "entries" || section === "notes";
+
 function sectionHash(section) {
-  return "#" + ({ stats: "dashboard", site: "photos", compose: "entries" }[section] || section);
+  return "#" + ({ stats: "dashboard", site: "photos", compose: listScreen }[section] || section);
 }
 
 function deskSection() {
@@ -1284,12 +1307,14 @@ function deskSection() {
 }
 
 function composeAddress(section) {
-  if (location.hash && section !== "entries") return {};
+  if (location.hash && !isListScreen(section)) return {};
   const params = new URLSearchParams(location.search);
   const draft = params.get("draft");
   const post = draft ? null : params.get("post");
   const mode = params.get("compose");
-  return { draft, post, compose: mode === "note" || mode === "entry" ? mode : null };
+  const compose = !draft && !post && (mode === "note" || mode === "entry") ? mode : null;
+  const local = params.get("local");
+  return { draft, post, compose, local: compose && localSlotPattern.test(local) ? local : undefined };
 }
 
 function updateDeskAddress(section, navigate = false) {
@@ -1297,12 +1322,16 @@ function updateDeskAddress(section, navigate = false) {
   url.searchParams.delete("draft");
   url.searchParams.delete("post");
   url.searchParams.delete("compose");
+  url.searchParams.delete("local");
   if (section === "compose") {
     if (activeDraft) {
       url.searchParams.set("draft", activeDraft.slot);
       url.searchParams.set("post", activeDraft.slug + "/draft");
     } else if (activePost) url.searchParams.set("post", activePost.id);
-    else url.searchParams.set("compose", isNote ? "note" : "entry");
+    else {
+      url.searchParams.set("compose", isNote ? "note" : "entry");
+      url.searchParams.set("local", compositionSlot);
+    }
   }
   url.hash = sectionHash(section);
   if (url.href === location.href) return;
@@ -1312,14 +1341,33 @@ function updateDeskAddress(section, navigate = false) {
 
 function showSection(section, navigate = false) {
   if (!document.querySelector("#entries-panel").hidden) entryListScroll = window.scrollY;
+  if (isListScreen(section) && listScreen !== section) {
+    listScreen = section;
+    search.value = "";
+    entryFilter.value = "all";
+    entryListScroll = 0;
+  }
   document.body.classList.toggle("writing", section === "compose");
-  for (const panel of document.querySelectorAll("[data-desk-panel]")) panel.hidden = panel.id !== section + "-panel";
+  const panelId = (isListScreen(section) ? "entries" : section) + "-panel";
+  for (const panel of document.querySelectorAll("[data-desk-panel]")) panel.hidden = panel.id !== panelId;
   for (const button of sections) {
-    const selected = button.dataset.section === section || section === "compose" && button.dataset.section === "entries";
+    const selected = button.dataset.section === (section === "compose" ? listScreen : section);
     button.setAttribute("aria-pressed", String(selected));
   }
+  if (isListScreen(section)) {
+    const notes = section === "notes";
+    const title = notes ? "Notes" : "Entries";
+    document.querySelector("#entry-list-title").textContent = title;
+    postList.setAttribute("aria-label", title);
+    search.placeholder = notes ? "Search notes…" : "Search entries…";
+    search.setAttribute("aria-label", notes ? "Search notes" : "Search entries");
+    newPost.hidden = entryType.hidden = notes;
+    newNote.classList.toggle("primary", notes);
+    renderPostList();
+  }
+  document.querySelector("#back-entries").textContent = listScreen === "notes" ? "← Notes" : "← Entries";
   updateDeskAddress(section, navigate);
-  window.scrollTo(0, section === "entries" ? entryListScroll : 0);
+  window.scrollTo(0, isListScreen(section) ? entryListScroll : 0);
 }
 
 async function loadPrivacyRequests() {
@@ -1425,21 +1473,22 @@ async function restoreDeskSection() {
   const post = posts.find(row => row.id === address.post);
   const screen = draft || post || address.compose ? "compose" : section;
   if (screen === "compose") {
+    if (isListScreen(section)) listScreen = section;
     if (draft && current === "draft:" + draft.slot || post && current === post.id ||
-        address.compose && !current && isNote === (address.compose === "note")) {
+        address.compose && !current && compositionSlot === (address.local || (address.compose === "note" ? "new-note" : "new"))) {
       showSection(screen);
       return;
     }
     await run(null, async () => {
       const [record] = post ? await api("posts?id=eq." + post.id) : [];
       if (post && !record) throw new Error("This entry is unavailable.");
-      openEditor(record, draft && draftEntry(draft), address.compose === "note");
+      openEditor(record, draft && draftEntry(draft), address.compose === "note", address.local);
       recoverDraft();
       showSection(screen);
     });
     return;
   }
-  if (document.querySelector("#" + screen + "-panel").hidden) openSection(screen);
+  if (isListScreen(screen) || document.querySelector("#" + screen + "-panel").hidden) openSection(screen);
   else updateDeskAddress(screen);
 }
 window.addEventListener("popstate", restoreDeskSection);
@@ -1449,7 +1498,7 @@ for (const button of sections) {
   button.addEventListener("click", () => {
     if (deskNav.matches(":popover-open")) deskNav.hidePopover();
     if (!wide.matches) deskMenu.focus();
-    if (busy) return;
+    if (busy || !canLeaveDraft()) return;
     const section = button.dataset.section;
     if (button.getAttribute("aria-pressed") === "true" && !document.body.classList.contains("writing")) return;
     openSection(section, true);

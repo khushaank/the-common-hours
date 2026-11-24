@@ -49,6 +49,12 @@ export function noteCard(post, dateLabel) {
   return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">Note · <time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p><p class="note-text">${escape(post.excerpt)}</p></article>`;
 }
 
+export function renderTopics(topicCounts) {
+  const topics = [...topicCounts].sort(([a], [b]) => a.localeCompare(b));
+  return `<div class="section-head"><h1>All topics</h1><span class="section-note">${topics.length} ${topics.length === 1 ? "topic" : "topics"}</span></div>` +
+    (topics.length ? `<ul class="side-list all-topics">${sideLinks(topics, "tag", name => name)}</ul>` : "<p>No topics have been published yet.</p>");
+}
+
 export function commentCards(comments) {
   return comments.map(comment => `<article class="comment"><h3>${escape(comment.display_name)}</h3>
     <p>${escape(comment.body)}</p></article>`).join("");

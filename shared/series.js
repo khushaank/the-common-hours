@@ -38,20 +38,19 @@ export function seriesNavigation(posts, post) {
 
 export function seriesDirectory(posts) {
   const names = [...new Set(posts.map(post => post.series).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const single = names.length === 1;
-  const heading = single ? "h1" : "h2";
-  const partHeading = single ? "h2" : "h3";
   const groups = names.map(name => {
     const id = seriesId(name, posts);
     const legacy = legacySeriesId(name);
-    return `<section class="series-group" id="${id}">
+    const parts = seriesEntries(posts, name);
+    return `<details class="series-group">
+      <summary><span class="series-name">${escape(name)}</span><span class="section-note">${parts.length} ${parts.length === 1 ? "part" : "parts"}</span></summary>
+      <span id="${id}" class="series-anchor" aria-hidden="true"></span>
       ${legacy !== id ? `<span id="${legacy}" class="series-anchor" aria-hidden="true"></span>` : ""}
-      <${heading}>${escape(name)}</${heading}>
-      <ol class="series-parts">${seriesEntries(posts, name).map(post => `<li class="series-part">
+      <ol class="series-parts">${parts.map(post => `<li class="series-part">
         ${post.series_order == null ? "" : `<span class="series-part-number">Part ${escape(post.series_order)}</span>`}
-        ${post.is_note ? noteCard(post, date => date) : `<div><${partHeading} class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></${partHeading}>
-          <p class="series-excerpt">${escape(post.excerpt)}</p></div>`}</li>`).join("")}</ol></section>`;
+        ${post.is_note ? noteCard(post, date => date) : `<div><h2 class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></h2>
+          <p class="series-excerpt">${escape(post.excerpt)}</p></div>`}</li>`).join("")}</ol></details>`;
   });
-  return `<div class="series-directory"><a class="back" href="archive.html">← Archive</a>
-    ${single ? "" : "<h1>Series</h1>"}${groups.join("") || "<p>No series have been published yet.</p>"}</div>`;
+  return `<a class="back" href="archive.html">← Archive</a><div class="section-head"><h1>Series</h1><span class="section-note">${names.length} series</span></div>
+    <div class="series-directory">${groups.join("") || "<p>No series have been published yet.</p>"}</div>`;
 }
