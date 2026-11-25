@@ -62,55 +62,76 @@ export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
       image.width = 72;
       image.height = 56;
       image.dataset.id = photo.id;
+      const photoName = photo.alt || "photo " + (index + 1);
       const label = document.createElement("span");
       label.textContent = (index + 1) + ". " + (photo.alt || "Photo") + (photoResolution(photo) ? " · " + photoResolution(photo) : "");
-      if (photo.id === cover?.id) {
+      if (photo.id === cover?.id && photo.id !== asset.cover_media_id) {
         const marker = document.createElement("strong");
         marker.className = "carousel-cover-label";
-        marker.textContent = "Cover";
+        marker.textContent = "Automatic cover";
         label.append(marker);
       }
       const controls = document.createElement("div");
       controls.className = "carousel-photo-actions";
+      const reorder = document.createElement("div");
+      reorder.className = "carousel-reorder";
       for (const [direction, glyph, action] of [[-1, "↑", "Move up"], [1, "↓", "Move down"]]) {
         const move = document.createElement("button");
         move.type = "button";
         move.dataset.move = direction;
         move.textContent = glyph;
         move.title = action;
-        move.setAttribute("aria-label", action + " " + (photo.alt || "photo " + (index + 1)));
+        move.setAttribute("aria-label", action + " " + photoName);
         move.disabled = index + direction < 0 || index + direction >= asset.photos.length;
         move.addEventListener("click", () => void change(async () => {
           if (!await movePhoto(current, photo.id, direction)) throw new Error("This photo is already at the end of the list or was removed.");
           return "Photo order updated.";
         }, photo.id, '[data-move="' + direction + '"]'));
-        controls.append(move);
+        reorder.append(move);
       }
       const chooseCover = document.createElement("button");
       chooseCover.type = "button";
       chooseCover.dataset.setCover = "";
-      chooseCover.textContent = "Set cover";
       chooseCover.disabled = photo.id === asset.cover_media_id;
-      chooseCover.setAttribute("aria-label", "Set " + (photo.alt || "photo " + (index + 1)) + " as cover");
+      chooseCover.textContent = chooseCover.disabled ? "Cover" : "Set cover";
+      chooseCover.setAttribute("aria-label", chooseCover.disabled ? photoName + " is the cover" : "Set " + photoName + " as cover");
       chooseCover.addEventListener("click", () => void change(() => setCover(photo.id), photo.id));
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "icon-button";
+      more.dataset.photoMore = "";
+      more.textContent = "⋯";
+      more.title = "More actions";
+      more.setAttribute("aria-label", "More actions for " + photoName);
+      const menu = document.createElement("div");
+      menu.className = "carousel-photo-menu";
+      menu.popover = "auto";
+      more.popoverTargetElement = menu;
       const remove = document.createElement("button");
       remove.type = "button";
+      remove.autofocus = true;
       remove.textContent = "Remove from carousel";
-      remove.addEventListener("click", () => void change(async () => {
-        await api("carousel_photos?carousel_id=eq." + current + "&media_id=eq." + photo.id, { method: "DELETE" });
-        return "Photo removed from the carousel.";
-      }));
+      remove.addEventListener("click", () => {
+        menu.hidePopover();
+        void change(async () => {
+          await api("carousel_photos?carousel_id=eq." + current + "&media_id=eq." + photo.id, { method: "DELETE" });
+          return "Photo removed from the carousel.";
+        }, photo.id, "[data-photo-more]");
+      });
       const erase = document.createElement("button");
       erase.type = "button";
       erase.textContent = "Delete photo…";
       erase.addEventListener("click", async () => {
+        menu.hidePopover();
+        more.focus();
         if (busy || !await confirmDelete("Delete photo?", "This permanently removes the photo from Media and this carousel.")) return;
         void change(async () => {
           if (!await deletePhoto(current, photo.id)) throw new Error("This photo is no longer in the carousel.");
           return "Photo deleted.";
-        });
+        }, photo.id, "[data-photo-more]");
       });
-      controls.append(chooseCover, remove, erase);
+      menu.append(remove, erase);
+      controls.append(reorder, chooseCover, more, menu);
       row.append(image, label, controls);
       list.append(row);
       if (observer) observer.observe(image);
@@ -126,6 +147,7 @@ export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
 
   async function change(action, focusPhoto, control = "[data-set-cover]") {
     if (busy) return;
+    const focusIndex = focusPhoto ? [...list.children].findIndex(row => row.dataset.photo === focusPhoto) : -1;
     busy = true;
     for (const element of dialog.querySelectorAll("button, input, select")) element.disabled = true;
     status.textContent = "Saving…";
@@ -140,9 +162,10 @@ export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
       for (const element of dialog.querySelectorAll("button, input, select")) element.disabled = false;
       render();
       if (focusPhoto) {
-        const row = [...list.children].find(item => item.dataset.photo === focusPhoto);
+        const row = [...list.children].find(item => item.dataset.photo === focusPhoto) ||
+          list.children[Math.min(focusIndex, list.children.length - 1)];
         const preferred = row?.querySelector(control);
-        (preferred && !preferred.disabled ? preferred : row?.querySelector("button:not(:disabled)"))?.focus();
+        (preferred && !preferred.disabled ? preferred : row?.querySelector("button:not(:disabled)") || add).focus();
       }
     }
   }
@@ -176,6 +199,14 @@ export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
     } catch (error) { status.textContent = error.message; }
   });
   close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    const menu = list.querySelector(".carousel-photo-menu:popover-open");
+    if (!menu) return;
+    event.preventDefault();
+    menu.hidePopover();
+    menu.closest(".carousel-photo-actions").querySelector("[data-photo-more]").focus();
+  });
   dialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
   dialog.addEventListener("close", () => { observer?.disconnect(); onClose?.(changed); });
 

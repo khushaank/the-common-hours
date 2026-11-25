@@ -445,7 +445,20 @@ dialog .actions { justify-content: flex-end; }
 #carousel-photos li > span { flex: 1 1 140px; overflow-wrap: anywhere; }
 .carousel-cover-label { display: block; color: var(--accent); font-size: .8rem; }
 .carousel-photo-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.carousel-photo-actions button[data-move] { min-width: 44px; }
+.carousel-reorder { display: flex; border: 1px solid var(--line); border-radius: 8px; }
+.carousel-reorder button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; }
+.carousel-reorder button + button { border-inline-start: 1px solid var(--line); }
+.carousel-reorder button:hover:not(:disabled) { background: var(--soft); }
+.carousel-photo-actions [data-set-cover] { min-width: 80px; min-height: 44px; }
+.carousel-photo-actions [data-set-cover]:disabled { color: var(--accent); background: var(--soft); border-color: transparent; opacity: 1; }
+.carousel-photo-actions [data-photo-more] { font-size: 24px; line-height: 1; }
+.carousel-photo-menu { width: max-content; padding: 6px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); box-shadow: 0 8px 24px #26292329; }
+.carousel-photo-menu:popover-open { display: grid; }
+.carousel-photo-menu button { min-height: 44px; border: 0; text-align: start; }
+.carousel-photo-menu button:last-child { color: #8b332a; }
+@supports (position-area: block-end span-inline-start) {
+  .carousel-photo-menu { inset: auto; margin: 4px 0; position-area: block-end span-inline-start; position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline; }
+}
 .carousel-embed[contenteditable="false"] { border: 1px solid var(--line); padding: 12px; color: var(--muted); border-radius: 5px; }
 .dashboard-lines { display: grid; gap: 8px; padding-block: 4px; }
 #dashboard-latest:not([aria-busy="true"]) > .dashboard-lines,
