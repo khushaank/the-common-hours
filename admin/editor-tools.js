@@ -1,5 +1,6 @@
 import { attachmentLimit, imageSource, missingFeature, readMediaImage, videoFrom } from "./common.js";
-import { notePhotoLimit, noteReferenceLimit, readNote, writeNote } from "./note.js";
+import { noteReferenceLimit, readNote, writeNote } from "./note.js";
+import { carouselMarkup } from "./carousel.js";
 import { renderText } from "./rich.js";
 import { createVisualEditor, visualMarkdown } from "./visual-editor.js";
 
@@ -53,6 +54,7 @@ const toolbarFormats = [
 ];
 const commands = [
   ["image", "Image"],
+  ["carousel", "Photo carousel"],
   ["file", "File"],
   ["pdf", "PDF"],
   ["entry", "Link to entry"],
@@ -130,7 +132,8 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   let previousBody;
   let displayMarkdown = true;
   let note = false;
-  let noteAssets = { photos: [], references: [] };
+  let noteAssets = { photos: [], references: [], carousels: [] };
+  const carouselTitles = new Map();
   let editorRevision = 0;
   let uploadRange;
   const previewImages = new Map();
@@ -156,7 +159,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     checkSpace(text.length, start, end);
     if (typeof start !== "number") {
       if (previewPanel.hidden || !previewBody.contains(start.commonAncestorContainer)) throw new Error("Choose where to insert this in the preview.");
-      document.querySelector("#insert-dialog[open], #entry-link-dialog[open], #library-dialog[open]")?.close();
+      document.querySelector("#insert-dialog[open], #entry-link-dialog[open], #library-dialog[open], #carousel-dialog[open]")?.close();
       visual.insert(text, start);
       return;
     }
@@ -199,7 +202,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     const [, trigger, value] = match;
     const query = value.toLowerCase();
     if (note && trigger === "@") {
-      matches = "image".startsWith(query) ? [["@image", "Open Media Library"]] : [];
+      matches = [["@image", "Add a photo"], ["@carousel", "Photo carousel"]].filter(([key]) => key.slice(1).startsWith(query));
     } else if (note) {
       matches = getEntries().filter(entry => entry.published && !entry.is_note &&
         [entry.slug, entry.title].some(field => field.toLowerCase().includes(query.trim())))
@@ -211,6 +214,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
         !saved.some(ref => ref.alias === entry.slug));
       matches = [...saved.map(ref => ["@" + ref.alias, ref.label, ref.url]),
         ...entries.map(entry => ["@" + entry.slug, entry.title, "?post=" + entry.slug])].slice(0, 12);
+      if (query && "carousel".startsWith(query)) matches.unshift(["@carousel", "Photo carousel"]);
     } else {
       matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
     }
@@ -279,20 +283,33 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
         items.push(item);
       }
     }
+    for (const id of noteAssets.carousels) {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = carouselTitles.get(id) || "Photo carousel";
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", "Remove " + label.textContent);
+      remove.addEventListener("click", () => {
+        noteAssets.carousels = noteAssets.carousels.filter(item => item !== id);
+        renderNoteAssets();
+        body.dispatchEvent(new Event("input", { bubbles: true }));
+        body.focus();
+      });
+      item.append(label, remove);
+      items.push(item);
+    }
     noteAttachments.replaceChildren(...items);
   }
 
   function addNotePhoto(start, end) {
-    if (noteAssets.photos.length >= notePhotoLimit) {
-      status.textContent = `A note can have up to ${notePhotoLimit} photos.`;
-      return;
-    }
     const revision = editorRevision;
     const value = body.value;
     openImageLibrary(({ id, alt }) => {
       if (revision !== editorRevision || value !== body.value || !note) return;
       if (noteAssets.photos.some(photo => photo.id === id)) throw new Error("This photo is already attached.");
-      noteAssets.photos.push({ id, alt: String(alt || "").slice(0, 300) });
+      noteAssets.photos.push({ id, alt: String(alt || "").slice(0, 200) });
       renderNoteAssets();
       replace("", start, end);
     }, focus, message => { status.textContent = message; });
@@ -318,6 +335,22 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   function choose([type, name, template], selected = "") {
     const { start, end } = command;
     closeMenu();
+    if (type === "@carousel" || type === "carousel" && !note) {
+      const revision = editorRevision;
+      void attachments.carousel({
+        onPick: asset => {
+          if (revision !== editorRevision) return;
+          if (!note) { replace("\n\n" + carouselMarkup(asset.id) + "\n\n", start, end); return; }
+          if (noteAssets.carousels.includes(asset.id)) throw new Error("This carousel is already attached.");
+          noteAssets.carousels.push(asset.id);
+          carouselTitles.set(asset.id, asset.title);
+          renderNoteAssets();
+          replace("", start, end);
+        },
+        onClose: focus,
+      }).catch(error => { status.textContent = error.message; });
+      return;
+    }
     if (note) {
       if (type === "@image") { addNotePhoto(start, end); return; }
       if (noteAssets.references.some(reference => reference.slug === type)) {
@@ -674,9 +707,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
         renderNoteAssets();
       }
       body.maxLength = note ? 500 : 99960;
+      body.required = !note;
       body.placeholder = note ? "Write a note…" : "Start writing…";
       body.setAttribute("aria-label", note ? "Note text" : "Entry body in Markdown");
-      if (note) body.setAttribute("aria-description", "Type @image and press Enter to add photos. Type / to link a published article. Notes support Markdown for emphasis and links.");
+      if (note) body.setAttribute("aria-description", "Type @image for photos, @carousel for a reusable carousel, or / to link a published article.");
       else body.removeAttribute("aria-description");
       setPreview(!note);
       refresh();

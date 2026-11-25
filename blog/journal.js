@@ -2,11 +2,11 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, commentLabel, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
+import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { articleTopics } from "./text.js";
-import { loadNoteImages } from "./image-viewer.js";
+import { loadCarousels } from "./image-viewer.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
@@ -52,6 +52,9 @@ document.head.append(canonical);
 const get = (path, options) => request(table(path), options);
 const insert = (path, body) => get(path, { method: "POST", body, prefer: "return=minimal" });
 const publicImage = id => publicData("image:" + id, () => readMediaImage(get, id));
+const publicCarousel = id => publicData("carousel:" + id, async () =>
+  (await allRows(get, "carousel_photos?select=media_id,alt&carousel_id=eq." + encodeURIComponent(id) + "&order=position"))
+    .map(row => ({ id: row.media_id, alt: row.alt })), 0);
 
 async function loadPublicPosts() {
   if (demo) return [];
@@ -61,7 +64,7 @@ async function loadPublicPosts() {
 async function fetchPublicPosts() {
   const fields = "id,slug,title,tag,excerpt,published_on";
   const filter = "&published=eq.true&order=published_on.desc,id.desc";
-  for (const extra of [",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""]) {
+  for (const extra of [",series,series_order,start_here,is_note,note_number", ",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""]) {
     try {
       const posts = await allRows(get, "posts?select=" + fields + extra + filter);
       if (!posts.some(post => post.is_note)) return posts;
@@ -82,24 +85,6 @@ function loadBody(currentSlug) {
       return (await read("body"))[0] || null;
     }
   });
-}
-
-async function refreshNoteComments() {
-  const notes = [...content.querySelectorAll(".note-row")];
-  for (let start = 0; start < notes.length; start += 40) {
-    const group = notes.slice(start, start + 40);
-    const ids = group.map(note => note.querySelector("[data-note-like]").dataset.noteLike);
-    const params = new URLSearchParams({
-      select: "post_id,display_name,body", approved: "eq.true", post_id: "in.(" + ids.join(",") + ")",
-      order: "created_at.asc,id.asc",
-    });
-    const comments = await publicData("note-comments:" + ids.join(","), () => allRows(get, "comments?" + params));
-    for (const [index, note] of group.entries()) {
-      const recent = comments.filter(comment => comment.post_id === ids[index]);
-      note.querySelector(".note-comments-link").textContent = commentLabel(recent.length);
-      note.querySelector(".note-comment-preview").innerHTML = commentCards(recent.slice(-2));
-    }
-  }
 }
 
 function saveLatestForOffline(posts) {
@@ -203,6 +188,10 @@ async function renderPost(posts, index, firstBody) {
     const position = notes.indexOf(post);
     content.querySelector(".note-detail-layout").insertAdjacentHTML("afterend",
       `<nav class="post-nav" aria-label="Adjacent notes">${nav(notes[position + 1], "← Older note")}${nav(notes[position - 1], "Newer note →")}</nav>`);
+    const { restoreArticleAnchors } = await import("./reading.js");
+    restoreArticleAnchors(content.querySelector("#entry-body"));
+    recordView("post", post.id);
+    return;
   } else if (!retain) content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article">
     ${seriesMembership(post, posts)}<h1>${escape(post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
@@ -219,9 +208,9 @@ async function renderPost(posts, index, firstBody) {
   discussion.insertAdjacentHTML("beforeend", `
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
     ${post.reader_prompt ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
-    <label>${post.is_note ? "Name" : "Display name"} <input name="display_name" autocomplete="name" required maxlength="60"></label>
+    <label>Display name <input name="display_name" autocomplete="name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
-    <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy.html">Privacy</a>'}</p>
+    <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy">Privacy</a>'}</p>
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form>`);
   discussion.hidden = false;
   const bodyElement = document.querySelector("#entry-body");
@@ -233,10 +222,10 @@ async function renderPost(posts, index, firstBody) {
     renderer.renderText(bodyElement, post.body, publicImage, { loadAttachment: fetchAttachment, preparePrint: true, enlargeImages: true });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
-  } else if (!post.is_note) {
+  } else {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
-  if (!post.is_note && (retain || renderer || !hasFormatting)) {
+  if (retain || renderer || !hasFormatting) {
     const walker = document.createTreeWalker(bodyElement, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, node => {
       if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
       return node.matches(".media-slot, .attachment, .attachment-status, .video, .footnote-backref") ?
@@ -275,7 +264,7 @@ async function renderPost(posts, index, firstBody) {
     const display_name = fields.get("display_name").trim();
     const body = fields.get("body").trim();
     if (!display_name || !body) {
-      status.textContent = post.is_note ? "Enter your name and comment." : "Enter a display name and comment.";
+      status.textContent = "Enter a display name and comment.";
       return;
     }
     button.disabled = true;
@@ -404,11 +393,7 @@ async function load() {
   try {
     if (content.dataset.prerendered && content.dataset.refreshPending === undefined && offline()) return;
     await start();
-    if (view !== "review") await loadNoteImages(content.parentElement, publicImage);
-    if (view === "notes" && !demo) void refreshNoteComments().catch(() => {});
-    if (content.querySelector(".note-like")) {
-      void import("./note-likes.js").then(({ mountNoteLikes }) => mountNoteLikes(content)).catch(() => {});
-    }
+    if (view !== "review") await loadCarousels(content.parentElement, publicCarousel, publicImage);
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
     if (content.dataset.prerendered) {

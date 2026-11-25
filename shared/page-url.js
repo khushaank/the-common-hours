@@ -36,12 +36,12 @@ export function pageParams(search = location.search, pathname = location.pathnam
   return params;
 }
 
-export function pageHref(values) {
+export function pageHref(values, { filename = false } = {}) {
   const params = new URLSearchParams(values);
   let file = "./";
   const view = params.get("view");
   const slug = params.get("post");
-  if (retired.includes(view)) return "archive.html";
+  if (retired.includes(view)) return filename ? "archive.html" : "archive";
   if (!view && slugPattern.test(slug || "")) {
     file = "entry-" + slug + ".html";
     params.delete("post");
@@ -64,9 +64,9 @@ export function pageHref(values) {
     params.delete("photo");
   }
   // New publications remain readable before the next static build.
-  if (/^(?:entry-|photo-|archive-)/.test(file) && typeof document !== "undefined" &&
+  if (!filename && /^(?:entry-|photo-|archive-)/.test(file) && typeof document !== "undefined" &&
       !document.querySelector("#public-pages")?.dataset.files.split(" ").includes(file)) {
     return "./?" + new URLSearchParams(values);
   }
-  return file + (params.size ? "?" + params : "");
+  return (filename ? file : file.replace(/\.html$/, "")) + (params.size ? "?" + params : "");
 }

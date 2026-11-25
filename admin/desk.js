@@ -111,6 +111,7 @@ const editorTools = setupEditorTools(editor, api, {
   upload: uploadFile,
   uploadMedia,
   download: async id => fetchAttachment(id, await sessionToken()),
+  carousel: openCarousels,
 }, () => posts, () => references);
 const photoTools = setupPhotoTools(api, editorTools.openImageLibrary);
 let originalBody = "";
@@ -235,8 +236,8 @@ const selectedEntryKey = () => "common-hours:last-entry:" + getProjectOrigin() +
 const draftPath = id => "working_drafts?slot=eq." + id;
 const slugFromTitle = title => title.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").slice(0, 120).replace(/^-+|-+$/g, "");
-function noteTitle({ text, photos }) {
-  return [...(text.trim().split(/\r?\n/, 1)[0] || (photos.length ? "Photo note" : "Untitled note"))].slice(0, 180).join("");
+function noteTitle({ text, photos, carousels = [] }) {
+  return [...(text.trim().split(/\r?\n/, 1)[0] || (photos.length || carousels.length ? "Photo note" : "Untitled note"))].slice(0, 180).join("");
 }
 
 function draftEntry(row) {
@@ -1143,8 +1144,8 @@ function validateEntry(record) {
   const errors = new Map();
   if (!record.title) errors.set("title", "Enter a title.");
   if (record.is_note) {
-    const { text, photos } = readNote(record.body);
-    if (!text.trim() && !photos.length) errors.set("body", "Write a note or add a photo before publishing.");
+    const { text, photos, carousels } = readNote(record.body);
+    if (!text.trim() && !photos.length && !carousels.length) errors.set("body", "Write a note or add a photo before publishing.");
     else if ([...text.trim()].length > 500) errors.set("body", "Use 500 characters or fewer for the note.");
   } else if (!record.body) errors.set("body", "Write something in the entry body.");
   if (!record.tag) errors.set("tag", "Add at least one tag.");
@@ -1168,7 +1169,7 @@ editor.addEventListener("submit", event => {
   if (note) {
     fields.title = noteTitle(note);
     fields.tag ||= "Notes";
-    fields.excerpt = note.text.trim() || (note.photos.length ? fields.title : "");
+    fields.excerpt = note.text.trim() || (note.photos.length || note.carousels.length ? fields.title : "");
   }
   if (event.submitter.value === "draft") {
     const source = activeDraft?.source || activePost;
@@ -1556,6 +1557,14 @@ async function openStats() {
   }
 }
 
+let carouselEditor;
+async function openCarousels(options) {
+  const { setupCarouselEditor } = await import("./carousel-editor.js");
+  carouselEditor ??= setupCarouselEditor(api, editorTools.openImageLibrary,
+    (carousel, photo) => adminRpc("delete_carousel_photo", { p_carousel: carousel, p_id: photo }));
+  return carouselEditor(options);
+}
+
 async function openMedia() {
   try {
     const { setupMediaEditor } = await import("./media-editor.js");
@@ -1566,10 +1575,16 @@ async function openMedia() {
       download: async id => fetchAttachment(id, await sessionToken()),
       save: saveAsset,
       upload: uploadMedia,
+      carousel: openCarousels,
       remove: async asset => {
         if (asset.kind === "image") {
-          if (!await adminRpc("delete_image", { p_id: asset.id })) throw new Error("Remove this image from any entries or drafts and unfeature it before deleting.");
-          return;
+          try {
+            if (await adminRpc("delete_image", { p_id: asset.id })) return;
+          } catch (error) {
+            if (error.code === "23503") throw new Error("Remove this image from its carousels before deleting.");
+            throw error;
+          }
+          throw new Error("Remove this image from any entries or drafts and unfeature it before deleting.");
         }
         const removed = await removeAttachment(asset.id, await sessionToken());
         if (!removed?.some(file => file.name === asset.id)) throw new Error("Remove this file from any entries or drafts that use it first.");

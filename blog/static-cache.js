@@ -8,8 +8,8 @@ const entries = "__OFFLINE_ENTRIES__";
 const scope = new URL(self.registration.scope);
 const shell = new URL("index.html", scope);
 const urls = new Set(Array.isArray(paths) ? paths.map(path => new URL(path, scope).href) : []);
-const publicPage = /^(?:index|archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|notes|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html$/i;
-const entryPage = /^entry-[a-z0-9-]{1,120}\.html$/i;
+const publicPage = /^(?:index|archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|notes|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))(?:\.html)?$/i;
+const entryPage = /^entry-[a-z0-9-]{1,120}(?:\.html)?$/i;
 const mediaFile = /^(?:media-[0-9a-f-]{36}\.jpg|note-thumb-[0-9a-f-]{36}\.webp)$/i;
 const file = url => url.pathname.slice(scope.pathname.length);
 const inScope = url => url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
@@ -42,7 +42,7 @@ async function saveDocument(request, response) {
   if (home(url) && (url.searchParams.has("post") || url.searchParams.has("view"))) return;
   const copy = response.clone();
   await store(pageCache, request, response, 30);
-  if (file(url) === "notes.html") return;
+  if (/^notes(?:\.html)?$/.test(file(url))) return;
   const html = await copy.text();
   const photos = new Set([...html.matchAll(/<img src="(media-[0-9a-f-]{36}\.jpg)"/gi)].map(match => match[1]));
   await Promise.allSettled([...photos].map(async name => {

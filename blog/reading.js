@@ -3,7 +3,7 @@ import { escape, request } from "./common.js";
 import { cachedEntries } from "./public-cache.js";
 import { noteCard } from "./archive.js";
 import { noteBody } from "./note.js";
-import { loadNoteImages } from "./image-viewer.js";
+import { loadCarousels } from "./image-viewer.js";
 import { searchExcerpt } from "./text.js";
 
 const entryHref = slug => pageHref({ post: slug });
@@ -76,6 +76,15 @@ export async function renderReview(content) {
   const read = image => request("/rest/v1/rpc/qmargin_b74_read_review", {
     method: "POST", body: { p_token: token, p_image: image },
   });
+  const galleryPhotos = new Map();
+  const readGallery = (id, image = null) => request("/rest/v1/rpc/qmargin_b74_review_carousel", {
+    method: "POST", body: { p_token: token, p_id: id, p_media: image },
+  });
+  const reviewCarousels = target => loadCarousels(target, async id => {
+    const photos = await readGallery(id) || [];
+    for (const photo of photos) galleryPhotos.set(photo.id, id);
+    return photos;
+  }, id => galleryPhotos.has(id) ? readGallery(galleryPhotos.get(id), id) : read(id));
   let draft;
   if (/^[0-9a-f]{64}$/.test(token)) {
     try { draft = await read(null); } catch { /* Treat an unavailable review as expired. */ }
@@ -92,7 +101,7 @@ export async function renderReview(content) {
     content.innerHTML = '<article class="article journal-note"><p class="meta">Private draft review</p><h1>Note</h1>' +
       noteBody(draft.body, undefined, true) +
       (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
-    await loadNoteImages(content, read);
+    await reviewCarousels(content);
     return;
   }
   const { renderText } = await import("./rich.js");
@@ -107,4 +116,5 @@ export async function renderReview(content) {
       method: "POST", body: { token, id }, download: true, timeout: 120000,
     }),
   });
+  await reviewCarousels(content);
 }

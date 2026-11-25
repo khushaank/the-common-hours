@@ -45,7 +45,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   release.update(await readFile(assetSource(app, "index.html")));
   if (snapshot) {
     release.update(await readFile(new URL("./prerender.mjs", import.meta.url)));
-    release.update(JSON.stringify([snapshot.posts, snapshot.photos, snapshot.comments, [...snapshot.images]]));
+    release.update(JSON.stringify([snapshot.posts, snapshot.photos, snapshot.comments, [...snapshot.images], [...snapshot.carousels]]));
     for (const [name, bytes] of snapshot.files) release.update(name).update(bytes);
   }
   const versioned = new Set([...browserAssets, "config.js", "logo.png"]);
@@ -53,7 +53,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const revision = release.digest("hex").slice(0, 16);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
   if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); }
-  const retiredAssets = app === "blog" ? ["favicon.svg", "footer-landscape.jpg", "photo-shell.js"] : ["favicon.svg"];
+  const retiredAssets = app === "blog" ? ["favicon.svg", "footer-landscape.jpg", "photo-shell.js", "note-likes.js"] : ["favicon.svg"];
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory
@@ -83,7 +83,8 @@ async function buildApp(app, destination, files, config, childDirectory, feature
         .resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 76, mozjpeg: true }).toBuffer());
     } else if (file === "static-cache.js") {
       const offline = [...new Set([...versioned, "index.html", ...assets.filter(name => /\.(?:jpg|woff2|svg|png|webmanifest)$/.test(name))])].map(version);
-      const entries = [...(publicPages?.keys() || [])].filter(name => /^entry-[a-z0-9-]+\.html$/.test(name)).slice(0, 5);
+      const entries = [...(publicPages?.keys() || [])].filter(name => /^entry-[a-z0-9-]+\.html$/.test(name)).slice(0, 5)
+        .map(name => name.slice(0, -5));
       if (featured) offline.push("featured.webp?v=" + featured.version);
       const worker = await readFile(source, "utf8");
       const hash = createHash("sha256").update(revision).update(worker).update(JSON.stringify([offline, entries]));

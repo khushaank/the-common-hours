@@ -10,6 +10,7 @@ export function publicationRevision(posts, detail = false) {
     post.id, post.slug, post.title, post.tag, post.excerpt, post.published_on,
     post.series || "", post.series_order ?? null, Boolean(post.start_here), Boolean(post.is_note),
     detail || post.is_note ? post.body ?? null : null,
+    post.note_number ?? null,
   ]));
   let hash = 2166136261;
   for (let index = 0; index < values.length; index++) {
@@ -41,30 +42,24 @@ export function renderSidebar(months, topics, month, tag) {
   const archives = sideLinks(new Map([...months].filter(([name], index) => index < 8 || name === month)), "month", monthLabel, month);
   return `<section class="side-section"><h2 class="side-title">Blog archive</h2>
     <ul class="side-list">${archives}</ul>
-    ${months.size > 8 ? '<p><a class="back" href="archive.html">All months →</a></p>' : ""}
+    ${months.size > 8 ? '<p><a class="back" href="archive">All months →</a></p>' : ""}
     ${!months.size ? '<p class="status">No published entries yet.</p>' : ""}</section>
     ${topics.length ? `<section class="side-section sidebar-topics"><h2 class="side-title">Topics</h2><ul class="side-list">${sideLinks(topics.slice(0, 10), "tag", name => name, tag)}</ul>
-    ${topics.length > 10 ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
+    ${topics.length > 10 ? '<a class="back" href="topics">All topics →</a>' : ""}</section>` : ""}`;
 }
 
-export function noteCard(post, dateLabel, picture, discussion) {
+const noteNumber = post => post.note_number ? `<span class="note-number">Note ${escape(String(post.note_number).padStart(3, "0"))}</span>` : "";
+
+export function noteCard(post, dateLabel, picture, carousel = false) {
   const text = post.body === undefined ? post.excerpt : readNote(post.body).text;
   const permalink = escape(pageHref({ post: post.slug }));
-  const date = `<p class="meta"><a class="note-permalink" href="${permalink}" aria-label="${escape("Read note: " + post.title)}">${discussion ? "" : "Note · "}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>`;
-  if (!discussion) return `<article class="entry journal-note">${date}${noteText(text)}${noteExtras(post.body, picture)}</article>`;
+  const date = `<p class="meta"><a class="note-permalink" href="${permalink}" aria-label="${escape("Read note: " + post.title)}">${noteNumber(post)}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>`;
+  if (!carousel) return `<article class="entry journal-note">${date}${noteText(text)}${noteExtras(post.body, picture)}</article>`;
   const title = noteHeading(post, text);
-  const recent = commentCards(discussion.slice(-2));
   return `<article class="entry journal-note note-row"><div class="note-copy">${date}
     ${title ? `<h2 class="note-title"><a href="${permalink}">${escape(title)}</a></h2>` : ""}
     ${noteText(text)}${noteExtras(post.body, picture, true)}
-    <a class="back note-open" href="${permalink}">Open note</a></div>
-    <aside class="note-rail" aria-label="Note conversation">${noteLike(post)}<a class="note-comments-link" href="${permalink}#comments">${commentLabel(discussion.length)}</a><div class="note-comment-preview">${recent}</div></aside></article>`;
-}
-
-export const commentLabel = count => count ? count + (count === 1 ? " comment" : " comments") : "Leave a comment";
-
-function noteLike(post) {
-  return `<button class="note-like quiet-button" type="button" data-note-like="${escape(post.id)}" aria-pressed="false" disabled hidden><span aria-hidden="true">♡</span> <span class="like-label">Like</span> <span class="like-count"></span></button>`;
+    <a class="back note-open" href="${permalink}">Open note</a></div></article>`;
 }
 
 function noteHeading(post, text) {
@@ -72,31 +67,32 @@ function noteHeading(post, text) {
   return post.title && post.title !== first ? post.title : "";
 }
 
-export function renderNotes(posts, dateLabel, picture, comments = new Map()) {
+export function renderNotes(posts, dateLabel, picture) {
   return `<div class="notes-feed"><header class="notes-mast"><h1>Notes</h1><p>Brief observations, passing thoughts, and photographs.</p></header>
-    ${posts.filter(post => post.is_note).map(post => noteCard(post, dateLabel, picture, comments.get(post.id) || [])).join("") || '<p>No notes have been published yet.</p>'}</div>`;
+    ${posts.filter(post => post.is_note).map(post => noteCard(post, dateLabel, picture, true)).join("") || '<p>No notes have been published yet.</p>'}</div>`;
 }
 
-export function renderNoteDetail(post, dateLabel, picture, discussion = "") {
+export function renderNoteDetail(post, dateLabel, picture) {
   const title = noteHeading(post, readNote(post.body).text) || "Note";
-  return `<a class="back note-back" href="notes.html">← Back to Notes</a>
+  return `<a class="back note-back" href="notes">← Back to Notes</a>
     <div class="note-detail-layout"><article class="article journal-note" data-publication="${publicationRevision([post], true)}">
-      <p class="meta"><time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time> <span class="byline">By Ellis Vale</span></p>
-      <h1>${escape(title)}</h1><div class="prose" id="entry-body">${noteBody(post.body, picture, true)}</div></article>
-      <aside class="note-rail note-discussion"><section class="comments" id="comments"><header><h2>Comments</h2>${noteLike(post)}</header>
-        <div id="comment-list" aria-live="polite">${discussion || '<p class="status">No comments yet.</p>'}</div></section></aside></div>`;
+      <p class="meta">${noteNumber(post)}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time> <span class="byline">By Ellis Vale</span></p>
+      <h1>${escape(title)}</h1><div class="prose" id="entry-body">${noteBody(post.body, picture, true)}</div></article></div>`;
 }
 
-export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot) {
+export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot, cover = () => null) {
   const notes = posts.filter(post => post.is_note).slice(0, 3);
   return `<section class="side-section"><h2 class="side-title">Recent notes</h2>
     ${notes.length ? '<ul class="recent-notes">' + notes.map(post => {
-      const { text, photos } = readNote(post.body ?? post.excerpt);
+      const { text, photos, carousels } = readNote(post.body ?? post.excerpt);
+      const photo = photos[0] || cover(carousels[0]);
+      const thumb = photo ? `<span class="note-thumb">${thumbnail(photo)}</span>` :
+        carousels.length ? `<span class="note-thumb" data-carousel-cover="${escape(carousels[0])}"></span>` : "";
       const date = escape(dateLabel(post.published_on));
-      return `<li><a href="${escape(pageHref({ post: post.slug }))}">${photos[0] ? `<span class="note-thumb">${thumbnail(photos[0])}</span>` : ""}
-        <span><time datetime="${escape(post.published_on)}">${date}</time><span class="note-preview">${escape(plainNoteText(text) || "Photo note")}</span></span></a></li>`;
+      return `<li><a href="${escape(pageHref({ post: post.slug }))}">${thumb}
+        <span><span class="note-preview-meta">${noteNumber(post)}<time datetime="${escape(post.published_on)}">${date}</time></span><span class="note-preview">${escape(plainNoteText(text) || "Photo note")}</span></span></a></li>`;
     }).join("") + '</ul>' : '<p class="status">No published notes yet.</p>'}
-    <a class="back" href="notes.html">View all notes</a></section>`;
+    <a class="back" href="notes">View all notes</a></section>`;
 }
 
 export function renderLatest(posts, dateLabel, limit) {
@@ -106,7 +102,7 @@ export function renderLatest(posts, dateLabel, limit) {
       ${articleTopics(post).map(tag => `<a class="tag" href="${href({ tag })}">${escape(tag)}</a>`).join(" · ")}</p>
     <h2 class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></h2>
     <p>${escape(post.excerpt)}</p></article>`).join("") || '<p>No entries here yet.</p>'}
-    <p><a class="back" href="archive.html">Browse all articles</a></p>`;
+    <p><a class="back" href="archive">Browse all articles</a></p>`;
 }
 
 export function renderTopics(topicCounts) {
@@ -136,7 +132,7 @@ export function renderArchive(posts, params, picture) {
   const selection = [selected.year, selected.month && monthLabel(selected.month), selected.tag].filter(Boolean).join(" · ");
   return `<div class="section-head"><h1>Archive</h1><span class="section-note">${entries.length} ${entries.length === 1 ? "entry" : "entries"}</span></div>
     <nav class="archive-browse" aria-label="Browse the archive">
-      <p><a href="archive.html">All entries</a> · <a href="topics.html">Topics</a> · <a href="series.html">Series</a></p>
+      <p><a href="archive">All entries</a> · <a href="topics">Topics</a> · <a href="series">Series</a></p>
       <details${selection ? " open" : ""}><summary>Browse by year, month, or topic</summary>
         <h2>Year</h2><div>${links("year", unique(posts.map(post => post.published_on.slice(0, 4))))}</div>
         <h2>Month</h2><div>${links("month", unique(posts.map(post => post.published_on.slice(0, 7))), monthLabel)}</div>

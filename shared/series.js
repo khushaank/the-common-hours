@@ -14,7 +14,7 @@ function seriesId(name, posts) {
   return conflict ? legacySeriesId(name) : id;
 }
 
-const seriesHref = (name, posts) => "series.html#" + seriesId(name, posts);
+const seriesHref = (name, posts) => "series#" + seriesId(name, posts);
 
 export function seriesEntries(posts, series) {
   return posts.filter(post => post.series === series).sort((a, b) =>
@@ -51,6 +51,6 @@ export function seriesDirectory(posts) {
         ${post.is_note ? noteCard(post, date => date) : `<div><h2 class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></h2>
           <p class="series-excerpt">${escape(post.excerpt)}</p></div>`}</li>`).join("")}</ol></details>`;
   });
-  return `<a class="back" href="archive.html">← Archive</a><div class="section-head"><h1>Series</h1><span class="section-note">${names.length} series</span></div>
+  return `<a class="back" href="archive">← Archive</a><div class="section-head"><h1>Series</h1><span class="section-note">${names.length} series</span></div>
     <div class="series-directory">${groups.join("") || "<p>No series have been published yet.</p>"}</div>`;
 }

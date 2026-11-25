@@ -2,6 +2,7 @@ import "./markdown-it.min.js";
 import footnotes from "./markdown-it-footnote.js";
 import { escape, imageSource, markdownMarker, mediaId, videoFrom } from "./text.js";
 import { photoText } from "./photo-text.js";
+import { carouselLine, carouselSlot } from "./carousel.js";
 
 const md = globalThis.markdownit({ html: false, linkify: true, breaks: true }).use(footnotes);
 md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
@@ -76,6 +77,20 @@ md.block.ruler.before("paragraph", "video", (state, line, endLine, silent) => {
   return true;
 }, { alt: ["paragraph", "blockquote", "list"] });
 
+md.block.ruler.before("paragraph", "carousel", (state, line, endLine, silent) => {
+  if (state.sCount[line] - state.blkIndent >= 4) return false;
+  const start = state.bMarks[line] + state.tShift[line];
+  const match = carouselLine.exec(state.src.slice(start, state.eMarks[line]).trim());
+  if (!match) return false;
+  if (!silent) {
+    state.push("carousel", "", 0).meta = match[1];
+    state.line = line + 1;
+  }
+  return true;
+}, { alt: ["paragraph", "blockquote", "list"] });
+
+md.renderer.rules.carousel = (tokens, index, options, env) => carouselSlot(tokens[index].meta, env.editable);
+
 md.core.ruler.after("inline", "linked_video", state => {
   const tokens = state.tokens;
   for (let index = tokens.length - 3; index >= 0; index--) {
@@ -108,6 +123,7 @@ export function mediaReferences(body) {
   if (!body.startsWith(markdownMarker)) return [];
   const references = [];
   for (const block of md.parse(body.slice(markdownMarker.length), {})) {
+    if (block.type === "carousel") references.push({ id: block.meta, kind: "carousel" });
     const tokens = block.children || [];
     for (const [index, token] of tokens.entries()) {
       if (token.type === "image") {

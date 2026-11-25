@@ -10,6 +10,7 @@ import { renderFeed } from "./feed.mjs";
 import { archiveEntries, archivePageSize, renderArchive } from "./shared/archive.js";
 import { photoText, publicPhoto } from "./shared/photo-text.js";
 import { writeNote } from "./shared/note.js";
+import { carouselMarkup } from "./shared/carousel.js";
 
 const template = await readFile(new URL("./blog/index.html", import.meta.url), "utf8");
 const initialRouteScript = template.match(/<script>(.*?)<\/script>/is)[1];
@@ -31,13 +32,13 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.match(article, /class="zoom-image" href="media-12345678-1234-1234-1234-123456789abc.jpg"/);
   assert.match(article, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(article, /<script>alert/);
-  assert.match(article, /href="entry-first-entry.html"/);
+  assert.match(article, /href="entry-first-entry"/);
   assert.match(article, /<h2>Comments<\/h2>[\s\S]+Approved &amp; visible/);
   assert.doesNotMatch(article, /id="comment-form"/);
-  for (const name of ["index", "archive", "start"]) assert.match(pages.get(name + ".html"), /href="entry-first-entry.html"/);
+  for (const name of ["index", "archive", "start"]) assert.match(pages.get(name + ".html"), /href="entry-first-entry"/);
   const topics = pages.get("topics.html");
   assert.doesNotMatch(topics, /Notes<span>/);
-  assert.doesNotMatch(topics, /href="entry-first-entry.html"/);
+  assert.doesNotMatch(topics, /href="entry-first-entry"/);
   assert.match(pages.get("notes.html"), /<h1>Notes<\/h1>/);
   assert.match(article, /alt="An image" draggable="false"/);
   assert.match(article, /og:image" content="https:\/\/commonhours\.qd\.je\/media-/);
@@ -46,11 +47,11 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.match(pages.get("privacy.html"), /What the journal collects/);
   assert.match(pages.get("terms.html"), /<h1>Terms<\/h1>/);
   assert.match(pages.get("photos.html"), /url=\.\/#featured-photo/);
-  assert.doesNotMatch(pages.get("sitemap.xml"), /\/(photos|collections|photo-essays)\.html/);
+  assert.doesNotMatch(pages.get("sitemap.xml"), /\/(photos|collections|photo-essays)<\/loc>|\.html<\/loc>/);
   assert.doesNotMatch(pages.get("photo-" + imageId + ".html"), /The description/);
   const canonicals = [];
   for (const [name, html] of pages) {
-    if (!name.endsWith(".html") || ["photos.html", "collections.html", "photo-essays.html", pageHref({ view: "archive", tag: "Notes" })].includes(name)) continue;
+    if (!name.endsWith(".html") || ["photos.html", "collections.html", "photo-essays.html", pageHref({ view: "archive", tag: "Notes" }, { filename: true })].includes(name)) continue;
     const canonical = html.match(/rel="canonical" href="([^"]+)"/)[1];
     canonicals.push(canonical);
     assert.match(html, /aria-busy="false" data-prerendered="true"/);
@@ -93,7 +94,7 @@ test("a successful refresh keeps the published marker when the published DOM is 
     const content = { dataset: { prerendered: "true" }, querySelector: () => retained, setAttribute(name, value) { this[name] = value; } };
     await runInNewContext(load + "\nload()", {
       content, location: { search: "" }, document: { querySelector: () => null }, start: async () => {},
-      view: null, offline: () => false, loadNoteImages: async () => {}, publicImage() {},
+      view: null, offline: () => false, loadCarousels: async () => {}, publicCarousel() {}, publicImage() {},
     });
     assert.equal(content.dataset.prerendered, retained ? "true" : undefined);
     assert.equal(content["aria-busy"], "false");
@@ -254,15 +255,15 @@ test("archives have accessible pagination and static year, month, and Unicode to
   const posts = Array.from({ length: 32 }, (_, index) => ({ ...post, slug: "entry-" + index, tag: index % 2 ? "प्रकृति & art" : "Notes", published_on: index < 20 ? "2026-11-16" : "2025-10-14" }));
   const pages = renderPublicPages(template, { posts, photos: [], images: new Map(), files: new Map() });
   for (const values of [{ view: "archive", page: "2" }, { view: "archive", year: "2026" }, { view: "archive", month: "2025-10" }, { view: "archive", tag: "प्रकृति & art", page: "2" }]) {
-    const file = pageHref(values);
+    const file = pageHref(values, { filename: true });
     assert.equal(generatedFile.test(file), true);
     const url = new URL(file, "https://example.com/");
     assert.deepEqual(Object.fromEntries(pageParams(url.search, url.pathname)), values);
     assert.ok(pages.has(file), file);
   }
   assert.equal((pages.get("archive.html").match(/<article class="entry">/g) || []).length, archivePageSize);
-  assert.match(pages.get("archive.html"), /rel="next" href="archive-page-2.html"/);
-  assert.match(pages.get("archive-page-2.html"), /rel="prev" href="archive.html"/);
+  assert.match(pages.get("archive.html"), /rel="next" href="archive-page-2"/);
+  assert.match(pages.get("archive-page-2.html"), /rel="prev" href="archive"/);
   assert.equal(archiveEntries(posts, new URLSearchParams({ year: "2025" })).length, 12);
   assert.match(renderArchive(posts, new URLSearchParams({ page: "999" })), /Page 3 of 3/);
 });
@@ -275,7 +276,7 @@ test("legal pages offer email without scripts, and reading sections explain thei
   }
   assert.match(pages.get("privacy.html"), /id="contact"/);
   assert.match(pages.get("start.html"), /Find your way in/);
-  for (const name of ["photo-essays.html", "collections.html"]) assert.match(pages.get(name), /url=archive\.html/);
+  for (const name of ["photo-essays.html", "collections.html"]) assert.match(pages.get(name), /url=archive"/);
 });
 
 test("notes render without an entry title and support inline formatting and links", () => {
@@ -302,16 +303,38 @@ test("note photos and references appear on notes and archive pages, with carouse
     const html = pages.get(file);
     assert.match(html, /class="note-gallery" data-count="2"/);
     assert.match(html, /class="zoom-image" href="media-12345678-1234-1234-1234-123456789abc\.jpg" aria-label="Enlarge photo: First &amp; best"/);
-    assert.match(html, /href="entry-first-entry\.html">Related &lt;article&gt;/);
+    assert.match(html, /href="entry-first-entry">Related &lt;article&gt;/);
     assert.doesNotMatch(html, /common-hours-note-extras/);
     assert.equal(html.includes('data-carousel role="group"'), file !== "archive.html");
   }
   const homepage = pages.get("index.html");
-  assert.match(homepage, /<h1>Latest entries<\/h1>[\s\S]*?entry-first-entry\.html/);
+  assert.match(homepage, /<h1>Latest entries<\/h1>[\s\S]*?href="entry-first-entry"/);
   assert.match(homepage, new RegExp(`<img src="${thumb}" width="144" height="144"`));
-  assert.match(homepage, /href="notes\.html">View all notes/);
+  assert.match(homepage, /href="notes">View all notes/);
   assert.equal((homepage.match(/<span class="note-preview">/g) ?? []).length, 3);
-  assert.doesNotMatch(homepage, /class="note-gallery"|href="entry-old-2\.html"|src="media-/);
+  assert.doesNotMatch(homepage, /class="note-gallery"|href="entry-old-2"|src="media-/);
+});
+
+test("a saved carousel renders in an article and a numbered Note", () => {
+  const id = "30000000-0000-0000-0000-000000000001";
+  const photos = Array.from({ length: 20 }, (_, index) => ({
+    id: "40000000-0000-0000-0000-" + String(index).padStart(12, "0"), alt: "Photo " + (index + 1),
+  }));
+  const article = { ...post, body: markdownMarker + "Before\n\n" + carouselMarkup(id) + "\n\nAfter" };
+  const note = { ...post, id: "short", slug: "short-note", is_note: true, note_number: 7, body: writeNote("", { photos: [], references: [], carousels: [id] }) };
+  const images = new Map(photos.map(({ id }) => [id, { src: "media-" + id + ".jpg", width: 800, height: 600 }]));
+  const pages = renderPublicPages(template, { posts: [note, article], photos: [], images, files: new Map(),
+    carousels: new Map([[id, photos]]), comments: [{ post_id: note.id, display_name: "Reader", body: "Hidden Note comment" }] });
+  for (const file of ["entry-first-entry.html", "entry-short-note.html", "notes.html"]) {
+    const html = pages.get(file);
+    assert.match(html, /class="note-gallery" data-count="20"/);
+    assert.match(html, /Enlarge photo: Photo 20/);
+    assert.doesNotMatch(html, /Hidden Note comment|data-note-like/);
+  }
+  assert.match(pages.get("notes.html"), /Note 007/);
+  assert.match(pages.get("entry-short-note.html"), /rel="canonical" href="https:\/\/commonhours\.qd\.je\/entry-short-note"/);
+  assert.doesNotMatch(pages.get("entry-short-note.html"), /<h2>Comments<\/h2>/);
+  assert.match(pages.get("entry-first-entry.html"), /<h2>Comments<\/h2>/);
 });
 
 test("series articles show membership before the title and keep links in part order", () => {
@@ -322,16 +345,16 @@ test("series articles show membership before the title and keep links in part or
   const standalone = { ...post, id: "four", slug: "standalone" };
   const pages = renderPublicPages(template, { posts: [second, unnumbered, standalone, first], photos: [], images: new Map(), files: new Map() });
   const article = pages.get("entry-first-entry.html");
-  const [, seriesAnchor] = article.match(/class="article-series">Part 1 of the series <a draggable="false" href="series\.html#(series-[\w-]+)">Making you dream big &amp; bold<\/a><\/p><h1>/);
-  assert.match(article, /href="entry-second-part\.html">Next in the series · Second part/);
-  assert.ok(article.includes('href="series.html#' + seriesAnchor + '">See the full series'));
+  const [, seriesAnchor] = article.match(/class="article-series">Part 1 of the series <a draggable="false" href="series#(series-[\w-]+)">Making you dream big &amp; bold<\/a><\/p><h1>/);
+  assert.match(article, /href="entry-second-part">Next in the series · Second part/);
+  assert.ok(article.includes('href="series#' + seriesAnchor + '">See the full series'));
   const directory = pages.get("series.html");
   assert.equal(seriesAnchor, "series-making-you-dream-big-bold");
   assert.ok(directory.includes('id="series-' + Buffer.from(series).toString("base64url") + '"'));
   assert.ok(directory.includes('id="' + seriesAnchor + '"'));
   assert.match(directory, /<h1>Series<\/h1>[\s\S]*<details class="series-group">\s*<summary><span class="series-name">Making you dream big &amp; bold<\/span>[\s\S]*<ol class="series-parts">/);
   assert.match(directory, /class="series-part-number">Part 1<\/span>[\s\S]*?<h2 class="entry-title">/);
-  assert.ok(directory.indexOf("entry-first-entry.html") < directory.indexOf("entry-second-part.html"));
+  assert.ok(directory.indexOf('href="entry-first-entry"') < directory.indexOf('href="entry-second-part"'));
   assert.match(pages.get("entry-older-part.html"), /class="article-series">Part of the series/);
   assert.doesNotMatch(pages.get("entry-standalone.html"), /class="(?:article-series|series-navigation)"/);
 });
@@ -346,7 +369,7 @@ test("series with similar names keep distinct links and fragment targets", () =>
   assert.match(directory, /<h1>Series<\/h1>/);
   for (const entry of entries) {
     const target = "series-" + Buffer.from(entry.series).toString("base64url");
-    assert.ok(pages.get("entry-" + entry.slug + ".html").includes('href="series.html#' + target + '"'));
+    assert.ok(pages.get("entry-" + entry.slug + ".html").includes('href="series#' + target + '"'));
     assert.ok(directory.includes('id="' + target + '"'));
   }
 });
@@ -396,12 +419,12 @@ test("each comma-separated tag gets its own linked topic and archive page", () =
   const tagged = { ...post, tag: "Notes, AI, ai" };
   const pages = renderPublicPages(template, { posts: [tagged], photos: [], images: new Map(), files: new Map() });
   const path = pageHref({ view: "archive", tag: "AI" });
-  assert.match(pages.get(path), /href="entry-first-entry.html"/);
+  assert.match(pages.get(path + ".html"), /href="entry-first-entry"/);
   assert.ok(pages.get("entry-first-entry.html").includes('href="' + path + '">AI</a>'));
-  const oldNotes = pageHref({ view: "archive", tag: "Notes" });
-  assert.match(pages.get(oldNotes), /url=notes\.html/);
+  const oldNotes = pageHref({ view: "archive", tag: "Notes" }, { filename: true });
+  assert.match(pages.get(oldNotes), /url=notes"/);
   assert.doesNotMatch(pages.get("topics.html"), /Notes<span>/);
-  assert.equal(pages.has(pageHref({ view: "archive", tag: "ai" })), false);
+  assert.equal(pages.has(pageHref({ view: "archive", tag: "ai" }, { filename: true })), false);
 });
 
 test("new routes and legacy query links resolve to the same entries and filters", () => {
@@ -423,16 +446,16 @@ test("new publications use working query links until their HTML pages exist", as
     URLSearchParams,
     document: { querySelector: () => ({ dataset: { files: "entry-first-entry.html photo-" + imageId + ".html" } }) },
   });
-  assert.equal(link({ post: "first-entry" }), "entry-first-entry.html");
+  assert.equal(link({ post: "first-entry" }), "entry-first-entry");
   assert.equal(link({ post: "just-published" }), "./?post=just-published");
   assert.equal(link({ view: "photo", photo: "cover" }), "./?view=photo&photo=cover");
-  assert.equal(link({ view: "photo-essays" }), "archive.html");
+  assert.equal(link({ view: "photo-essays" }), "archive");
 });
 
-test("RSS uses readable HTML links without changing existing subscription identifiers", async t => {
+test("RSS uses extensionless links without changing existing subscription identifiers", async t => {
   t.mock.method(globalThis, "fetch", async () => Response.json([post]));
   const feed = await renderFeed({ origin: "https://example.com", key: "public" });
-  assert.match(feed, /<link>https:\/\/commonhours.qd.je\/entry-first-entry.html<\/link>/);
+  assert.match(feed, /<link>https:\/\/commonhours.qd.je\/entry-first-entry<\/link>/);
   assert.match(feed, /<guid>https:\/\/commonhours.qd.je\/\?post=first-entry<\/guid>/);
 });
 
@@ -453,7 +476,7 @@ test("legacy section URLs redirect to canonical pages while retaining filters an
     let redirected;
     const location = { href: url.href, search: url.search, pathname: url.pathname, hash: url.hash, replace: address => { redirected = address; } };
     runInNewContext(script, { URL, URLSearchParams, location, document: { documentElement: { dataset: {}, classList: { add() {}, remove() {} } } } });
-    assert.equal(redirected, ["review", "https://bad.example"].includes(view) ? undefined : "https://commonhours.qd.je/" + view + ".html?year=2026#contact");
+    assert.equal(redirected, ["review", "https://bad.example"].includes(view) ? undefined : "https://commonhours.qd.je/" + view + "?year=2026#contact");
   }
 });
 

@@ -35,9 +35,9 @@ next to preserve comments when entries are removed and enable private preview li
 details, public entries with approved comments, and policies, plus `sitemap.xml`.
 These pages can be read without
 JavaScript. Legacy query links redirect in the browser; new links use separate
-HTML pages so search engines and link previews receive the right content.
-GitHub Pages cannot redirect query strings on the server: HTML-only visitors
-must use the `.html` links. The archive has 15 entries per page and separate
+pages so search engines and link previews receive the right content. Public
+links use extensionless addresses such as `/notes` and `/archive`; old `.html`
+addresses still work. The archive has 15 entries per page and separate
 pages for years, months, and topics, all browsable without JavaScript.
 The Featured Photo slideshow, full-text search, comment submission, and the
 contact form use JavaScript. The privacy page includes an email link.
@@ -74,7 +74,7 @@ Dashboard uses the existing daily traffic totals and each entry’s publication
 date. No new database migration is required for this layout.
 
 **New note** opens a short, title-free composer. Notes support up to 500
-characters and can be saved as drafts. Published notes appear at `notes.html`
+characters and can be saved as drafts. Published notes appear at `/notes`
 and keep their individual links. The Journal shows the three most recent notes
 beside the latest articles.
 Apply [`supabase/upgrade-notes-and-photos.sql`](supabase/upgrade-notes-and-photos.sql)
@@ -83,17 +83,25 @@ The upgrade enables publishing notes and retires the old editorial photo fields.
 The **Reader prompt** field is still available in **Publish settings**.
 
 Apply [the note media and search upgrade](supabase/upgrade-note-media-and-search.sql)
-before publishing this version. Notes can include up to 12 photos.
+before publishing this version.
 Type **@image** and press **Enter** to open the Media Library.
 Type **/** in a note to find and attach a published article link.
-Use Markdown for emphasis and external links. Notes with two or more photos
-automatically get a swipeable carousel on the Notes page and their permalinks.
+Use Markdown for emphasis and external links. To create or reuse a carousel
+from an article or Note, type **@carousel** and press **Enter**. The Media Library
+also has a **New carousel** button. Open a carousel there to see its photo count,
+resolutions, and members. **Remove from carousel** keeps the original photo in
+Media. **Delete photo** removes it permanently when nothing else uses it.
+Multiple individual photos attached to a Note become a carousel on publication.
+Carousels have no app-imposed photo count limit and stop at the first and last
+slide.
 On the public site, **Alt + N** opens Notes and **Alt + O** opens the current
 note. The left and right arrow keys work while the carousel has focus.
 
-Apply [the note likes upgrade](supabase/add-note-likes.sql) to enable likes.
-The database stores a salted fingerprint of the gateway-provided IP address
-and note ID. Readers on the same IP share one like per note.
+Apply [the reusable carousels upgrade](supabase/reusable-carousels.sql) before
+deploying this version. It assigns existing public Notes a permanent number.
+After deploying the reader and Writing Desk, run [the existing photo
+grouping script](supabase/group-existing-note-photos.sql) and publish again.
+Article comments still use the existing moderation workflow.
 
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
 after the Notes and live review upgrades. It carries the current homepage photos

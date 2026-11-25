@@ -1,8 +1,8 @@
 import { imageSource, missingFeature, showFailure } from "./common.js";
-import { loadCatalog } from "./media-catalog.js";
+import { carouselSummary, loadCatalog } from "./media-catalog.js";
 import { isSupportedImage, promptImageAlt } from "./editor-tools.js";
 
-const types = { image: "Image", pdf: "PDF", document: "Document", file: "File" };
+const types = { image: "Image", pdf: "PDF", document: "Document", file: "File", carousel: "Carousel" };
 const pageSize = 18;
 const fileBadge = extension => {
   if (/^(pptx?|odp)$/.test(extension)) return ["PPT", "slides"];
@@ -26,6 +26,7 @@ export function setupMediaEditor(api, storage) {
   const close = document.querySelector("#media-close");
   const remove = document.querySelector("#media-delete");
   const add = document.querySelector("#media-add");
+  const newCarousel = document.querySelector("#media-new-carousel");
   const fileInput = document.querySelector("#media-file");
   const save = form.querySelector('[type="submit"]');
   const message = document.querySelector("#media-edit-status");
@@ -67,8 +68,11 @@ export function setupMediaEditor(api, storage) {
   function render() {
     observer?.disconnect();
     const query = search.value.trim().toLowerCase();
-    const matches = catalog.filter(asset => (filter.value === "all" || filter.value === asset.type) &&
-      [asset.title, asset.original, asset.alt, asset.kind === "file" ? asset.description : ""].some(value => value?.toLowerCase().includes(query)));
+    const grouped = new Set(catalog.filter(asset => asset.kind === "carousel").flatMap(asset => asset.photos.map(photo => photo.id)));
+    const matches = catalog.filter(asset =>
+      (filter.value === "all" ? asset.kind !== "image" || !grouped.has(asset.id) : filter.value === asset.type) &&
+      [asset.title, asset.original, asset.alt, asset.kind === "file" ? asset.description : "", asset.photos?.map(photo => photo.alt).join(" ")]
+        .some(value => value?.toLowerCase().includes(query)));
     status.textContent = matches.length ? matches.length + (matches.length === 1 ? " item" : " items") : "No media matches.";
     grid.replaceChildren();
     more.hidden = matches.length <= limit;
@@ -89,21 +93,22 @@ export function setupMediaEditor(api, storage) {
       const type = document.createElement("small");
       button.type = "button";
       name.textContent = asset.title || asset.alt || "Untitled image";
-      type.textContent = types[asset.type];
+      type.textContent = asset.kind === "carousel" ? carouselSummary(asset) : types[asset.type];
       const frame = document.createElement("span");
       frame.className = "media-thumbnail";
       frame.setAttribute("aria-hidden", "true");
-      if (asset.kind === "image") {
+      const cover = asset.kind === "carousel" ? asset.photos[0]?.id : asset.kind === "image" ? asset.id : null;
+      if (cover) {
         const image = document.createElement("img");
         image.alt = "";
-        image.dataset.id = asset.id;
+        image.dataset.id = cover;
         image.decoding = "async";
         frame.setAttribute("aria-busy", "true");
         frame.append(image);
         if (observer) observer.observe(image);
-        else void showImage(image, asset.id);
+        else void showImage(image, cover);
       } else {
-        const [label, style] = fileBadge(asset.extension);
+        const [label, style] = asset.kind === "carousel" ? ["Photos", "file"] : fileBadge(asset.extension);
         const badge = document.createElement("span");
         badge.className = "media-file-badge";
         badge.dataset.format = style;
@@ -117,10 +122,16 @@ export function setupMediaEditor(api, storage) {
         }
       }
       button.append(frame, name, type);
-      button.addEventListener("click", () => edit(asset));
+      button.addEventListener("click", () => asset.kind === "carousel" ? openCarousel(asset.id, button) : edit(asset));
       grid.append(button);
     }
   }
+
+  const openCarousel = (id, trigger) => storage.carousel({ id, onClose: async changed => {
+    if (changed) await load();
+    (trigger.isConnected ? trigger : newCarousel).focus();
+  } }).catch(error => { status.textContent = error.message; });
+  newCarousel.addEventListener("click", () => void openCarousel(null, newCarousel));
 
   async function load() {
     const loading = ++revision;

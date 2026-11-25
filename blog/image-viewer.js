@@ -1,6 +1,5 @@
-import { photoArrows } from "./note.js";
+import { photoArrows, photoGallery, photoSlot } from "./carousel.js";
 
-const wrapIndex = (index, count) => (index + count) % count;
 const carousel = ".note-gallery[data-carousel]";
 const direction = event => event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
 
@@ -27,13 +26,18 @@ function galleryIndex(gallery) {
   return Number(gallery.dataset.active || 0);
 }
 
+function updateArrows(stage, index, count) {
+  for (const button of stage.querySelectorAll("[data-photo-step]")) {
+    const target = index + Number(button.dataset.photoStep);
+    button.setAttribute("aria-disabled", String(target < 0 || target >= count));
+  }
+}
+
 function showGalleryPhoto(gallery, index) {
   const slides = [...gallery.children];
   gallery.dataset.active = index;
-  const previous = wrapIndex(index - 1, slides.length);
-  const next = wrapIndex(index + 1, slides.length);
   for (const [i, slide] of slides.entries()) {
-    const position = i === index ? "current" : i === next ? "next" : i === previous ? "previous" : "";
+    const position = i === index ? "current" : i === index + 1 ? "next" : i === index - 1 ? "previous" : "";
     slide.dataset.position = position;
     slide.setAttribute("aria-hidden", String(i !== index));
     const trigger = slide.querySelector(".zoom-image");
@@ -41,13 +45,15 @@ function showGalleryPhoto(gallery, index) {
   }
   const status = gallery.closest(".note-carousel").querySelector("[aria-live]");
   status.textContent = (index + 1) + " of " + slides.length;
+  updateArrows(gallery.parentElement, index, slides.length);
   for (const slide of slides) {
     if (slide.dataset.position) slide.dispatchEvent(new Event("show-note-photo"));
   }
 }
 
 function stepGallery(gallery, amount) {
-  showGalleryPhoto(gallery, wrapIndex(galleryIndex(gallery) + amount, gallery.children.length));
+  const index = galleryIndex(gallery) + amount;
+  if (index >= 0 && index < gallery.children.length) showGalleryPhoto(gallery, index);
 }
 
 export function setupImageViewer() {
@@ -60,9 +66,9 @@ export function setupImageViewer() {
     if (!center?.src) return;
     const slides = gallery?.children;
     for (const [position, photo] of [
-      ["previous", slides?.length > 2 ? slides[wrapIndex(index - 1, slides.length)]?.querySelector("img") : null],
+      ["previous", slides?.[index - 1]?.querySelector("img")],
       ["current", center],
-      ["next", slides ? slides[wrapIndex(index + 1, slides.length)]?.querySelector("img") : null],
+      ["next", slides?.[index + 1]?.querySelector("img")],
     ]) {
       const image = dialog.querySelector('[data-view-photo="' + position + '"]');
       image.hidden = !photo?.src;
@@ -79,10 +85,13 @@ export function setupImageViewer() {
     }
     dialog.querySelector("[aria-live]").textContent = gallery ? (index + 1) + " of " + slides.length : "";
     for (const button of dialog.querySelectorAll("[data-photo-step]")) button.hidden = !gallery;
+    if (gallery) updateArrows(dialog.querySelector(".viewer-stage"), index, slides.length);
   };
   const step = amount => {
     if (!gallery) return false;
-    index = wrapIndex(index + amount, gallery.children.length);
+    const destination = index + amount;
+    if (destination < 0 || destination >= gallery.children.length) return true;
+    index = destination;
     showGalleryPhoto(gallery, index);
     update();
     return true;
@@ -154,6 +163,22 @@ export function setupNoteCarousels() {
 }
 
 const queuedNoteImages = new WeakSet();
+
+export async function loadCarousels(target, read, loadImage) {
+  const galleries = [...target.querySelectorAll("[data-carousel-id], [data-carousel-cover]")];
+  const requests = new Map();
+  await Promise.allSettled(galleries.map(async gallery => {
+    const id = gallery.dataset.carouselId || gallery.dataset.carouselCover;
+    if (!requests.has(id)) requests.set(id, read(id));
+    const photos = await requests.get(id);
+    if (!gallery.isConnected) return;
+    const identity = photos.map(photo => photo.id).join(",");
+    if (gallery.dataset.photos === identity) return;
+    gallery.dataset.photos = identity;
+    gallery.innerHTML = gallery.dataset.carouselCover ? (photos[0] ? photoSlot(photos[0]) : "") : photoGallery(photos);
+  }));
+  await loadNoteImages(target, loadImage);
+}
 
 export async function loadNoteImages(target, loadImage) {
   for (const gallery of target.querySelectorAll(carousel)) {

@@ -1,5 +1,6 @@
 import Turndown from "./turndown.js";
 import { loadImageSlot, renderMarkup } from "./rich.js";
+import { carouselMarkup } from "./carousel.js";
 
 const converter = new Turndown({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-", emDelimiter: "*", br: "" });
 const label = text => text.replace(/[\\[\]*_<>]/g, "\\$&").replace(/[\r\n]+/g, " ");
@@ -50,6 +51,7 @@ function imageMarkup(node) {
 
 export function visualMarkdown(target) {
   const copy = target.cloneNode(true);
+  for (const carousel of copy.querySelectorAll("[data-carousel-id]")) stored(carousel, "\n\n" + carouselMarkup(carousel.dataset.carouselId) + "\n\n");
   for (const image of copy.querySelectorAll("[data-image]")) stored(image, imageMarkup(image));
   for (const video of copy.querySelectorAll(".video")) {
     const href = video.querySelector(".video-link")?.getAttribute("href");
@@ -114,7 +116,7 @@ export function createVisualEditor(target, loadImage) {
     },
     insert(markdown, start) {
       const fragment = document.createElement("template");
-      fragment.innerHTML = renderMarkup(markdown, { docId: crypto.randomUUID() });
+      fragment.innerHTML = renderMarkup(markdown, { docId: crypto.randomUUID(), editable: true });
       for (const item of fragment.content.querySelectorAll(".media-slot, .video, .footnote-ref, .footnotes")) {
         item.contentEditable = "false";
       }

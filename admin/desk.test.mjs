@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
-import { notePhotoLimit, noteReferenceLimit, readNote, writeNote } from "../shared/note.js";
+import { noteReferenceLimit, readNote, writeNote } from "../shared/note.js";
 
 const source = await readFile(new URL("./editor-tools.js", import.meta.url), "utf8");
 const deskSource = await readFile(new URL("./desk.js", import.meta.url), "utf8");
@@ -45,7 +45,7 @@ function editorTools(value, start = 0, end = value.length, getReferences, getEnt
     document: { querySelector: query, createElement: element }, Event, URL,
     allowedImages: new Set(), async readMediaImage() {}, imageSource() {}, createVisualEditor: () => ({}), renderText() {},
     loadLibrary: async () => ({ setupImageLibrary: () => openLibrary }),
-    notePhotoLimit, noteReferenceLimit, readNote, writeNote,
+    noteReferenceLimit, readNote, writeNote,
   });
   const tools = setup(editor, () => {}, {}, getEntries, getReferences);
   const format = key => query(".format-tools").dispatchEvent({ type: "click", target: { closest: () => ({ dataset: { format: key } }) } });
@@ -97,7 +97,7 @@ test("slash menu omits toolbar formatting and retains every other insert command
   const view = editorTools("/", 1, 1);
   view.body.dispatchEvent(new Event("input"));
   const names = Array.from(view.query("#command-menu").children, button => button.dataset.command);
-  assert.deepEqual(names, ["image", "file", "pdf", "entry", "footnote"]);
+  assert.deepEqual(names, ["image", "carousel", "file", "pdf", "entry", "footnote"]);
   for (const name of ["heading", "bold", "italic", "list", "numbered", "quote", "library", "video", "divider"]) {
     const removed = editorTools("/" + name, name.length + 1, name.length + 1);
     removed.body.dispatchEvent(new Event("input"));

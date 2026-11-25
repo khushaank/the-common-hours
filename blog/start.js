@@ -15,10 +15,12 @@ document.addEventListener("dragstart", event => {
 });
 
 const route = pageParams();
-if (location.search) {
-  const target = new URL(pageHref(route), location.href);
+if ((location.search || location.pathname.endsWith(".html")) && navigator.onLine &&
+    !document.documentElement.hasAttribute("data-offline-copy")) {
+  const address = pageHref(route);
+  const target = new URL(address, location.href);
   target.hash = location.hash;
-  if (target.pathname !== location.pathname && target.pathname.endsWith(".html")) location.replace(target.href);
+  if (target.pathname !== location.pathname && !address.startsWith("./")) location.replace(target.href);
 }
 
 import("./journal.js").catch(() => {

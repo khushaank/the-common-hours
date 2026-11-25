@@ -32,7 +32,8 @@ const server = createServer(async (request, response) => {
   for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
   try {
     const path = new URL(request.url, "http://localhost").pathname;
-    const file = path === "/" ? "index.html" : path.slice(1);
+    const name = path === "/" ? "index.html" : path.slice(1);
+    const file = app === "blog" && !name.includes(".") && generatedFile.test(name + ".html") ? name + ".html" : name;
     if (!files.has(file) && !(app === "blog" && generatedFile.test(file))) {
       response.writeHead(404);
       response.end("Page not found");

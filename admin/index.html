@@ -158,7 +158,7 @@
               </div>
               <div class="editor-body" id="write-panel" hidden>
                 <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
-                <p id="note-compose-help">Use *italic*, **bold**, or [text](https://…) in a note. Type @image and press Enter to add a photo. Notes can have up to 12 photos.</p>
+                <p id="note-compose-help">Type @image to add a photo or @carousel to choose or create a reusable carousel.</p>
                 <ul id="note-attachments" aria-label="Note attachments" hidden></ul>
               </div>
               <section class="editor-preview" id="entry-preview" aria-label="Entry preview">
@@ -205,12 +205,12 @@
         </form>
       </section>
       <section id="media-panel" data-desk-panel hidden>
-        <div class="section-heading"><div class="help-row"><h1>Media</h1><span class="field-help"><button type="button" aria-label="Help with Media" aria-describedby="media-help">i</button><span id="media-help" role="tooltip">Upload and manage the images and files you use in entries and Photos. Select an item to edit its details.</span></span></div><button type="button" class="icon-button" id="media-add" aria-label="Upload media" title="Upload media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input type="file" id="media-file" hidden></div>
+        <div class="section-heading"><div class="help-row"><h1>Media</h1><span class="field-help"><button type="button" aria-label="Help with Media" aria-describedby="media-help">i</button><span id="media-help" role="tooltip">Upload and manage media for articles, Notes, and Photos. Select an item to edit its details.</span></span></div><div class="actions"><button type="button" id="media-new-carousel">New carousel</button><button type="button" class="icon-button" id="media-add" aria-label="Upload media" title="Upload media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div><input type="file" id="media-file" hidden></div>
         <div class="card">
           <div class="fields media-filters">
             <label>Search media <input type="search" id="media-search" autocomplete="off"></label>
             <label>Type <select id="media-filter">
-              <option value="all">All media</option><option value="image">Images</option>
+              <option value="all">All media</option><option value="image">Images</option><option value="carousel">Carousels</option>
               <option value="pdf">PDFs</option><option value="document">Documents</option><option value="file">Other files</option>
             </select></label>
           </div>
@@ -309,6 +309,17 @@
       <p id="media-edit-status" role="status"></p>
       <div class="actions"><button type="button" id="media-delete">Delete media</button><button type="button" id="media-download">Download file</button><button type="submit" class="primary">Save details</button></div>
     </form>
+  </dialog>
+  <dialog id="carousel-dialog" aria-labelledby="carousel-dialog-title">
+    <div class="body-heading"><h2 id="carousel-dialog-title">Photo carousel</h2><button type="button" id="carousel-close">Close</button></div>
+    <div class="actions" id="carousel-chooser" hidden><label>Choose a carousel <select id="carousel-select"></select></label><button type="button" id="carousel-new">New carousel</button></div>
+    <form id="carousel-form">
+      <label>Carousel title <input name="title" maxlength="180" required></label>
+      <div class="actions"><button type="submit" id="carousel-save">Save title</button><button type="button" id="carousel-add" hidden>Add photo</button><button type="button" class="primary" id="carousel-insert" hidden>Insert carousel</button></div>
+    </form>
+    <p id="carousel-summary" class="muted"></p>
+    <p id="carousel-status" role="status"></p>
+    <ol id="carousel-photos"></ol>
   </dialog>
   <dialog id="share-dialog" aria-labelledby="share-title">
     <div class="body-heading"><h2 id="share-title">Share entry</h2><button type="button" id="close-share">Close</button></div>

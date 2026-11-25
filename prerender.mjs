@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { articleTopics, entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
 import { readNote } from "./shared/note.js";
+import { carouselSlot } from "./shared/carousel.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
 import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
@@ -21,7 +22,8 @@ export async function loadPublicSnapshot(config) {
   const files = new Map();
   const images = new Map();
   const attachments = new Map();
-  if (!config.origin) return { posts: [], photos: [], comments: [], files, images, attachments };
+  const carousels = new Map();
+  if (!config.origin) return { posts: [], photos: [], comments: [], files, images, attachments, carousels };
   async function get(path) {
     const response = await fetch(config.origin + "/rest/v1/qmargin_b74_" + path, {
       headers: { apikey: config.key }, signal: AbortSignal.timeout(12000), redirect: "error",
@@ -49,7 +51,7 @@ export async function loadPublicSnapshot(config) {
   const base = "id,slug,title,tag,excerpt,published_on,body";
   const weekly = "id,week,media_id,title,alt,created_at";
   const [posts, weeks, months, comments] = await Promise.all([
-    rows("posts", [",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""].map(extra => base + extra), "&published=eq.true&order=published_on.desc,id.desc"),
+    rows("posts", [",series,series_order,start_here,is_note,note_number", ",series,series_order,start_here,is_note", ",series,series_order,start_here", ",is_note", ""].map(extra => base + extra), "&published=eq.true&order=published_on.desc,id.desc"),
     rows("weekly_photos", [weekly], "&order=week.desc,created_at.asc,id.asc", true),
     rows("photos", ["month,media_id,alt,caption"], "&order=month.desc", true),
     rows("comments", ["post_id,display_name,body"], "&approved=eq.true&order=created_at.asc,id.asc"),
@@ -57,18 +59,33 @@ export async function loadPublicSnapshot(config) {
   const photos = [...weeks, ...months.map(photo => ({ ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" }))]
     .sort((a, b) => photoDate(b).localeCompare(photoDate(a)));
   const ids = new Set(photos.map(photo => photo.media_id));
-  const thumbnailIds = new Set(posts.filter(post => post.is_note).slice(0, 3).map(post => readNote(post.body).photos[0]?.id));
+  const carouselIds = new Set();
   const downloads = new Set();
   for (const post of posts) {
     if (post.is_note) {
       for (const photo of readNote(post.body).photos) ids.add(photo.id);
+      for (const id of readNote(post.body).carousels) carouselIds.add(id);
       continue;
     }
     for (const reference of mediaReferences(post.body)) {
       if (reference.kind === "image") ids.add(reference.id);
       else if (reference.kind === "file") downloads.add(reference.id);
+      else if (reference.kind === "carousel") carouselIds.add(reference.id);
     }
   }
+  if (carouselIds.size) {
+    const members = await rows("carousel_photos", ["carousel_id,media_id,alt"], "&order=position.asc", true);
+    for (const { carousel_id, media_id, alt } of members) {
+      if (!carouselIds.has(carousel_id)) continue;
+      if (!carousels.has(carousel_id)) carousels.set(carousel_id, []);
+      carousels.get(carousel_id).push({ id: media_id, alt });
+      ids.add(media_id);
+    }
+  }
+  const thumbnailIds = new Set(posts.filter(post => post.is_note).slice(0, 3).map(post => {
+    const note = readNote(post.body);
+    return (note.photos[0] || carousels.get(note.carousels[0])?.[0])?.id;
+  }));
   for (const id of ids) {
     if (!mediaId.test(id || "")) continue;
     const [image] = await rows("media", ["encoded,width,height,alt", "encoded,width,height"], "&id=eq." + id);
@@ -96,10 +113,10 @@ export async function loadPublicSnapshot(config) {
     files.set(src, bytes);
     attachments.set(id, src);
   }
-  return { posts, photos, comments, files, images, attachments };
+  return { posts, photos, comments, files, images, attachments, carousels };
 }
 
-export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map() }, featured) {
+export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map(), carousels = new Map() }, featured) {
   const pages = new Map(files);
   const pageImages = new Map();
   const commentsByPost = new Map();
@@ -118,9 +135,9 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   const archivePages = archiveRoutes.flatMap(values => Array.from({ length: Math.max(1, Math.ceil(archiveEntries(posts, new URLSearchParams(values)).length / archivePageSize)) }, (_, index) =>
     index ? { ...values, page: String(index + 1) } : values));
   const publicFiles = new Set([
-    ...posts.map(post => pageHref({ post: post.slug })),
-    ...photos.map(photo => pageHref({ view: "photo", photo: photo.id })),
-    ...archivePages.map(pageHref), ...attachments.values(),
+    ...posts.map(post => pageHref({ post: post.slug }, { filename: true })),
+    ...photos.map(photo => pageHref({ view: "photo", photo: photo.id }, { filename: true })),
+    ...archivePages.map(values => pageHref(values, { filename: true })), ...attachments.values(),
   ]);
   const tagLinks = post => articleTopics(post).map(tag => `<a class="tag" href="${href({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ");
   const cards = entries => entries.map(post => post.is_note ? noteCard(post, date, notePicture) : `<article class="entry"><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)}</p><h2 class="entry-title"><a href="${href({ post: post.slug })}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>";
@@ -141,8 +158,10 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topicCounts = [...grouped(posts, articleTopics)].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   function page(values, title, content, description, classes = "wide-page") {
+    content = content.replace(/<div class="carousel-embed" data-carousel-id="([a-f0-9-]{36})" data-photos=""><\/div>/g,
+      (_, id) => carouselSlot(id, false, carousels.get(id), notePicture));
     const address = pageHref(values);
-    const file = address === "./" ? "index.html" : address;
+    const file = address === "./" ? "index.html" : pageHref(values, { filename: true });
     if (file !== "index.html" && !generatedFile.test(file)) throw new Error("Invalid public page filename.");
     const canonical = new URL(address, home).href;
     const fullTitle = title + " - The Common Hours";
@@ -158,7 +177,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
       .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}" data-publication="${revision}"></template></body>`)
       .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true"')
       .replace('<aside id="sidebar" aria-label="Journal index"></aside>', () =>
-        `<aside id="sidebar" aria-label="Journal index">${file === "index.html" ? renderRecentNotes(posts, date, thumbnail) : ""}${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
+        `<aside id="sidebar" aria-label="Journal index">${file === "index.html" ? renderRecentNotes(posts, date, thumbnail, id => carousels.get(id)?.[0]) : ""}${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
       .replace("<!-- featured-snapshot -->", file === "index.html" ? featured?.markup || "" : "");
     if (!["privacy", "terms"].includes(values.view)) {
       const active = classes.includes("note-page") || values.view === "notes" ? "notes" : ["archive", "series", "topics"].includes(values.view) ? "archive" : values.view === "start" ? "start" : "journal";
@@ -176,7 +195,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   }
   const heading = title => `<div class="section-head"><h1>${escape(title)}</h1></div>`;
   page({}, "An independent journal", renderLatest(posts, date, 5), "An independent journal by Ellis Vale.", "home-page");
-  page({ view: "notes" }, "Notes", renderNotes(posts, date, notePicture, commentsByPost), "Short observations and photographs from The Common Hours.");
+  page({ view: "notes" }, "Notes", renderNotes(posts, date, notePicture), "Short observations and photographs from The Common Hours.");
   for (const values of archivePages) {
     const selection = [values.year, values.month, values.tag, values.page && "Page " + values.page].filter(Boolean).join(" · ");
     page(values, archiveTitle(new URLSearchParams(values)), renderArchive(posts, new URLSearchParams(values), notePicture), "Browse the journal archive" + (selection ? " · " + selection : " by year, month, or topic") + ".");
@@ -196,7 +215,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;
     const postRevision = publicationRevision([post], true);
     if (post.is_note) {
-      page({ post: post.slug }, post.title, renderNoteDetail(post, date, notePicture, discussion), post.excerpt || post.title, "article-page note-page");
+      page({ post: post.slug }, post.title, renderNoteDetail(post, date, notePicture), post.excerpt || post.title, "article-page note-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>
@@ -208,14 +227,14 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
         if (!attachments.has(id)) return label + " (attachment unavailable)";
         return `<a class="attachment" href="${attachments.get(id)}" download="${escape(attachmentNames.get(id) || "Attachment")}">${label}</a>`;
       })
-      .replace(/href="\?post=([a-z0-9-]+)"/g, (_, slug) => `href="${publicFiles.has("entry-" + slug + ".html") ? "entry-" + slug + ".html" : "./?post=" + slug}"`);
+      .replace(/href="\?post=([a-z0-9-]+)"/g, (_, slug) => `href="${publicFiles.has("entry-" + slug + ".html") ? pageHref({ post: slug }) : "./?post=" + slug}"`);
     page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article" data-publication="${postRevision}">${membership}<h1>${escape(post.title)}</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt, "article-page");
   }
   for (const photo of photos) {
     const taken = photoDate(photo);
     page({ view: "photo", photo: photo.id }, photo.title, `<a class="back" href="./#featured-photo">← Featured Photo</a><article class="photo-detail" data-photo-media="${escape(photo.media_id)}"><h1>${escape(photo.title)}</h1>${taken ? `<p class="meta">${date(taken)}</p>` : ""}<div class="photo-detail-image photo-ready">${picture(photo.media_id, escape(photo.alt), true)}</div></article>`, photo.alt || photo.title);
   }
-  const urls = [...pageImages].map(([file, images]) => `<url><loc>${escape(new URL(file === "index.html" ? "./" : file, home).href)}</loc>` +
+  const urls = [...pageImages].map(([file, images]) => `<url><loc>${escape(new URL(file === "index.html" ? "./" : file.replace(/\.html$/, ""), home).href)}</loc>` +
     [...images].map(src => `<image:image><image:loc>${escape(new URL(src, home).href)}</image:loc></image:image>`).join("") + "</url>");
   pages.set("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' + urls.join("") + "</urlset>\n");
   pages.set("robots.txt", "User-agent: *\nAllow: /\nSitemap: " + home + "sitemap.xml\n");
@@ -223,11 +242,11 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   for (const tag of legacyNoteTags) {
     const oldPages = Math.ceil(posts.filter(post => entryTags(post.tag).includes(tag)).length / archivePageSize);
     for (let number = 1; number <= Math.max(1, oldPages); number++) {
-      pages.set(pageHref({ view: "archive", tag, page: number }), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Notes - The Common Hours</title><link rel="canonical" href="https://commonhours.qd.je/notes.html"><meta http-equiv="refresh" content="0; url=notes.html"><p><a href="notes.html">Read the notes</a></p></html>');
+      pages.set(pageHref({ view: "archive", tag, page: number }, { filename: true }), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Notes - The Common Hours</title><link rel="canonical" href="https://commonhours.qd.je/notes"><meta http-equiv="refresh" content="0; url=notes"><p><a href="notes">Read the notes</a></p></html>');
     }
   }
   for (const name of ["collections.html", "photo-essays.html"]) {
-    pages.set(name, '<!doctype html><html lang="en"><meta charset="utf-8"><title>Archive - The Common Hours</title><meta http-equiv="refresh" content="0; url=archive.html"><p><a href="archive.html">Browse the archive</a></p></html>');
+    pages.set(name, '<!doctype html><html lang="en"><meta charset="utf-8"><title>Archive - The Common Hours</title><meta http-equiv="refresh" content="0; url=archive"><p><a href="archive">Browse the archive</a></p></html>');
   }
   pages.set("photos.html", '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Featured Photo</title><meta http-equiv="refresh" content="0; url=./#featured-photo"><p><a href="./#featured-photo">Featured Photo</a></p></html>');
   return pages;
