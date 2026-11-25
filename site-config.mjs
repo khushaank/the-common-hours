@@ -12,7 +12,7 @@ export const adminFiles = [
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const sharedFiles = ["scrollbars.css", "interface.css", "keyboard.js", "focus.js", "feedback.js", "common.js", "text.js", "note.js", "carousel.js", "photo-text.js", "page-url.js", "archive.js", "series.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
-  "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt"];
+  "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt", "link-icons.js", "LICENSE-Tabler-Icons.txt"];
 export const securityHeaders = {
   "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'none'; object-src 'none'",
   "X-Content-Type-Options": "nosniff",

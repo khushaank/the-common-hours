@@ -21,6 +21,11 @@ html { overflow-x: clip; }
 #mfa-qr { max-width: 100%; height: auto; }
 #mfa-key { display: block; margin-top: 6px; overflow-wrap: anywhere; }
 body { margin: 0; color: var(--ink); background: radial-gradient(ellipse at 75% 45%, #fffcf8, transparent 75%), var(--paper); font: 13px/1.5 "DM Sans", system-ui, sans-serif; }
+#editor:not([data-note]) #entry-heading, #preview-prompt, #mfa-key,
+#comments .comment-copy > p, #privacy-requests .comment > p {
+  -webkit-user-select: text;
+  user-select: text;
+}
 .shell { width: calc(100% - 36px); margin: 18px auto 36px; }
 .mast, .mast-start, .section-heading, .body-heading, .actions { display: flex; align-items: center; gap: 12px; }
 .mast { justify-content: space-between; border-bottom: 1px solid var(--line); padding: 2px 0 17px; }

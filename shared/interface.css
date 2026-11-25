@@ -1,3 +1,7 @@
+body { -webkit-user-select: none; user-select: none; }
+:is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text; }
+.service-link-icon { display: inline-block; width: 1em; height: 1em; margin-inline-end: .3em; vertical-align: -.13em; }
+
 .shortcut-dialog, .unexpected-error, .site-notice {
   border: 1px solid var(--line);
   border-radius: 12px;

@@ -47,12 +47,13 @@ function carousel(get) {
   const attributes = new Map();
   const element = () => {
     const handlers = new Map();
-    const attrs = new Set();
+    const attrs = new Map();
     return {
       hidden: false, textContent: "", addEventListener: (key, handler) => handlers.set(key, handler),
-      dispatch: (key, event) => handlers.get(key)(event), setAttribute: key => attrs.add(key),
+      dispatch: (key, event) => handlers.get(key)(event), setAttribute: (key, val) => attrs.set(key, val),
+      getAttribute: key => attrs.get(key),
       removeAttribute: key => attrs.delete(key), hasAttribute: key => attrs.has(key),
-      toggleAttribute: key => attrs.has(key) ? attrs.delete(key) : attrs.add(key),
+      toggleAttribute: key => attrs.has(key) ? attrs.delete(key) : attrs.set(key, ""),
       setPointerCapture() {}, contains: () => false,
     };
   };
@@ -60,7 +61,7 @@ function carousel(get) {
     set src(value) { attributes.set("src", value); } };
   const caption = { ...element(), busy: false, setAttribute() { this.busy = true; }, removeAttribute() { this.busy = false; } };
   const status = element();
-  const items = { img: picture, "#photo-caption": caption, "#slide-next": element(), "#slide-count": element(), ".slide": element() };
+  const items = { img: picture, "#photo-caption": caption, "#slide-previous": element(), "#slide-next": element(), "#slide-count": element(), ".slide": element() };
   const figure = { ...element(), hidden: true, querySelector: selector => items[selector], removeAttribute() {} };
   const source = photosSource.slice(photosSource.indexOf("async function optional"), photosSource.indexOf("\nasync function getImage")) +
     photosSource.slice(photosSource.indexOf("async function featurePhotos"), photosSource.indexOf("\nfunction photoDate"));
@@ -78,6 +79,23 @@ function carousel(get) {
   });
   return { run: () => run(get, false), attributes, figure, caption, status, slide: items[".slide"], arrow: items["#slide-next"] };
 }
+
+test("the featured slideshow stops at both ends and can go back from the last photo", async () => {
+  const view = carousel(async () => [{ id: "first", title: "First" }, { id: "second", title: "Second" }]);
+  await view.run();
+  const step = async key => {
+    view.slide.dispatch("keydown", { key, preventDefault() {} });
+    await new Promise(resolve => setImmediate(resolve));
+  };
+  await step("ArrowLeft");
+  assert.equal(view.caption.textContent, "First");
+  await step("ArrowRight");
+  await step("ArrowRight");
+  assert.equal(view.caption.textContent, "Second");
+  assert.equal(view.arrow.getAttribute("aria-disabled"), "true");
+  await step("ArrowLeft");
+  assert.equal(view.caption.textContent, "First");
+});
 
 test("tapping the featured photo reveals the next arrow without changing the photo", async () => {
   const view = carousel(async () => [{ id: "first", title: "First" }, { id: "second", title: "Second" }]);

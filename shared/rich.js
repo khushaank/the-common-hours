@@ -3,6 +3,7 @@ import footnotes from "./markdown-it-footnote.js";
 import { escape, imageSource, markdownMarker, mediaId, videoFrom } from "./text.js";
 import { photoText } from "./photo-text.js";
 import { carouselLine, carouselSlot } from "./carousel.js";
+import { linkIcon } from "./link-icons.js";
 
 const md = globalThis.markdownit({ html: false, linkify: true, breaks: true }).use(footnotes);
 md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
@@ -31,7 +32,7 @@ md.renderer.rules.link_open = (tokens, index, options, env, self) => {
     token.attrSet("class", "attachment");
   } else if (href.startsWith("media:")) token.attrSet("href", "#");
   token.attrSet("rel", "noreferrer");
-  return self.renderToken(tokens, index, options);
+  return self.renderToken(tokens, index, options) + linkIcon(href);
 };
 
 md.renderer.rules.bullet_list_open = (tokens, index, options, env, self) => {

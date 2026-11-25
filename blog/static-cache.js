@@ -103,10 +103,10 @@ async function offlineScreen(url) {
     const title = (await response?.text())?.match(/<title>([^<]*)<\/title>/i)?.[1]?.replace(/ - The Common Hours$/, "");
     if (title) articles.set(address.pathname, '<li><a href="' + escapeAttribute(address.href) + '">' + title + '</a></li>');
   }
-  const style = [...urls].find(path => file(new URL(path)) === "style.css");
+  const styles = [...urls].filter(path => ["style.css", "interface.css"].includes(file(new URL(path))));
   const page = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<meta name="theme-color" content="#fbfaf7"><title>Page unavailable - The Common Hours</title>' +
-    (style ? '<link rel="stylesheet" href="' + escapeAttribute(style) + '">' : '') +
+    styles.map(style => '<link rel="stylesheet" href="' + escapeAttribute(style) + '">').join("") +
     '<main class="wrap offline-page"><p>The Common Hours</p><h1>This page is unavailable</h1>' +
     (home(url) ? '' : '<p>This page isn’t saved on this device.</p>') +
     (articles.size ? '<h2>Available offline</h2><ul>' + [...articles.values()].join("") + '</ul>' : '<p>Visit the journal online to save articles for your next visit.</p>') +

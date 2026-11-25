@@ -1,6 +1,7 @@
 import Turndown from "./turndown.js";
 import { loadImageSlot, renderMarkup } from "./rich.js";
 import { carouselMarkup } from "./carousel.js";
+import { linkIcon } from "./link-icons.js";
 
 const converter = new Turndown({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-", emDelimiter: "*", br: "" });
 const label = text => text.replace(/[\\[\]*_<>]/g, "\\$&").replace(/[\r\n]+/g, " ");
@@ -51,6 +52,7 @@ function imageMarkup(node) {
 
 export function visualMarkdown(target) {
   const copy = target.cloneNode(true);
+  copy.querySelectorAll(".service-link-icon").forEach(icon => icon.remove());
   for (const carousel of copy.querySelectorAll("[data-carousel-id]")) stored(carousel, "\n\n" + carouselMarkup(carousel.dataset.carouselId) + "\n\n");
   for (const image of copy.querySelectorAll("[data-image]")) stored(image, imageMarkup(image));
   for (const video of copy.querySelectorAll(".video")) {
@@ -90,7 +92,18 @@ export function createVisualEditor(target, loadImage) {
   target.addEventListener("drop", event => event.preventDefault());
   target.addEventListener("paste", event => {
     event.preventDefault();
-    document.execCommand("insertText", false, event.clipboardData?.getData("text/plain") || "");
+    const text = event.clipboardData?.getData("text/plain") || "";
+    const icon = linkIcon(text);
+    if (!icon) {
+      document.execCommand("insertText", false, text);
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = text;
+    link.rel = "noreferrer";
+    link.innerHTML = icon;
+    link.append(text);
+    document.execCommand("insertHTML", false, link.outerHTML);
   });
 
   function range() {
