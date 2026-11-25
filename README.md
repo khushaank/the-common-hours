@@ -55,10 +55,11 @@ Live document requests revalidate the browser’s HTTP cache.
 ### Netlify setup
 
 Connect the GitHub repository and choose branch `main`. Leave the base and
-functions directories blank. Use `node build.mjs` as the build command,
+functions directories blank. Use `node build.mjs --clean-dist` as the build command,
 `dist` as the publish directory, and Node.js 24. The included `netlify.toml`
-sets the build command, output directory, and Node version. The build emits
-route rewrites for clean URLs and the site's response headers.
+sets the build command, output directory, and Node version. Netlify rebuilds
+`dist` from scratch. The build emits route rewrites for clean URLs and the
+site's response headers.
 
 Add `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` as build variables using the
 production Supabase project's URL and publishable key. The `PREVIEW_SUPABASE_*`

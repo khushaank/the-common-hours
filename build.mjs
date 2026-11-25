@@ -1,4 +1,4 @@
-import { copyFile, lstat, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { adminFiles, assetSource, blogFiles, browserConfig, readSiteConfig, securityHeaders, sharedFiles, withConnectSource } from "./site-config.mjs";
 import { renderFeed } from "./feed.mjs";
 import { generatedFile, loadPublicSnapshot, renderPublicPages } from "./prerender.mjs";
@@ -116,6 +116,9 @@ try {
   const config = process.argv.includes("--offline-feed") ? {} : readSiteConfig({ required: true });
   const [featured, snapshot] = await Promise.all([featuredSnapshot(config), loadPublicSnapshot(config)]);
   const feed = await renderFeed(config, snapshot.posts);
+  if (process.argv.includes("--clean-dist")) {
+    await rm(new URL("./dist", import.meta.url), { recursive: true, force: true });
+  }
   await buildApp("blog", "./dist", blogFiles, config, deskPath, featured, snapshot);
   await buildApp("admin", "./dist/" + deskPath, adminFiles, config);
   await writeFile(new URL("./dist/feed.xml", import.meta.url), feed);

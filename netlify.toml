@@ -1,5 +1,5 @@
 [build]
-  command = "node build.mjs"
+  command = "node build.mjs --clean-dist"
   publish = "dist"
 
 [build.environment]
