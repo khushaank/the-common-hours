@@ -1,10 +1,10 @@
 import sharp from "sharp";
 import { articleTopics, entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
-import { noteBody, readNote } from "./shared/note.js";
+import { readNote } from "./shared/note.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
-import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
+import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
 import { seriesDirectory, seriesMembership, seriesNavigation } from "./shared/series.js";
 import { startIntroduction, startEmpty } from "./blog/reading-copy.js";
 import { photoText, photoTitle, publicPhoto } from "./shared/photo-text.js";
@@ -102,6 +102,11 @@ export async function loadPublicSnapshot(config) {
 export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map() }, featured) {
   const pages = new Map(files);
   const pageImages = new Map();
+  const commentsByPost = new Map();
+  for (const comment of comments) {
+    if (!commentsByPost.has(comment.post_id)) commentsByPost.set(comment.post_id, []);
+    commentsByPost.get(comment.post_id).push(comment);
+  }
   const revision = publicationRevision(posts);
   const loading = (template.match(/<!-- public-content -->([\s\S]*?)<!-- \/public-content -->/)?.[1] || "")
     .replace(/\bid="[^"]*"/g, "");
@@ -171,7 +176,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   }
   const heading = title => `<div class="section-head"><h1>${escape(title)}</h1></div>`;
   page({}, "An independent journal", renderLatest(posts, date, 5), "An independent journal by Ellis Vale.", "home-page");
-  page({ view: "notes" }, "Notes", renderNotes(posts, date, notePicture), "Short observations and photographs from The Common Hours.");
+  page({ view: "notes" }, "Notes", renderNotes(posts, date, notePicture, commentsByPost), "Short observations and photographs from The Common Hours.");
   for (const values of archivePages) {
     const selection = [values.year, values.month, values.tag, values.page && "Page " + values.page].filter(Boolean).join(" · ");
     page(values, archiveTitle(new URLSearchParams(values)), renderArchive(posts, new URLSearchParams(values), notePicture), "Browse the journal archive" + (selection ? " · " + selection : " by year, month, or topic") + ".");
@@ -183,11 +188,6 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     page({ view }, view === "privacy" ? "Privacy" : "Terms", `<article class="legal">${body}</article>`, `Read the ${view === "privacy" ? "privacy policy" : "terms"} for The Common Hours.`, "policy-page");
   }
   page({ view: "topics" }, "All topics", renderTopics(topicCounts), "Browse the journal by topic.");
-  const commentsByPost = new Map();
-  for (const comment of comments) {
-    if (!commentsByPost.has(comment.post_id)) commentsByPost.set(comment.post_id, []);
-    commentsByPost.get(comment.post_id).push(comment);
-  }
   for (const post of posts) {
     if (!/^[a-z0-9-]{1,120}$/.test(post.slug)) throw new Error("Invalid published entry slug.");
     const membership = seriesMembership(post, posts);
@@ -196,7 +196,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;
     const postRevision = publicationRevision([post], true);
     if (post.is_note) {
-      page({ post: post.slug }, post.title, `<a class="back" href="notes.html">← Back to Notes</a><article class="article journal-note" data-publication="${postRevision}">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> <span class="byline">By Ellis Vale</span></p><div class="prose" id="entry-body">${noteBody(post.body, notePicture, true)}</div></article>${navigation}${commentsSection}`, post.excerpt || post.title, "article-page note-page");
+      page({ post: post.slug }, post.title, renderNoteDetail(post, date, notePicture, discussion), post.excerpt || post.title, "article-page note-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>

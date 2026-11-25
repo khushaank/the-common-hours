@@ -42,10 +42,20 @@ const activate = selector => () => document.querySelector(selector).click();
 setupShortcuts("Journal shortcuts", [
   ["Alt + K", "Open journal search", activate("#search-link")],
   ["Alt + J", "Go to the journal", activate("#journal-link")],
+  ["Alt + N", "Go to Notes", activate("#notes-link")],
+  ["Alt + O", "Open the current note", () => currentNoteLink()?.click(), () => Boolean(currentNoteLink())],
   ["Alt + A", "Browse the archive", activate("#archive-link")],
   ["Alt + T", "Back to top", activate(".back-to-top")],
   ["← / →", "Change photos while the carousel is focused"],
 ]);
+function currentNoteLink() {
+  if (document.activeElement.closest("input, textarea, select, [contenteditable]") ||
+      document.querySelector("#content .article.journal-note")) return null;
+  const notes = [...document.querySelectorAll(".notes-feed .note-row")];
+  const visible = notes.find(note => note.getBoundingClientRect().bottom > innerHeight * .25) || notes.at(-1);
+  return document.activeElement.closest(".journal-note")?.querySelector(".note-permalink") ||
+    visible?.querySelector(".note-permalink") || document.querySelector(".recent-notes li > a");
+}
 document.documentElement.setAttribute("data-interactive", "");
 if (route.get("view") !== "review" && "serviceWorker" in navigator) {
   const workers = navigator.serviceWorker;

@@ -284,7 +284,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
 
   function addNotePhoto(start, end) {
     if (noteAssets.photos.length >= notePhotoLimit) {
-      status.textContent = "A note can have up to four photos.";
+      status.textContent = `A note can have up to ${notePhotoLimit} photos.`;
       return;
     }
     const revision = editorRevision;

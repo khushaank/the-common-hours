@@ -1,6 +1,6 @@
 import { articleTopics, escape } from "./text.js";
 import { pageHref } from "./page-url.js";
-import { noteExtras, noteImageSlot, noteText, readNote } from "./note.js";
+import { noteBody, noteExtras, noteImageSlot, noteText, readNote } from "./note.js";
 import { plainNoteText } from "./rich.js";
 
 export const archivePageSize = 15;
@@ -47,14 +47,44 @@ export function renderSidebar(months, topics, month, tag) {
     ${topics.length > 10 ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
 }
 
-export function noteCard(post, dateLabel, picture, carousel = false) {
+export function noteCard(post, dateLabel, picture, discussion) {
   const text = post.body === undefined ? post.excerpt : readNote(post.body).text;
-  return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">${carousel ? "" : "Note · "}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>${noteText(text)}${noteExtras(post.body, picture, carousel)}</article>`;
+  const permalink = escape(pageHref({ post: post.slug }));
+  const date = `<p class="meta"><a class="note-permalink" href="${permalink}" aria-label="${escape("Read note: " + post.title)}">${discussion ? "" : "Note · "}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>`;
+  if (!discussion) return `<article class="entry journal-note">${date}${noteText(text)}${noteExtras(post.body, picture)}</article>`;
+  const title = noteHeading(post, text);
+  const recent = commentCards(discussion.slice(-2));
+  return `<article class="entry journal-note note-row"><div class="note-copy">${date}
+    ${title ? `<h2 class="note-title"><a href="${permalink}">${escape(title)}</a></h2>` : ""}
+    ${noteText(text)}${noteExtras(post.body, picture, true)}
+    <a class="back note-open" href="${permalink}">Open note</a></div>
+    <aside class="note-rail" aria-label="Note conversation">${noteLike(post)}<a class="note-comments-link" href="${permalink}#comments">${commentLabel(discussion.length)}</a><div class="note-comment-preview">${recent}</div></aside></article>`;
 }
 
-export function renderNotes(posts, dateLabel, picture) {
-  return `<div class="notes-feed"><div class="section-head"><h1>Notes</h1></div>
-    ${posts.filter(post => post.is_note).map(post => noteCard(post, dateLabel, picture, true)).join("") || '<p>No notes have been published yet.</p>'}</div>`;
+export const commentLabel = count => count ? count + (count === 1 ? " comment" : " comments") : "Leave a comment";
+
+function noteLike(post) {
+  return `<button class="note-like quiet-button" type="button" data-note-like="${escape(post.id)}" aria-pressed="false" disabled hidden><span aria-hidden="true">♡</span> <span class="like-label">Like</span> <span class="like-count"></span></button>`;
+}
+
+function noteHeading(post, text) {
+  const first = plainNoteText((text || "").split(/\r?\n/, 1)[0]);
+  return post.title && post.title !== first ? post.title : "";
+}
+
+export function renderNotes(posts, dateLabel, picture, comments = new Map()) {
+  return `<div class="notes-feed"><header class="notes-mast"><h1>Notes</h1><p>Brief observations, passing thoughts, and photographs.</p></header>
+    ${posts.filter(post => post.is_note).map(post => noteCard(post, dateLabel, picture, comments.get(post.id) || [])).join("") || '<p>No notes have been published yet.</p>'}</div>`;
+}
+
+export function renderNoteDetail(post, dateLabel, picture, discussion = "") {
+  const title = noteHeading(post, readNote(post.body).text) || "Note";
+  return `<a class="back note-back" href="notes.html">← Back to Notes</a>
+    <div class="note-detail-layout"><article class="article journal-note" data-publication="${publicationRevision([post], true)}">
+      <p class="meta"><time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time> <span class="byline">By Ellis Vale</span></p>
+      <h1>${escape(title)}</h1><div class="prose" id="entry-body">${noteBody(post.body, picture, true)}</div></article>
+      <aside class="note-rail note-discussion"><section class="comments" id="comments"><header><h2>Comments</h2>${noteLike(post)}</header>
+        <div id="comment-list" aria-live="polite">${discussion || '<p class="status">No comments yet.</p>'}</div></section></aside></div>`;
 }
 
 export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot) {

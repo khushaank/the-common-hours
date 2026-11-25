@@ -83,11 +83,17 @@ The upgrade enables publishing notes and retires the old editorial photo fields.
 The **Reader prompt** field is still available in **Publish settings**.
 
 Apply [the note media and search upgrade](supabase/upgrade-note-media-and-search.sql)
-before publishing this version. Notes can include up to four photos.
+before publishing this version. Notes can include up to 12 photos.
 Type **@image** and press **Enter** to open the Media Library.
 Type **/** in a note to find and attach a published article link.
 Use Markdown for emphasis and external links. Notes with two or more photos
 automatically get a swipeable carousel on the Notes page and their permalinks.
+On the public site, **Alt + N** opens Notes and **Alt + O** opens the current
+note. The left and right arrow keys work while the carousel has focus.
+
+Apply [the note likes upgrade](supabase/add-note-likes.sql) to enable likes.
+The database stores a salted fingerprint of the gateway-provided IP address
+and note ID. Readers on the same IP share one like per note.
 
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
 after the Notes and live review upgrades. It carries the current homepage photos

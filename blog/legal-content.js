@@ -6,6 +6,7 @@ export const notice = `<h1>Privacy</h1><div class="prose">
   <p>The Common Hours is an independent journal operated from India.</p>
   <h2>What the journal collects</h2>
   <p>You can read without an account. If you leave a comment, the journal stores your display name, comment, the entry it belongs to, and when it was submitted. The editor reviews it before publication. An approved comment and its display name are public. Choose a display name you are comfortable sharing.</p>
+  <p>If you like a note, the journal stores a salted fingerprint of your network IP address for that note and includes the like in a public total. This keeps it to one like per network address per note. Likes remain with the note until it is deleted.</p>
   <p>If you send a privacy request, the journal stores your reply email, your message, and when you sent it. The editor uses this information to handle your request. Please avoid including documents or other sensitive information.</p>
   <h2>Services and embeds</h2>
   <p>GitHub Pages hosts the website and logs visitor IP addresses for security. Supabase hosts the journal database and downloadable files and processes requests to them. When an embedded video loads, your browser connects to its provider, such as YouTube or Vimeo. The provider handles that connection under its own privacy policy.</p>

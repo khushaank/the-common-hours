@@ -2,11 +2,10 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
+import { archiveTitle, commentCards, commentLabel, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { articleTopics } from "./text.js";
-import { noteBody } from "./note.js";
 import { loadNoteImages } from "./image-viewer.js";
 
 const content = document.querySelector("#content");
@@ -83,6 +82,24 @@ function loadBody(currentSlug) {
       return (await read("body"))[0] || null;
     }
   });
+}
+
+async function refreshNoteComments() {
+  const notes = [...content.querySelectorAll(".note-row")];
+  for (let start = 0; start < notes.length; start += 40) {
+    const group = notes.slice(start, start + 40);
+    const ids = group.map(note => note.querySelector("[data-note-like]").dataset.noteLike);
+    const params = new URLSearchParams({
+      select: "post_id,display_name,body", approved: "eq.true", post_id: "in.(" + ids.join(",") + ")",
+      order: "created_at.asc,id.asc",
+    });
+    const comments = await publicData("note-comments:" + ids.join(","), () => allRows(get, "comments?" + params));
+    for (const [index, note] of group.entries()) {
+      const recent = comments.filter(comment => comment.post_id === ids[index]);
+      note.querySelector(".note-comments-link").textContent = commentLabel(recent.length);
+      note.querySelector(".note-comment-preview").innerHTML = commentCards(recent.slice(-2));
+    }
+  }
 }
 
 function saveLatestForOffline(posts) {
@@ -167,18 +184,27 @@ async function renderPost(posts, index, firstBody) {
     if (!detail) return renderPost([], 0);
     Object.assign(post, detail);
   }
-  if (post.is_note) setCurrentNav("notes");
+  if (post.is_note) {
+    setCurrentNav("notes");
+    document.documentElement.classList.add("note-page");
+  }
   const hasFormatting = !post.is_note && post.body.startsWith(markdownMarker);
   const published = content.querySelector(".published-copy .article");
-  const retain = content.dataset.refreshPending === undefined && published?.dataset.publication === publicationRevision([post], true);
+  const retain = content.dataset.refreshPending === undefined && published?.dataset.publication === publicationRevision([post], true) &&
+    (!post.is_note || published.closest(".note-detail-layout"));
   const renderer = !retain && hasFormatting ? await import("./rich.js").catch(() => null) : null;
   document.title = post.title + " - The Common Hours";
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   const previousNext = `<nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>`;
-  const back = post.is_note ? '<a class="back" href="notes.html">← Back to Notes</a>' : '<a class="back" href="./">← Back to the journal</a>';
-  if (!retain) content.innerHTML = `${back}<article class="article${post.is_note ? " journal-note" : ""}">
-    ${seriesMembership(post, posts)}<h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
+  if (post.is_note) {
+    if (!retain) content.innerHTML = renderNoteDetail(post, dateLabel);
+    const notes = posts.filter(item => item.is_note);
+    const position = notes.indexOf(post);
+    content.querySelector(".note-detail-layout").insertAdjacentHTML("afterend",
+      `<nav class="post-nav" aria-label="Adjacent notes">${nav(notes[position + 1], "← Older note")}${nav(notes[position - 1], "Newer note →")}</nav>`);
+  } else if (!retain) content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article">
+    ${seriesMembership(post, posts)}<h1>${escape(post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     ${seriesNavigation(posts, post)}
     ${previousNext}<section class="comments"><h2>Comments</h2><div id="comment-list" aria-live="polite"></div></section>`;
@@ -193,7 +219,7 @@ async function renderPost(posts, index, firstBody) {
   discussion.insertAdjacentHTML("beforeend", `
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
     ${post.reader_prompt ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
-    <label>Display name <input name="display_name" required maxlength="60"></label>
+    <label>${post.is_note ? "Name" : "Display name"} <input name="display_name" autocomplete="name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
     <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy.html">Privacy</a>'}</p>
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form>`);
@@ -203,13 +229,11 @@ async function renderPost(posts, index, firstBody) {
     if (bodyElement.querySelector("[data-player], .video-poster")) {
       void import("./rich.js").then(({ enhanceVideos }) => enhanceVideos(bodyElement)).catch(() => {});
     }
-  } else if (post.is_note) {
-    bodyElement.innerHTML = noteBody(post.body, undefined, true);
   } else if (renderer) {
     renderer.renderText(bodyElement, post.body, publicImage, { loadAttachment: fetchAttachment, preparePrint: true, enlargeImages: true });
   } else if (hasFormatting) {
     showFailure(bodyElement, "The article could not load.", () => location.reload());
-  } else {
+  } else if (!post.is_note) {
     bodyElement.innerHTML = post.body.split(/\n\s*\n/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("");
   }
   if (!post.is_note && (retain || renderer || !hasFormatting)) {
@@ -251,7 +275,7 @@ async function renderPost(posts, index, firstBody) {
     const display_name = fields.get("display_name").trim();
     const body = fields.get("body").trim();
     if (!display_name || !body) {
-      status.textContent = "Enter a display name and comment.";
+      status.textContent = post.is_note ? "Enter your name and comment." : "Enter a display name and comment.";
       return;
     }
     button.disabled = true;
@@ -381,6 +405,10 @@ async function load() {
     if (content.dataset.prerendered && content.dataset.refreshPending === undefined && offline()) return;
     await start();
     if (view !== "review") await loadNoteImages(content.parentElement, publicImage);
+    if (view === "notes" && !demo) void refreshNoteComments().catch(() => {});
+    if (content.querySelector(".note-like")) {
+      void import("./note-likes.js").then(({ mountNoteLikes }) => mountNoteLikes(content)).catch(() => {});
+    }
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
     if (content.dataset.prerendered) {
