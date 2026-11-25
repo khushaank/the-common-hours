@@ -1,0 +1,9 @@
+[build]
+  command = "node build.mjs"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[build.processing.html]
+  pretty_urls = false

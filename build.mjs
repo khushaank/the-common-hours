@@ -52,7 +52,7 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   release.update(await readFile(assetSource(app, "logo.png")));
   const revision = release.digest("hex").slice(0, 16);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
-  if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); }
+  if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); allowedFiles.add("_redirects"); }
   const retiredAssets = app === "blog" ? ["favicon.svg", "footer-landscape.jpg", "photo-shell.js", "note-likes.js"] : ["favicon.svg"];
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
@@ -98,6 +98,9 @@ async function buildApp(app, destination, files, config, childDirectory, feature
     }
   }
   if (app === "blog") {
+    const redirects = [...publicPages.keys()].filter(name => name.endsWith(".html") && name !== "index.html")
+      .map(name => "/" + name.slice(0, -5) + " /" + name + " 200").join("\n");
+    await writeFile(new URL("_redirects", output), redirects + "\n");
     if (featured) await writeFile(new URL("featured.webp", output), featured.bytes);
     for (const name of featured ? ["featured.jpg"] : ["featured.jpg", "featured.webp"]) {
       if (existing.some(entry => entry.name === name)) await unlink(new URL(name, output));

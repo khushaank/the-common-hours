@@ -2,7 +2,9 @@ import { showFailure, watchUnexpectedErrors } from "./feedback.js";
 import { setupShortcuts } from "./keyboard.js";
 import { pageHref, pageParams } from "./page-url.js";
 import { setupImageViewer, setupNoteCarousels } from "./image-viewer.js";
+import { trackFocusInput } from "./focus.js";
 
+trackFocusInput();
 watchUnexpectedErrors("Part of the journal ran into a problem. You can keep reading or reload the page.",
   () => document.documentElement.hasAttribute("data-interactive"));
 

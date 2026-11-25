@@ -52,6 +52,20 @@ The journal saves its five latest published entries and pages you open for offli
 The offline screen lists saved articles, and each saved page opens at its original URL.
 Live document requests revalidate the browser’s HTTP cache.
 
+### Netlify setup
+
+Connect the GitHub repository and choose branch `main`. Leave the base and
+functions directories blank. Use `node build.mjs` as the build command,
+`dist` as the publish directory, and Node.js 24. The included `netlify.toml`
+sets the build command, output directory, and Node version. The build emits
+route rewrites for clean URLs and the site's response headers.
+
+Add `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` as build variables using the
+production Supabase project's URL and publishable key. The `PREVIEW_SUPABASE_*`
+values are for local previews. Use the `.netlify.app` address to check the site
+and Writing Desk before switching the custom domain. Use **Trigger deploy** in
+Netlify to refresh static pages after changes made only in Supabase.
+
 Run `node --test` for the rendering checks, `node build.mjs` to build, and
 `node preview.mjs blog 8000 --built` to inspect the generated site locally.
 Local previews use no backend by default. To test sign-in and writes, set
@@ -108,6 +122,8 @@ after that schema to enable those controls.
 After deploying the reader and Writing Desk, run [the existing photo
 grouping script](supabase/group-existing-note-photos.sql) and publish again.
 Article comments still use the existing moderation workflow.
+Apply [the comment moderation upgrade](supabase/comment-moderation.sql) to
+enable the **Ignored** state and exclude it from the pending queue.
 
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
 after the Notes and live review upgrades. It carries the current homepage photos

@@ -158,7 +158,10 @@
               </div>
               <div class="editor-body" id="write-panel" hidden>
                 <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
-                <p id="note-compose-help">Type @image to add a photo or @carousel to choose or create a reusable carousel.</p>
+                <div id="note-compose-tools" class="actions">
+                  <button type="button" id="note-add-image" title="Add photo (@image)">Add photo</button>
+                  <button type="button" id="note-add-carousel" title="Add carousel (@carousel)">Add carousel</button>
+                </div>
                 <ul id="note-attachments" aria-label="Note attachments" hidden></ul>
               </div>
               <section class="editor-preview" id="entry-preview" aria-label="Entry preview">
@@ -205,7 +208,7 @@
         </form>
       </section>
       <section id="media-panel" data-desk-panel hidden>
-        <div class="section-heading"><div class="help-row"><h1>Media</h1><span class="field-help"><button type="button" aria-label="Help with Media" aria-describedby="media-help">i</button><span id="media-help" role="tooltip">Upload and manage media for articles, Notes, and Photos. Select an item to edit its details.</span></span></div><div class="actions"><button type="button" id="media-new-carousel">New carousel</button><button type="button" class="icon-button" id="media-add" aria-label="Upload media" title="Upload media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div><input type="file" id="media-file" hidden></div>
+        <div class="section-heading"><div class="help-row"><h1>Media</h1><span class="field-help"><button type="button" aria-label="Help with Media" aria-describedby="media-help">i</button><span id="media-help" role="tooltip">Upload and manage media for articles, Notes, and Photos. Select an item to edit its details.</span></span></div><div class="actions"><button type="button" class="icon-button" id="media-refresh" aria-label="Refresh Media" title="Refresh Media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5m11 0a8 8 0 0 0-14-5m-2 5a8 8 0 0 0 14 5"/></svg></button><button type="button" id="media-new-carousel">New carousel</button><button type="button" class="icon-button" id="media-add" aria-label="Upload media" title="Upload media"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div><input type="file" id="media-file" hidden></div>
         <div class="card">
           <div class="fields media-filters">
             <label>Search media <input type="search" id="media-search" autocomplete="off"></label>
@@ -220,16 +223,7 @@
         </div>
       </section>
       <section id="references-panel" data-desk-panel hidden>
-        <div class="section-heading"><div class="help-row"><h1>References</h1><span class="field-help"><button type="button" aria-label="Help with References" aria-describedby="reference-help">i</button><span id="reference-help" role="tooltip">Save links to external sites or specific public pages. Type @ in the entry body to find a saved shortcut or published entry.</span></span></div><button type="button" class="primary" id="add-reference" aria-controls="reference-form" aria-expanded="false">Add reference</button></div>
-        <form id="reference-form" class="card reference-editor" aria-labelledby="reference-form-title" hidden>
-          <h2 id="reference-form-title">New reference</h2>
-          <div class="fields">
-            <label>Shortcut <input name="alias" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
-            <label>Link text <input name="label" maxlength="120" required></label>
-            <label>Link URL <input name="url" type="url" placeholder="https://" maxlength="2000" required></label>
-          </div>
-          <div class="actions"><button type="submit" class="primary">Save reference</button><button type="button" id="cancel-reference">Cancel</button></div>
-        </form>
+        <div class="section-heading"><div class="help-row"><h1>References</h1><span class="field-help"><button type="button" aria-label="Help with References" aria-describedby="reference-help">i</button><span id="reference-help" role="tooltip">Save links to external sites or specific public pages. Type @ in the entry body to find a saved shortcut or published entry.</span></span></div><button type="button" class="primary" id="add-reference" aria-haspopup="dialog" aria-controls="reference-dialog">Add reference</button></div>
         <div id="reference-status" role="status"></div>
         <section class="card reference-directory" aria-labelledby="saved-references-title">
           <h2 id="saved-references-title">Saved references</h2>
@@ -243,9 +237,9 @@
           <label>Period <select id="stats-period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option><option value="five-years">Past five years</option></select></label>
         </div>
         <div class="dashboard-overview">
-          <section class="card dashboard-latest"><span class="eyebrow">Last published entry</span><button type="button" id="last-published-entry" disabled>No published entries yet</button><p id="last-published-date" class="muted"></p></section>
-          <section class="card stats-metric"><span>Days since publishing</span><strong id="publishing-age">-</strong><small id="publishing-note"></small></section>
-          <section class="card stats-metric"><span>Busiest day</span><strong id="active-day">-</strong><small id="active-day-note">Loading activity…</small></section>
+          <section class="card dashboard-latest" id="dashboard-latest" aria-busy="true"><span class="eyebrow">Last published entry</span><div class="dashboard-value"><button type="button" id="last-published-entry" disabled></button><p id="last-published-date" class="muted"></p></div><div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div></section>
+          <section class="card stats-metric" id="dashboard-publishing" aria-busy="true"><span>Days since publishing</span><div class="dashboard-value"><strong id="publishing-age"></strong><small id="publishing-note"></small></div><div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div></section>
+          <section class="card stats-metric" id="dashboard-activity" aria-busy="true"><span>Busiest day</span><div class="dashboard-value"><strong id="active-day"></strong><small id="active-day-note"></small></div><div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div></section>
         </div>
         <div class="dashboard-queue">
           <section class="card" aria-labelledby="recent-drafts-heading">
@@ -255,16 +249,20 @@
           </section>
           <section class="card" aria-labelledby="moderation-heading">
             <h2 id="moderation-heading">Comments awaiting moderation</h2>
-            <button type="button" id="moderation-queue" aria-labelledby="moderation-heading pending-comment-count"><span id="pending-comment-count" aria-live="polite">Checking…</span> <span aria-hidden="true">↗</span></button>
+            <button type="button" id="moderation-queue" aria-busy="true" aria-labelledby="moderation-heading pending-comment-count"><span class="dashboard-value"><span id="pending-comment-count" aria-live="polite"></span> <span aria-hidden="true">↗</span></span><span class="dashboard-lines" aria-hidden="true"><span></span></span></button>
           </section>
         </div>
         <div id="stats-status" role="status"></div>
+        <div id="stats-placeholder" aria-hidden="true">
+          <div class="stats-metrics"><div class="card dashboard-lines"><span></span><span></span></div><div class="card dashboard-lines"><span></span><span></span></div><div class="card dashboard-lines"><span></span><span></span></div></div>
+          <div class="card dashboard-chart-placeholder"><div class="dashboard-lines"><span></span></div><div class="dashboard-chart-frame"></div></div>
+        </div>
         <div id="stats-report"></div>
       </section>
       <section id="comments-panel" data-desk-panel hidden>
-        <div class="section-heading"><h1>Comments</h1><label>Show <select id="comment-filter"><option value="all">All comments</option><option value="published">Published</option><option value="pending">Pending</option></select></label></div>
+        <div class="section-heading"><h1>Comments</h1><label>Show <select id="comment-filter"><option value="all">All comments</option><option value="published">Published</option><option value="pending">Pending</option><option value="ignored">Ignored</option></select></label></div>
         <section class="card moderation">
-          <div class="body-heading"><p class="muted">Published and pending comments</p><button id="refresh-comments" type="button">Refresh</button></div>
+          <div class="body-heading"><p class="muted" id="comment-summary" role="status"></p><button id="refresh-comments" type="button">Refresh</button></div>
           <div id="comments"></div>
         </section>
       </section>
@@ -324,8 +322,25 @@
   <dialog id="share-dialog" aria-labelledby="share-title">
     <div class="body-heading"><h2 id="share-title">Share entry</h2><button type="button" id="close-share">Close</button></div>
     <p id="share-notice"></p>
-    <label>Link <input id="share-link" readonly></label>
-    <div class="actions"><button type="button" class="primary" id="copy-share">Copy link</button><p id="share-status" role="status"></p></div>
+    <div class="share-link-row"><label>Link <input id="share-link" readonly></label><button type="button" class="primary" id="copy-share" autofocus>Copy link</button></div>
+    <p id="share-status" role="status"></p>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-message">
+    <form method="dialog">
+      <h2 id="delete-title">Delete item?</h2>
+      <p id="delete-message"></p>
+      <div class="actions"><button type="submit" value="cancel" autofocus>Cancel</button><button type="submit" class="danger" value="delete">Delete</button></div>
+    </form>
+  </dialog>
+  <dialog id="reference-dialog" aria-labelledby="reference-form-title">
+    <form id="reference-form">
+      <h2 id="reference-form-title">New reference</h2>
+      <label>Shortcut <input name="alias" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
+      <label>Link text <input name="label" maxlength="120" required></label>
+      <label>Link URL <input name="url" type="url" placeholder="https://" maxlength="2000" required></label>
+      <p id="reference-form-status" role="status"></p>
+      <div class="actions"><button type="button" id="cancel-reference">Cancel</button><button type="submit" class="primary">Save reference</button></div>
+    </form>
   </dialog>
   <dialog id="library-dialog" aria-labelledby="library-title">
     <div class="body-heading"><h2 id="library-title">Image library</h2><div class="actions"><button type="button" class="icon-button" id="library-add" aria-label="Upload an image" title="Upload an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" id="library-close">Close</button></div></div>

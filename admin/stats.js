@@ -30,9 +30,12 @@ export function setupStats(api, getPosts, editEntry) {
   const period = document.querySelector("#stats-period");
   const status = document.querySelector("#stats-status");
   const report = document.querySelector("#stats-report");
+  const skeleton = document.querySelector("#stats-placeholder");
+  const activity = document.querySelector("#dashboard-activity");
   const lastEntry = document.querySelector("#last-published-entry");
   let latest;
   let revision = 0;
+  let loaded = false;
   lastEntry.addEventListener("click", () => { if (latest) editEntry(latest, lastEntry); });
 
   function renderPublishing() {
@@ -44,6 +47,8 @@ export function setupStats(api, getPosts, editEntry) {
       "Published " + new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(new Date(last.published_on + "T00:00:00Z")) : "Your next entry starts here.";
     document.querySelector("#publishing-age").textContent = days === null ? "-" : number.format(days);
     document.querySelector("#publishing-note").textContent = days === null ? "No publications yet" : days === 0 ? "Published today" : "Based on the publication date";
+    document.querySelector("#dashboard-latest").removeAttribute("aria-busy");
+    document.querySelector("#dashboard-publishing").removeAttribute("aria-busy");
   }
 
   function render(days, rows, selectedPeriod) {
@@ -117,18 +122,27 @@ export function setupStats(api, getPosts, editEntry) {
     const selectedPeriod = period.value;
     const days = periodDays(selectedPeriod, journalToday());
     renderPublishing();
-    document.querySelector("#active-day").textContent = "-";
-    document.querySelector("#active-day-note").textContent = "Loading activity…";
-    status.textContent = "Loading traffic…";
-    report.replaceChildren();
+    activity.setAttribute("aria-busy", String(!loaded));
+    report.setAttribute("aria-busy", "true");
+    skeleton.hidden = loaded;
+    status.textContent = loaded ? "Updating traffic…" : "Loading traffic…";
     try {
       const rows = await allRows(api, "traffic?select=day,page,views,visits&day=gte." + days[0] + "&day=lte." + days.at(-1) + "&order=day,page");
-      if (revision === loading) render(days, rows, selectedPeriod);
+      if (revision === loading) {
+        render(days, rows, selectedPeriod);
+        loaded = true;
+      }
     } catch (error) {
       if (revision !== loading) return;
       showFailure(status, missingFeature(error) ? "Apply the Supabase traffic upgrade to enable stats." :
         "Traffic could not load.", load);
-      document.querySelector("#active-day-note").textContent = "Daily activity could not load";
+      if (!loaded) document.querySelector("#active-day-note").textContent = "Daily activity could not load";
+    } finally {
+      if (revision === loading) {
+        skeleton.hidden = true;
+        report.removeAttribute("aria-busy");
+        activity.removeAttribute("aria-busy");
+      }
     }
   }
 
@@ -137,6 +151,7 @@ export function setupStats(api, getPosts, editEntry) {
     load,
     clear() {
       revision++;
+      loaded = false;
       report.replaceChildren();
       status.textContent = "";
     },

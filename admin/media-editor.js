@@ -2,6 +2,7 @@ import { imageSource, missingFeature, showFailure } from "./common.js";
 import { carouselSummary, loadCatalog } from "./media-catalog.js";
 import { coverPhoto } from "./carousel.js";
 import { isSupportedImage, promptImageAlt } from "./editor-tools.js";
+import { confirmDelete } from "./confirm-delete.js";
 
 const types = { image: "Image", pdf: "PDF", document: "Document", file: "File", carousel: "Carousel" };
 const pageSize = 18;
@@ -28,6 +29,7 @@ export function setupMediaEditor(api, storage) {
   const remove = document.querySelector("#media-delete");
   const add = document.querySelector("#media-add");
   const newCarousel = document.querySelector("#media-new-carousel");
+  const refreshButton = document.querySelector("#media-refresh");
   const fileInput = document.querySelector("#media-file");
   const save = form.querySelector('[type="submit"]');
   const message = document.querySelector("#media-edit-status");
@@ -36,6 +38,9 @@ export function setupMediaEditor(api, storage) {
   let selected;
   let revision = 0;
   let observer;
+  let loaded = false;
+  let stale = true;
+  let pending;
   const previews = new Map();
   const covers = new Map();
 
@@ -129,36 +134,54 @@ export function setupMediaEditor(api, storage) {
   }
 
   const openCarousel = (id, trigger) => storage.carousel({ id, onClose: async changed => {
-    if (changed) await load();
+    if (changed) await refresh();
     (trigger.isConnected ? trigger : newCarousel).focus();
   } }).catch(error => { status.textContent = error.message; });
   newCarousel.addEventListener("click", () => void openCarousel(null, newCarousel));
 
-  async function load() {
+  function load() {
+    if (pending) return pending;
+    if (loaded && !stale) return Promise.resolve();
     const loading = ++revision;
-    status.textContent = "Loading media…";
-    observer?.disconnect();
+    stale = false;
+    status.textContent = loaded ? "Refreshing media…" : "Loading media…";
     grid.setAttribute("aria-busy", "true");
-    grid.replaceChildren(document.querySelector("#media-skeleton").content.cloneNode(true));
-    search.disabled = filter.disabled = true;
-    more.hidden = true;
-    try {
-      const assets = await loadCatalog(api, storage.list);
-      if (loading !== revision) return;
-      catalog = assets;
-      render();
-    } catch {
-      if (loading === revision) {
-        grid.replaceChildren();
-        showFailure(status, "Media could not load.", load);
-      }
-    } finally {
-      if (loading === revision) {
-        grid.removeAttribute("aria-busy");
-        search.disabled = filter.disabled = false;
-      }
+    refreshButton.disabled = true;
+    if (!loaded) {
+      grid.replaceChildren(document.querySelector("#media-skeleton").content.cloneNode(true));
+      search.disabled = filter.disabled = true;
+      more.hidden = true;
     }
+    pending = (async () => {
+      try {
+        const assets = await loadCatalog(api, storage.list);
+        if (loading !== revision) return;
+        catalog = assets;
+        loaded = true;
+        render();
+      } catch {
+        if (loading === revision) {
+          stale = true;
+          if (!loaded) grid.replaceChildren();
+          showFailure(status, "Media could not load.", refresh);
+        }
+      } finally {
+        if (loading === revision) {
+          pending = null;
+          grid.removeAttribute("aria-busy");
+          search.disabled = filter.disabled = refreshButton.disabled = false;
+        }
+      }
+    })();
+    return pending;
   }
+
+  async function refresh() {
+    if (pending) await pending;
+    stale = true;
+    return load();
+  }
+  refreshButton.addEventListener("click", refresh);
 
   function edit(asset) {
     selected = asset;
@@ -233,12 +256,12 @@ export function setupMediaEditor(api, storage) {
       await storage.upload(file, alt);
       search.value = "";
       filter.value = "all";
-      await load();
+      await refresh();
     } catch (error) { status.textContent = error.message; }
     finally { add.disabled = false; }
   });
   remove.addEventListener("click", async () => {
-    if (!confirm("Permanently delete this media item?")) return;
+    if (!await confirmDelete("Delete media?", "This permanently removes the selected item from the Media Library.")) return;
     const asset = selected;
     save.disabled = close.disabled = remove.disabled = download.disabled = true;
     message.textContent = "Deleting…";
@@ -262,8 +285,12 @@ export function setupMediaEditor(api, storage) {
   more.addEventListener("click", () => { limit += pageSize; render(); });
   return {
     load,
+    invalidate() { stale = true; },
     clear() {
       revision++;
+      pending = null;
+      loaded = false;
+      stale = true;
       observer?.disconnect();
       catalog = [];
       previews.clear();

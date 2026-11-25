@@ -1,6 +1,7 @@
 import { imageSource, readMediaImage } from "./common.js";
 import { carouselSummary, photoResolution, readCarouselCatalog } from "./media-catalog.js";
 import { coverPhoto } from "./carousel.js";
+import { confirmDelete } from "./confirm-delete.js";
 
 export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
   const dialog = document.querySelector("#carousel-dialog");
@@ -102,8 +103,8 @@ export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
       const erase = document.createElement("button");
       erase.type = "button";
       erase.textContent = "Delete photo…";
-      erase.addEventListener("click", () => {
-        if (busy || !confirm("Permanently delete this photo from Media and the current carousel?")) return;
+      erase.addEventListener("click", async () => {
+        if (busy || !await confirmDelete("Delete photo?", "This permanently removes the photo from Media and this carousel.")) return;
         void change(async () => {
           if (!await deletePhoto(current, photo.id)) throw new Error("This photo is no longer in the carousel.");
           return "Photo deleted.";

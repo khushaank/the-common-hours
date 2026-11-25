@@ -6,7 +6,7 @@ const fields = "id,media_id,title,alt";
 const activePhotos = "week=is.null&featured=eq.true";
 const upgradeMessage = "Apply the Supabase Featured Photo upgrade to manage the homepage selection.";
 
-export function setupPhotoTools(api, openLibrary) {
+export function setupPhotoTools(api, openLibrary, onMediaChange = () => {}) {
   const form = document.querySelector("#photo-form");
   const list = document.querySelector("#featured-photos");
   const count = document.querySelector("#featured-count");
@@ -205,7 +205,10 @@ export function setupPhotoTools(api, openLibrary) {
         const rows = [];
         for (const [index, entry] of pending.entries()) {
           status.textContent = "Preparing photo " + (index + 1) + " of " + pending.length + "…";
-          entry.media ??= await uploadImage(api, entry.file, entry.alt);
+          if (!entry.media) {
+            entry.media = await uploadImage(api, entry.file, entry.alt);
+            onMediaChange();
+          }
           rows.push({ id: entry.id, week: null, media_id: entry.media.id, title: entry.title, alt: entry.alt, featured: true });
         }
         await api("weekly_photos?on_conflict=id", {

@@ -13,7 +13,7 @@ function element() {
   const listeners = new Map();
   return {
     value: "", textContent: "", hidden: false, scrollTop: 0, dataset: {}, style: {}, children: [], parentElement: { firstChild: {} },
-    classList: { toggle() {} }, setAttribute() {}, focus() {}, scrollIntoView() {},
+    classList: { toggle() {}, add() {} }, setAttribute() {}, removeAttribute() {}, focus() {}, scrollIntoView() {},
     addEventListener(type, listener) { listeners.set(type, [...listeners.get(type) || [], listener]); },
     dispatchEvent(event) { for (const listener of listeners.get(event.type) || []) listener(event); },
     append(...children) { this.children.push(...children); },
@@ -511,22 +511,31 @@ test("Comments includes published and pending comments and filters them independ
   const comments = element();
   const filter = { value: "all" };
   const rows = [{ id: "a", display_name: "A reader", approved: true, body: "Published comment", post_id: "one" },
-    { id: "b", display_name: "Another reader", approved: false, body: "Pending comment", post_id: "one" }];
-  const load = runInNewContext(deskSource.slice(deskSource.indexOf("async function loadComments("), deskSource.indexOf("async function openDesk(")) + "\nloadComments", {
+    { id: "b", display_name: "Another reader", approved: false, body: "Pending comment", post_id: "one" },
+    { id: "c", display_name: "A reader", approved: false, ignored: true, body: "Ignored comment", post_id: "one" }];
+  const summary = element();
+  let requests = 0;
+  const { loadComments, renderComments } = runInNewContext(deskSource.slice(deskSource.indexOf("let commentRows"), deskSource.indexOf("async function openDesk(")) + "\n({loadComments,renderComments})", {
     comments, commentsRevision: 0, posts: [{ id: "one", title: "Market" }], api() {},
-    allRows: async (_, path) => rows.filter(row => !path.includes("&approved=") || row.approved === path.includes("&approved=eq.true")),
-    document: { querySelector: () => filter, createElement: element },
+    allRows: async () => { requests++; return rows; },
+    document: { querySelector: selector => selector === "#comment-filter" ? filter : summary, createElement: element },
   });
-  await load();
-  assert.equal(comments.children.length, 2);
-  assert.match(comments.children[0].children[1].textContent, /^Published/);
+  await loadComments();
+  assert.equal(comments.children.length, 3);
+  assert.match(comments.children[0].children[1].children[1].textContent, /^Published/);
   filter.value = "published";
-  await load();
+  renderComments();
   assert.equal(comments.children.length, 1);
-  assert.equal(comments.children[0].children[2].textContent, "Published comment");
+  assert.equal(comments.children[0].children[1].children[2].textContent, "Published comment");
   filter.value = "pending";
-  await load();
-  assert.equal(comments.children[0].children[2].textContent, "Pending comment");
+  renderComments();
+  assert.equal(comments.children[0].children[0].textContent, "#2");
+  assert.equal(comments.children[0].children[1].children[2].textContent, "Pending comment");
+  assert.equal(comments.children[0].children[2].children[1].title, "Ignore comment");
+  filter.value = "ignored";
+  renderComments();
+  assert.equal(comments.children[0].children[1].children[2].textContent, "Ignored comment");
+  assert.equal(requests, 1);
 });
 
 test("the homepage selection features photos without dates and can unfeature them without touching media", async () => {

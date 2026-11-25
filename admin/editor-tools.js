@@ -315,6 +315,25 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     }, focus, message => { status.textContent = message; });
   }
 
+  function addCarousel(start, end) {
+    const revision = editorRevision;
+    void attachments.carousel({
+      onPick: asset => {
+        if (revision !== editorRevision) return;
+        if (!note) { replace("\n\n" + carouselMarkup(asset.id) + "\n\n", start, end); return; }
+        if (noteAssets.carousels.includes(asset.id)) throw new Error("This carousel is already attached.");
+        noteAssets.carousels.push(asset.id);
+        carouselTitles.set(asset.id, asset.title);
+        renderNoteAssets();
+        replace("", start, end);
+      },
+      onClose: focus,
+    }).catch(error => { status.textContent = error.message; });
+  }
+
+  document.querySelector("#note-add-image").addEventListener("click", () => addNotePhoto(body.selectionEnd, body.selectionEnd));
+  document.querySelector("#note-add-carousel").addEventListener("click", () => addCarousel(body.selectionEnd, body.selectionEnd));
+
   blockFormat.addEventListener("change", () => {
     if (!previewPanel.hidden) {
       visual.format("formatBlock", blockFormat.value ? "h" + blockFormat.value : "p");
@@ -336,19 +355,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     const { start, end } = command;
     closeMenu();
     if (type === "@carousel" || type === "carousel" && !note) {
-      const revision = editorRevision;
-      void attachments.carousel({
-        onPick: asset => {
-          if (revision !== editorRevision) return;
-          if (!note) { replace("\n\n" + carouselMarkup(asset.id) + "\n\n", start, end); return; }
-          if (noteAssets.carousels.includes(asset.id)) throw new Error("This carousel is already attached.");
-          noteAssets.carousels.push(asset.id);
-          carouselTitles.set(asset.id, asset.title);
-          renderNoteAssets();
-          replace("", start, end);
-        },
-        onClose: focus,
-      }).catch(error => { status.textContent = error.message; });
+      addCarousel(start, end);
       return;
     }
     if (note) {
@@ -643,7 +650,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   async function renderPreview() {
     const revision = ++previewRevision;
     const fields = editor.elements;
-    document.querySelector("#preview-meta").textContent = [fields.namedItem("published_on").value, fields.namedItem("tag").value].filter(Boolean).join(" · ");
+    const published = fields.namedItem("published_on").value;
+    const date = published ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+      .format(new Date(published + "T00:00:00Z")) : "";
+    document.querySelector("#preview-meta").textContent = [date, fields.namedItem("tag").value].filter(Boolean).join(" · ");
     const prompt = document.querySelector("#preview-prompt");
     prompt.textContent = fields.namedItem("reader_prompt").value.trim();
     prompt.hidden = !prompt.textContent;

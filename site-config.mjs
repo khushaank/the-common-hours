@@ -7,11 +7,11 @@ export const blogFiles = [
   "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const adminFiles = [
-  "index.html", "logo.png", "style.css", "desk-start.js", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "carousel-editor.js", "stats.js",
+  "index.html", "logo.png", "style.css", "desk-start.js", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "carousel-editor.js", "stats.js", "confirm-delete.js",
   "visual-editor.js", "pdf-thumbnail.js", "turndown.js", "pdf-engine.js", "pdf-worker.js", "LICENSE-turndown.txt", "LICENSE-pdfjs.txt",
   "serif.woff2", "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
-export const sharedFiles = ["scrollbars.css", "interface.css", "keyboard.js", "feedback.js", "common.js", "text.js", "note.js", "carousel.js", "photo-text.js", "page-url.js", "archive.js", "series.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
+export const sharedFiles = ["scrollbars.css", "interface.css", "keyboard.js", "focus.js", "feedback.js", "common.js", "text.js", "note.js", "carousel.js", "photo-text.js", "page-url.js", "archive.js", "series.js", "rich.js", "markdown-it.min.js", "LICENSE-markdown-it.txt",
   "markdown-it-footnote.js", "LICENSE-markdown-it-footnote.txt"];
 export const securityHeaders = {
   "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'none'; object-src 'none'",

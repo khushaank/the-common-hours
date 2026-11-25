@@ -5,6 +5,8 @@ import { readNote, writeNote } from "./note.js";
 import { entryExcerpt, isSupportedImage, setupEditorTools, uploadImage } from "./editor-tools.js";
 import { setupPhotoTools } from "./photo-tools.js";
 import { setupShortcuts } from "./keyboard.js";
+import { pageHref } from "./page-url.js";
+import { confirmDelete } from "./confirm-delete.js";
 
 if (window.top !== window.self) {
   document.body.replaceChildren();
@@ -113,7 +115,7 @@ const editorTools = setupEditorTools(editor, api, {
   download: async id => fetchAttachment(id, await sessionToken()),
   carousel: openCarousels,
 }, () => posts, () => references);
-const photoTools = setupPhotoTools(api, editorTools.openImageLibrary);
+const photoTools = setupPhotoTools(api, editorTools.openImageLibrary, () => media?.invalidate());
 let originalBody = "";
 let session;
 let factorId;
@@ -200,6 +202,7 @@ async function saveUploadDetails(asset, details) {
 
 async function uploadFile(id, file) {
   await uploadAttachment(id, file, await sessionToken());
+  media?.invalidate();
   const filename = file.name.slice(0, 200);
   await saveUploadDetails({ id, kind: "file" }, { title: filename, original: filename, alt: "", description: "" });
   return { id, kind: "file", title: filename, original: filename };
@@ -208,6 +211,7 @@ async function uploadFile(id, file) {
 async function uploadMedia(file, alt) {
   if (!isSupportedImage(file)) return uploadFile(crypto.randomUUID(), file);
   const image = await uploadImage(api, file, alt);
+  media?.invalidate();
   const details = { title: alt, original: file.name.slice(0, 200), alt, description: "" };
   await saveUploadDetails({ id: image.id, kind: "image" }, details);
   return { ...details, id: image.id, kind: "image" };
@@ -496,7 +500,8 @@ function entryIcon(action, post, path) {
 }
 
 async function deleteEntry(post, button) {
-  if (!confirm('Permanently delete “' + post.title + '”?' + (post.published ? " Its comments will stay in the desk." : ""))) return;
+  if (!await confirmDelete('Delete “' + post.title + '”?',
+    "This permanently deletes the entry." + (post.published ? " Its comments will stay in the desk." : ""))) return;
   await run(button, async () => {
     if (post.local) localStorage.removeItem(backupKey(post.slot));
     else {
@@ -522,16 +527,27 @@ document.querySelector("#copy-share").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(shareLink.value);
     document.querySelector("#share-status").textContent = "Link copied.";
-  } catch { shareLink.select(); }
+  } catch {
+    shareLink.select();
+    document.querySelector("#share-status").textContent = "Copy the selected link.";
+  }
 });
 shareButton.addEventListener("click", () => shareEntry(activeDraft || activePost, shareButton));
 
 function shareEntry(post, button) {
   return run(button, async () => {
-    const url = new URL("../", location.href);
+    let url = new URL("../", location.href);
     const notice = document.querySelector("#share-notice");
     if (post?.published) {
       url.searchParams.set("post", post.slug);
+      const permalink = pageHref({ post: post.slug }, { filename: true }).replace(/\.html$/, "");
+      if (permalink.startsWith("entry-")) {
+        const clean = new URL(permalink, url);
+        try {
+          const response = await fetch(clean, { method: "HEAD", cache: "no-cache", signal: AbortSignal.timeout(2500) });
+          if (response.ok) url = clean;
+        } catch { /* The live query link is available before the next static build. */ }
+      }
       notice.textContent = "Anyone can open the published entry.";
     } else {
       // Legacy unpublished entries are converted to private working drafts on first share.
@@ -551,7 +567,6 @@ function shareEntry(post, button) {
     shareLink.value = url.href;
     document.querySelector("#share-status").textContent = "";
     shareDialog.showModal();
-    shareLink.select();
   });
 }
 
@@ -835,52 +850,101 @@ document.addEventListener("visibilitychange", () => {
   if (!document.querySelector("#stats-panel").hidden) void loadModerationCount();
 });
 
+let commentRows = [];
+let supportsIgnore = true;
+
 async function loadComments() {
   const revision = ++commentsRevision;
-  const filter = document.querySelector("#comment-filter").value;
-  const rows = await allRows(api, "comments?select=id,display_name,body,approved,post_id,deleted_entry_title&order=approved.asc,created_at.desc,id.desc" +
-    (filter === "all" ? "" : filter === "pending" ? "&approved=eq.false&post_id=not.is.null" : "&approved=eq.true"));
+  const fields = "id,display_name,body,approved,post_id,deleted_entry_title";
+  const order = "&order=created_at.desc,id.desc";
+  let rows;
+  let canIgnore = true;
+  try { rows = await allRows(api, "comments?select=" + fields + ",ignored" + order); }
+  catch (error) {
+    if (!missingColumn(error)) throw error;
+    rows = await allRows(api, "comments?select=" + fields + order);
+    canIgnore = false;
+  }
   if (revision !== commentsRevision) return;
+  supportsIgnore = canIgnore;
+  commentRows = rows;
+  renderComments();
+}
+
+function commentAction(label, icon) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "icon-button";
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + icon + '"/></svg>';
+  return button;
+}
+
+function renderComments() {
+  const filter = document.querySelector("#comment-filter").value;
   comments.replaceChildren();
-  if (!rows.length) comments.textContent = filter === "all" ? "No comments yet." : "No " + filter + " comments.";
   const titles = new Map(posts.map(post => [post.id, post.title]));
-  for (const row of rows) {
+  for (const [index, row] of commentRows.entries()) {
+    const state = !row.post_id ? "Deleted entry" : row.ignored ? "Ignored" : row.approved ? "Published" : "Pending";
+    if (filter !== "all" && state.toLowerCase() !== filter) continue;
     const article = document.createElement("article");
-    article.className = "comment";
+    article.className = "comment moderation-comment";
+    const number = document.createElement("span");
+    number.className = "comment-number";
+    number.textContent = "#" + (commentRows.length - index);
+    const copy = document.createElement("div");
+    copy.className = "comment-copy";
     const name = document.createElement("strong");
     name.textContent = row.display_name;
     const context = document.createElement("small");
-    context.textContent = row.post_id ? (row.approved ? "Published" : "Pending") + " · " + (titles.get(row.post_id) || "Entry")
-      : "Deleted entry · " + (row.deleted_entry_title || "Untitled");
+    context.textContent = state + " · " + (row.post_id ? titles.get(row.post_id) || "Entry" : row.deleted_entry_title || "Untitled");
     const body = document.createElement("p");
     body.textContent = row.body;
     const actions = document.createElement("div");
     actions.className = "actions";
-    const moderate = document.createElement("button");
-    moderate.textContent = row.approved ? "Hide" : "Approve";
-    const remove = document.createElement("button");
-    remove.textContent = "Delete";
+    const approve = commentAction("Approve comment", "m5 12 4 4L19 6");
+    const ignore = commentAction(row.ignored || row.approved && !supportsIgnore ? "Return comment to pending" : "Ignore comment",
+      row.ignored ? "M3 12a9 9 0 1 1 3 6.7M3 12V6m0 6h6" : "m6 6 12 12M18 6 6 18");
+    const remove = commentAction("Delete comment", "M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5");
+    remove.classList.add("delete-comment");
+    for (const action of [approve, ignore, remove]) {
+      action.setAttribute("aria-label", action.title + " " + number.textContent);
+    }
     const path = "comments?id=eq." + row.id;
-    moderate.addEventListener("click", () => run(moderate, async () => {
-      const changed = await api(path, { method: "PATCH", body: { approved: !row.approved }, prefer: "return=representation" });
-      if (!changed.length) throw new Error("The comment is unavailable.");
-      await loadComments();
-      status.textContent = row.approved ? "Comment hidden." : "Comment approved.";
-    }));
-    remove.addEventListener("click", () => {
-      if (!confirm("Delete this comment permanently?")) return;
+    const update = (button, approved, ignored, message) => run(button, async () => {
+      const body = supportsIgnore ? { approved, ignored } : { approved };
+      const [changed] = await api(path, { method: "PATCH", body, prefer: "return=representation" });
+      if (!changed) throw new Error("The comment is unavailable.");
+      Object.assign(row, body);
+      renderComments();
+      document.querySelector("#comment-summary").textContent = message;
+      document.querySelector("#refresh-comments").focus({ preventScroll: true });
+    });
+    approve.addEventListener("click", () => update(approve, true, false, "Comment approved."));
+    ignore.addEventListener("click", () => update(ignore, false, supportsIgnore && !row.ignored,
+      row.ignored || !supportsIgnore ? "Comment returned to pending." : "Comment ignored."));
+    remove.addEventListener("click", async () => {
+      if (!await confirmDelete("Delete comment " + number.textContent + "?", "This permanently removes the comment from the journal.")) return;
       run(remove, async () => {
         const deleted = await api(path, { method: "DELETE", prefer: "return=representation" });
         if (!deleted.length) throw new Error("The comment is unavailable.");
-        await loadComments();
-        status.textContent = "Comment deleted.";
+        commentRows = commentRows.filter(item => item.id !== row.id);
+        renderComments();
+        document.querySelector("#comment-summary").textContent = "Comment deleted.";
+        document.querySelector("#refresh-comments").focus({ preventScroll: true });
       });
     });
-    if (row.post_id) actions.append(moderate);
+    if (row.post_id && !row.approved) actions.append(approve);
+    if (row.post_id && (supportsIgnore || row.approved)) actions.append(ignore);
     actions.append(remove);
-    article.append(name, context, body, actions);
+    copy.append(name, context, body);
+    article.append(number, copy, actions);
     comments.append(article);
   }
+  const count = comments.children.length;
+  if (!count) comments.textContent = filter === "all" ? "No comments yet." : "No " + filter + " comments.";
+  document.querySelector("#comment-summary").textContent = count + (count === 1 ? " comment" : " comments");
 }
 
 async function openDesk() {
@@ -1251,6 +1315,8 @@ editor.addEventListener("submit", event => {
 });
 
 const referenceForm = document.querySelector("#reference-form");
+const referenceDialog = document.querySelector("#reference-dialog");
+const referenceFormStatus = document.querySelector("#reference-form-status");
 const referenceList = document.querySelector("#reference-list");
 const referenceStatus = document.querySelector("#reference-status");
 const referenceEmpty = document.querySelector("#reference-empty");
@@ -1266,23 +1332,21 @@ function referenceUrl(value) {
   } catch { /* Invalid URLs remain plain text in the list. */ }
 }
 
-function editReference(reference, open = Boolean(reference)) {
+function editReference(reference) {
   editingReference = reference;
   referenceForm.reset();
-  referenceForm.hidden = !open;
-  addReference.setAttribute("aria-expanded", String(open));
+  referenceFormStatus.textContent = "";
   document.querySelector("#reference-form-title").textContent = reference ? "Edit reference" : "New reference";
   referenceForm.elements.namedItem("alias").readOnly = Boolean(reference);
   if (reference) {
     for (const name of ["alias", "label", "url"]) referenceForm.elements.namedItem(name).value = reference[name];
   }
-  if (open) referenceForm.elements.namedItem(reference ? "label" : "alias").focus();
+  referenceDialog.showModal();
+  referenceForm.elements.namedItem(reference ? "label" : "alias").focus();
 }
-addReference.addEventListener("click", () => {
-  if (referenceForm.hidden) editReference(undefined, true);
-  else referenceForm.elements.namedItem(editingReference ? "label" : "alias").focus();
-});
-cancelReference.addEventListener("click", () => { editReference(); addReference.focus(); });
+addReference.addEventListener("click", () => editReference());
+cancelReference.addEventListener("click", () => referenceDialog.close());
+referenceDialog.addEventListener("cancel", event => { if (saveReference.disabled) event.preventDefault(); });
 
 async function loadReferences() {
   const revision = ++referencesRevision;
@@ -1317,11 +1381,10 @@ async function loadReferences() {
       edit.setAttribute("aria-label", "Edit @" + reference.alias);
       remove.setAttribute("aria-label", "Delete @" + reference.alias);
       edit.addEventListener("click", () => editReference(reference));
-      remove.addEventListener("click", () => {
-        if (!confirm("Delete @" + reference.alias + " from References?")) return;
+      remove.addEventListener("click", async () => {
+        if (!await confirmDelete("Delete @" + reference.alias + "?", "The shortcut will be removed. Links already inserted in entries will still work.")) return;
         void run(remove, async () => {
           await api("references?alias=eq." + reference.alias, { method: "DELETE" });
-          if (editingReference?.alias === reference.alias) editReference();
           await loadReferences();
         });
       });
@@ -1345,7 +1408,8 @@ referenceForm.addEventListener("submit", async event => {
   event.preventDefault();
   const fields = Object.fromEntries(new FormData(referenceForm));
   saveReference.disabled = cancelReference.disabled = true;
-  referenceForm.inert = true;
+  referenceForm.setAttribute("aria-busy", "true");
+  referenceFormStatus.textContent = "Saving…";
   try {
     const url = referenceUrl(fields.url.trim());
     if (!url) throw new Error("Enter an HTTPS URL.");
@@ -1356,12 +1420,15 @@ referenceForm.addEventListener("submit", async event => {
       method: editingReference ? "PATCH" : "POST",
       body: editingReference ? body : { ...body, alias },
     });
-    editReference();
-    addReference.focus();
+    referenceDialog.close();
     if (await loadReferences()) referenceStatus.textContent = "Reference saved.";
+    addReference.focus();
   } catch (error) {
-    referenceStatus.textContent = error?.code === "23505" ? "That shortcut already exists. Select Edit to change it." : error?.message || "The reference could not be saved. Try again.";
-  } finally { referenceForm.inert = saveReference.disabled = cancelReference.disabled = false; }
+    referenceFormStatus.textContent = error?.code === "23505" ? "That shortcut already exists." : error?.message || "The reference could not be saved. Try again.";
+  } finally {
+    referenceForm.removeAttribute("aria-busy");
+    saveReference.disabled = cancelReference.disabled = false;
+  }
 });
 
 search.addEventListener("input", renderPostList);
@@ -1466,8 +1533,8 @@ async function loadPrivacyRequests() {
       const remove = document.createElement("button");
       remove.type = "button";
       remove.textContent = "Delete request";
-      remove.addEventListener("click", () => {
-        if (!confirm("Delete this privacy request permanently?")) return;
+      remove.addEventListener("click", async () => {
+        if (!await confirmDelete("Delete privacy request?", "The message and reply email will be permanently removed from the inbox.")) return;
         run(remove, async () => {
           const removed = await api("privacy_requests?id=eq." + row.id, { method: "DELETE", prefer: "return=representation" });
           if (!removed?.length) throw new Error("The request is unavailable.");
@@ -1494,7 +1561,7 @@ async function openComments() {
   comments.textContent = "Loading comments…";
   await loadComments().catch(() => showFailure(comments, "Comments could not load.", openComments));
 }
-document.querySelector("#comment-filter").addEventListener("change", openComments);
+document.querySelector("#comment-filter").addEventListener("change", renderComments);
 
 const moderationQueue = document.querySelector("#moderation-queue");
 const pendingCount = document.querySelector("#pending-comment-count");
@@ -1535,12 +1602,20 @@ function renderDraftQueue() {
 
 async function loadModerationCount() {
   const revision = ++moderationRevision;
-  pendingCount.textContent = "Checking…";
+  moderationQueue.setAttribute("aria-busy", "true");
   try {
-    const count = await api(pendingComments, { method: "HEAD", prefer: "count=exact", count: true });
+    const options = { method: "HEAD", prefer: "count=exact", count: true };
+    let count;
+    try { count = await api(pendingComments + "&ignored=eq.false", options); }
+    catch (error) {
+      if (!missingColumn(error)) throw error;
+      count = await api(pendingComments, options);
+    }
     if (revision === moderationRevision) pendingCount.textContent = String(count);
   } catch {
     if (revision === moderationRevision) pendingCount.textContent = "View pending comments";
+  } finally {
+    if (revision === moderationRevision) moderationQueue.removeAttribute("aria-busy");
   }
 }
 
@@ -1553,6 +1628,10 @@ async function openStats() {
     stats ??= setupStats(api, () => posts, editEntry);
     await stats.load();
   } catch {
+    document.querySelector("#stats-placeholder").hidden = true;
+    for (const id of ["#dashboard-latest", "#dashboard-publishing", "#dashboard-activity"]) {
+      document.querySelector(id).removeAttribute("aria-busy");
+    }
     showFailure(document.querySelector("#stats-status"), "The dashboard could not open.", openStats);
   }
 }
@@ -1563,7 +1642,10 @@ async function openCarousels(options) {
   carouselEditor ??= setupCarouselEditor(api, editorTools.openImageLibrary,
     (carousel, photo) => adminRpc("delete_carousel_photo", { p_carousel: carousel, p_id: photo }),
     (carousel, photo, direction) => adminRpc("move_carousel_photo", { p_carousel: carousel, p_id: photo, p_direction: direction }));
-  return carouselEditor(options);
+  return carouselEditor({ ...options, onClose: changed => {
+    if (changed) media?.invalidate();
+    options.onClose?.(changed);
+  } });
 }
 
 async function openMedia() {
