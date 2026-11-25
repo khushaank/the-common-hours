@@ -275,10 +275,13 @@
         </section>
       </section>
       <section id="entry-stats-panel" data-desk-panel hidden>
-        <div class="section-heading">
-          <div><button type="button" id="back-entry-stats">← Back to entries</button><h1 id="entry-stats-title" tabindex="-1">Entry stats</h1></div>
-          <button type="button" id="refresh-entry-stats">Refresh</button>
-        </div>
+        <header class="entry-stats-header">
+          <div class="entry-stats-actions">
+            <button type="button" id="back-entry-stats">← Back to entries</button>
+            <button type="button" id="refresh-entry-stats">Refresh</button>
+          </div>
+          <h1 id="entry-stats-title" tabindex="-1">Entry stats</h1>
+        </header>
         <p id="entry-stats-status" role="status"></p>
         <div id="entry-stats-report"></div>
       </section>

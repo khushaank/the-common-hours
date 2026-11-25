@@ -27,29 +27,38 @@ export function publishingSummary(posts, today = journalToday()) {
 }
 
 export function renderEntryStats(data) {
-  const metric = (label, value) => '<div class="stats-metric"><span>' + label + '</span><strong>' + number.format(value) + '</strong></div>';
+  const share = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 1 });
+  const quantity = (count, unit) => number.format(count) + " " + unit + (count === 1 ? "" : "s");
+  const metric = (label, value, detail = "") => '<div><dt>' + label + '</dt><dd>' + number.format(value) + '</dd>' +
+    (detail ? '<dd class="entry-stats-detail">' + detail + '</dd>' : '') + '</div>';
   const sources = [
     ["direct", "Direct or unknown"], ["home", "Journal homepage"], ["internal", "Another page on the site"],
     ["next", "Next entry or newer note"], ["external", "Another website"],
   ].map(([key, label]) => [label, Number(data.sources[key] || 0)]).sort((a, b) => b[1] - a[1]);
   const tracked = sources.reduce((sum, [, count]) => sum + count, 0);
-  const rows = (items, total) => '<ul class="traffic-leaders entry-stats-breakdown">' + items.map(([label, count]) =>
-    '<li><span>' + escape(label) + '</span><span>' + number.format(count) + '</span>' +
-    (total ? '<meter aria-label="' + escape(label) + '" max="' + total + '" value="' + count + '"></meter>' : '') +
+  const unknown = Number(data.views) - tracked;
+  const rows = (items, total) => '<ul class="entry-stats-breakdown">' + items.map(([label, count]) =>
+    '<li><span>' + escape(label) + '</span><span class="entry-stats-result"><strong>' + number.format(count) + '</strong>' +
+    (total ? '<small>' + share.format(count / total) + '</small>' : '') + '</span>' +
+    '<meter aria-hidden="true" max="' + (total || 1) + '" value="' + count + '"></meter>' +
     '</li>').join("") + '</ul>';
+  const heading = (title, total) => '<div class="entry-stats-card-heading"><h2>' + title + '</h2>' +
+    (total ? '<span class="entry-stats-total">' + total + '</span>' : '') + '</div>';
+  const comments = ["published", "pending", "ignored"]
+    .filter(state => Number(data.comments[state]) > 0)
+    .map(state => number.format(data.comments[state]) + " " + state).join(" · ");
   const poll = data.poll;
   const votes = poll?.counts.reduce((sum, count) => sum + Number(count), 0);
-  return '<section class="card"><h2>Overview</h2><div class="stats-metrics">' +
-    metric("Views", data.views) + metric("Visits started here", data.visits) + metric("Comments", data.comments.total) +
-    '</div><p class="muted">' + number.format(data.comments.published) + ' published · ' +
-    number.format(data.comments.pending) + ' pending · ' + number.format(data.comments.ignored) + ' ignored</p></section>' +
-    '<section class="card"><h2>How readers arrived</h2>' +
-    (tracked ? rows(sources, tracked) : '<p class="muted">No arrival sources recorded yet.</p>') +
-    (data.views > tracked ? '<p class="muted">' + number.format(data.views - tracked) + ' views without source information</p>' : '') +
-    '</section><section class="card"><h2>Reader poll</h2>' +
-    (poll ? '<h3>' + escape(poll.question) + '</h3><p class="muted">' + number.format(votes) + (votes === 1 ? ' vote' : ' votes') +
-      '</p>' + rows(poll.options.map((option, index) => [option, Number(poll.counts[index])]), votes) :
-      '<p class="muted">This entry has no reader poll.</p>') + '</section>';
+  return '<section class="card entry-stats-overview"><h2>Overview</h2><dl class="entry-stats-metrics">' +
+    metric("Views", data.views) + metric("Visits started here", data.visits) + metric("Comments", data.comments.total, comments) +
+    '</dl></section><section class="card">' + heading("How readers arrived", tracked ? quantity(tracked, "tracked view") : "") +
+    (tracked ? rows(sources, tracked) : '<p class="entry-stats-empty">No arrival sources recorded yet.</p>') +
+    (unknown > 0 ? '<p class="entry-stats-detail">' + quantity(unknown, "view") + (unknown === 1 ? " has" : " have") +
+      ' no source information.</p>' : '') +
+    '</section><section class="card">' + heading("Reader poll", poll ? quantity(votes, "vote") : "") +
+    (poll ? '<h3>' + escape(poll.question) + '</h3>' +
+      rows(poll.options.map((option, index) => [option, Number(poll.counts[index])]), votes) :
+      '<p class="entry-stats-empty">This entry has no reader poll.</p>') + '</section>';
 }
 
 export function setupStats(api, getPosts, editEntry) {

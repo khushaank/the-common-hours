@@ -475,12 +475,41 @@ dialog .actions { justify-content: flex-end; }
 #poll-choices:not(:has(> :nth-child(3))) button { display: none; }
 #poll-settings .actions { gap: 8px; margin-bottom: 6px; }
 #poll-add-option { border-color: var(--line); background: var(--card); }
-#entry-stats-panel { width: min(940px, 100%); margin-inline: auto; }
-#entry-stats-panel .section-heading h1 { margin-top: 8px; }
-#entry-stats-report { display: grid; gap: 12px; }
-#entry-stats-report section > h2 { margin-bottom: 12px; }
-#entry-stats-report h3 { font: 600 16px/1.4 "DM Sans", system-ui, sans-serif; margin: 0 0 4px; overflow-wrap: anywhere; }
-.entry-stats-breakdown { padding-block: 10px; }
+#entry-stats-panel { width: min(980px, 100%); margin-inline: auto; }
+.entry-stats-header { display: grid; gap: 14px; margin-bottom: 20px; }
+.entry-stats-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.entry-stats-actions button { min-height: 44px; }
+#back-entry-stats { padding-inline: 0 10px; border-color: transparent; background: transparent; }
+#back-entry-stats:hover { text-decoration: underline; text-underline-offset: .2em; }
+#refresh-entry-stats { padding-inline: 16px; }
+#entry-stats-title { font-size: clamp(34px, 5vw, 48px); overflow-wrap: anywhere; }
+#entry-stats-status:not(:empty) { color: var(--muted); margin-bottom: 14px; }
+#entry-stats-report { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr)); gap: clamp(12px, 2.2vw, 20px); }
+.entry-stats-overview { grid-column: 1 / -1; }
+.entry-stats-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 0; }
+.entry-stats-metrics > div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.entry-stats-metrics > div:first-child { background: var(--soft); border-color: transparent; }
+.entry-stats-metrics dt { color: var(--muted); font-size: 13px; }
+.entry-stats-metrics dd { margin: 0; font: 400 clamp(30px, 4vw, 42px)/1.1 var(--serif); overflow-wrap: anywhere; }
+.entry-stats-card-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 12px; }
+.entry-stats-total { border-radius: 999px; padding: 3px 9px; background: var(--soft); color: var(--accent); font-size: 12px; font-weight: 600; white-space: nowrap; }
+#entry-stats-report h3 { font: 600 16px/1.4 "DM Sans", system-ui, sans-serif; margin: 0 0 12px; overflow-wrap: anywhere; }
+.entry-stats-breakdown { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.entry-stats-breakdown li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; align-items: baseline; overflow-wrap: anywhere; }
+.entry-stats-result { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.entry-stats-result small { font-size: 11px; }
+.entry-stats-breakdown meter { appearance: none; grid-column: 1 / -1; width: 100%; height: 6px; border: 0; border-radius: 6px; background: var(--soft); }
+.entry-stats-breakdown meter::-webkit-meter-bar { height: 6px; border: 0; border-radius: 6px; background: var(--soft); }
+.entry-stats-breakdown meter::-webkit-meter-optimum-value { border-radius: 6px; background: var(--accent); }
+.entry-stats-breakdown meter::-moz-meter-bar { border-radius: 6px; background: var(--accent); }
+.entry-stats-empty { padding: 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+#entry-stats-report .entry-stats-detail { color: var(--muted); font: 400 12px/1.45 "DM Sans", system-ui, sans-serif; }
+p.entry-stats-detail { margin-top: 10px; }
+@media (max-width: 520px) {
+  .entry-stats-metrics { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .entry-stats-metrics > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 10px; padding: 6px 12px; }
+  .entry-stats-metrics .entry-stats-detail { grid-column: 1 / -1; }
+}
 #recent-drafts { display: grid; padding: 0; margin: 0; list-style: none; }
 #recent-drafts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 #recent-drafts li + li { border-top: 1px solid var(--line); }
