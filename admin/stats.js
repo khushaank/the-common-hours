@@ -31,7 +31,6 @@ export function setupStats(api, getPosts, editEntry) {
   const status = document.querySelector("#stats-status");
   const report = document.querySelector("#stats-report");
   const skeleton = document.querySelector("#stats-placeholder");
-  const activity = document.querySelector("#dashboard-activity");
   const lastEntry = document.querySelector("#last-published-entry");
   let latest;
   let revision = 0;
@@ -43,12 +42,9 @@ export function setupStats(api, getPosts, editEntry) {
     latest = last;
     lastEntry.textContent = last?.title || "No published entries yet";
     lastEntry.disabled = !last;
-    document.querySelector("#last-published-date").textContent = last ?
-      "Published " + new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(new Date(last.published_on + "T00:00:00Z")) : "Your next entry starts here.";
-    document.querySelector("#publishing-age").textContent = days === null ? "-" : number.format(days);
-    document.querySelector("#publishing-note").textContent = days === null ? "No publications yet" : days === 0 ? "Published today" : "Based on the publication date";
+    document.querySelector("#last-published-date").textContent =
+      !last ? "" : days === 0 ? "Published today" : "Published " + formatDay(last.published_on);
     document.querySelector("#dashboard-latest").removeAttribute("aria-busy");
-    document.querySelector("#dashboard-publishing").removeAttribute("aria-busy");
   }
 
   function render(days, rows, selectedPeriod) {
@@ -72,8 +68,6 @@ export function setupStats(api, getPosts, editEntry) {
     }
     const records = [...daily.values()];
     const peak = records.reduce((best, row) => row.views > (best?.views || 0) ? row : best, null);
-    document.querySelector("#active-day").textContent = peak ? formatDay(peak.day) : "-";
-    document.querySelector("#active-day-note").textContent = peak ? number.format(peak.views) + " page views" : "No daily activity recorded yet";
     const chartPeriod = selectedPeriod === "five-years" ? "Monthly" : selectedPeriod === "365" ? "Weekly" : "Daily";
     const buckets = new Map();
     for (const [index, record] of records.entries()) {
@@ -87,22 +81,24 @@ export function setupStats(api, getPosts, editEntry) {
     const maxViews = Math.max(1, ...[...buckets.values()].map(row => row.views));
     const leaders = [...posts.values()].filter(post => post.views > 0).sort((a, b) => b.views - a.views).slice(0, 10);
     const scale = leaders[0]?.views || 1;
-    const metric = (label, value) => '<div class="card stats-metric"><span>' + label + '</span><strong>' + number.format(value) + '</strong></div>';
+    const metric = (label, value) => '<div class="stats-metric"><span>' + label + '</span><strong>' + number.format(value) + '</strong></div>';
     report.innerHTML = '<div class="stats-metrics">' +
       metric("Site visits", totals.visits) + metric("Page views", totals.views) + metric("Entry views", totals.postViews) + '</div>' +
-      '<section class="card stats-chart"><h2>' + chartPeriod + ' traffic</h2>' +
+      '<div class="stats-chart">' +
       '<div class="stats-legend"><span>Page views</span><span>Visits</span></div>' +
       '<div class="traffic-bars" aria-hidden="true"></div>' +
       '<div class="traffic-axis"><span>' + formatDay(days[0]) + '</span><span>' + formatDay(days.at(-1)) + '</span></div>' +
-      '<details class="traffic-table"><summary>Daily counts</summary><table><thead><tr><th scope="col">Date</th><th scope="col">Page views</th><th scope="col">Visits</th></tr></thead><tbody>' +
+      '</div><details class="traffic-table"><summary>Daily counts</summary>' +
+      (peak ? '<p class="muted">Busiest day · ' + formatDay(peak.day) + ' · ' + number.format(peak.views) + ' page views</p>' : '') +
+      '<div class="traffic-counts" tabindex="0" role="region" aria-label="Daily traffic counts"><table><thead><tr><th scope="col">Date</th><th scope="col">Page views</th><th scope="col">Visits</th></tr></thead><tbody>' +
       records.map(row => '<tr><th scope="row">' + formatDay(row.day) + '</th><td>' + number.format(row.views) +
         '</td><td>' + number.format(row.visits) + '</td></tr>').join("") +
-      '</tbody></table></details></section>' +
-      '<section class="card stats-chart"><h2>Most-read entries</h2>' +
+      '</tbody></table></div></details>' +
+      '<details class="traffic-table"><summary>Most-read entries</summary>' +
       (leaders.length ? '<ol class="traffic-leaders">' + leaders.map(post => '<li><span>' + escape(post.title) +
         '</span><span>' + number.format(post.views) + '</span><meter aria-label="' + escape(post.title) +
         ' views" max="' + scale + '" value="' + post.views + '"></meter></li>').join("") + '</ol>' :
-        '<p>No entry views in this period yet.</p>') + '</section>';
+        '<p class="muted">No entry views in this period yet.</p>') + '</details>';
     const chart = report.querySelector(".traffic-bars");
     for (const [label, row] of buckets) {
       const group = document.createElement("div");
@@ -122,7 +118,6 @@ export function setupStats(api, getPosts, editEntry) {
     const selectedPeriod = period.value;
     const days = periodDays(selectedPeriod, journalToday());
     renderPublishing();
-    activity.setAttribute("aria-busy", String(!loaded));
     report.setAttribute("aria-busy", "true");
     skeleton.hidden = loaded;
     status.textContent = loaded ? "Updating traffic…" : "Loading traffic…";
@@ -136,12 +131,10 @@ export function setupStats(api, getPosts, editEntry) {
       if (revision !== loading) return;
       showFailure(status, missingFeature(error) ? "Apply the Supabase traffic upgrade to enable stats." :
         "Traffic could not load.", load);
-      if (!loaded) document.querySelector("#active-day-note").textContent = "Daily activity could not load";
     } finally {
       if (revision === loading) {
         skeleton.hidden = true;
         report.removeAttribute("aria-busy");
-        activity.removeAttribute("aria-busy");
       }
     }
   }

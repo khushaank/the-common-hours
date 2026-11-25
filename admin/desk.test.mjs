@@ -500,9 +500,9 @@ test("Dashboard sums daily page views for the busiest day without requesting hou
   }, () => [{ id: "one", title: "Market", published: true, published_on: "2026-11-13" }], () => {});
   await stats.load();
   assert.equal(query("#last-published-entry").textContent, "Market");
-  assert.equal(query("#publishing-age").textContent, "3");
-  assert.equal(query("#active-day-note").textContent, "11 page views");
-  assert.match(query("#active-day").textContent, /15/);
+  assert.equal(query("#last-published-date").textContent, "Published Nov 13, 2026");
+  assert.match(query("#stats-report").innerHTML, /<summary>Daily counts<\/summary><p class="muted">Busiest day · Nov 15, 2026 · 11 page views/);
+  assert.match(query("#stats-report").innerHTML, /<details class="traffic-table"><summary>Most-read entries<\/summary>/);
   assert.equal(paths.length, 1);
   assert.match(paths[0], /^traffic\?/);
 });

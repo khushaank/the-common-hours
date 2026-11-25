@@ -232,32 +232,40 @@
         </section>
       </section>
       <section id="stats-panel" data-desk-panel hidden>
-        <div class="section-heading">
-          <div><p class="eyebrow">The Common Hours</p><h1>Dashboard</h1></div>
-          <label>Period <select id="stats-period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option><option value="five-years">Past five years</option></select></label>
-        </div>
-        <div class="dashboard-overview">
-          <section class="card dashboard-latest" id="dashboard-latest" aria-busy="true"><span class="eyebrow">Last published entry</span><div class="dashboard-value"><button type="button" id="last-published-entry" disabled></button><p id="last-published-date" class="muted"></p></div><div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div></section>
-          <section class="card stats-metric" id="dashboard-publishing" aria-busy="true"><span>Days since publishing</span><div class="dashboard-value"><strong id="publishing-age"></strong><small id="publishing-note"></small></div><div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div></section>
-          <section class="card stats-metric" id="dashboard-activity" aria-busy="true"><span>Busiest day</span><div class="dashboard-value"><strong id="active-day"></strong><small id="active-day-note"></small></div><div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div></section>
-        </div>
-        <div class="dashboard-queue">
-          <section class="card" aria-labelledby="recent-drafts-heading">
-            <h2 id="recent-drafts-heading">Recent drafts</h2>
-            <p id="recent-drafts-empty" class="muted">No drafts yet.</p>
-            <ul id="recent-drafts"></ul>
-          </section>
-          <section class="card" aria-labelledby="moderation-heading">
-            <h2 id="moderation-heading">Comments awaiting moderation</h2>
-            <button type="button" id="moderation-queue" aria-busy="true" aria-labelledby="moderation-heading pending-comment-count"><span class="dashboard-value"><span id="pending-comment-count" aria-live="polite"></span> <span aria-hidden="true">↗</span></span><span class="dashboard-lines" aria-hidden="true"><span></span></span></button>
-          </section>
-        </div>
-        <div id="stats-status" role="status"></div>
-        <div id="stats-placeholder" aria-hidden="true">
-          <div class="stats-metrics"><div class="card dashboard-lines"><span></span><span></span></div><div class="card dashboard-lines"><span></span><span></span></div><div class="card dashboard-lines"><span></span><span></span></div></div>
-          <div class="card dashboard-chart-placeholder"><div class="dashboard-lines"><span></span></div><div class="dashboard-chart-frame"></div></div>
-        </div>
-        <div id="stats-report"></div>
+        <div class="section-heading"><h1>Dashboard</h1></div>
+        <section class="card dashboard-writing" aria-labelledby="dashboard-writing-heading">
+          <div class="body-heading">
+            <h2 id="dashboard-writing-heading">Writing</h2>
+            <button type="button" id="moderation-queue" aria-busy="true">
+              <span id="pending-comment-count" aria-live="polite">Pending comments</span>
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <div class="dashboard-writing-grid">
+            <section id="dashboard-latest" aria-busy="true">
+              <h3>Last published</h3>
+              <div class="dashboard-value"><button type="button" id="last-published-entry" disabled></button><p id="last-published-date" class="muted"></p></div>
+              <div class="dashboard-lines" aria-hidden="true"><span></span><span></span></div>
+            </section>
+            <section>
+              <h3>Recent drafts</h3>
+              <p id="recent-drafts-empty" class="muted">No drafts yet.</p>
+              <ul id="recent-drafts"></ul>
+            </section>
+          </div>
+        </section>
+        <section class="card dashboard-traffic" aria-labelledby="dashboard-traffic-heading">
+          <div class="body-heading">
+            <h2 id="dashboard-traffic-heading">Traffic</h2>
+            <select id="stats-period" aria-label="Traffic period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option><option value="five-years">Past five years</option></select>
+          </div>
+          <div id="stats-status" role="status"></div>
+          <div id="stats-placeholder" aria-hidden="true">
+            <div class="stats-metrics"><div class="dashboard-lines"><span></span><span></span></div><div class="dashboard-lines"><span></span><span></span></div><div class="dashboard-lines"><span></span><span></span></div></div>
+            <div class="dashboard-chart-frame"></div>
+          </div>
+          <div id="stats-report"></div>
+        </section>
       </section>
       <section id="comments-panel" data-desk-panel hidden>
         <div class="section-heading"><h1>Comments</h1><label>Show <select id="comment-filter"><option value="all">All comments</option><option value="published">Published</option><option value="pending">Pending</option><option value="ignored">Ignored</option></select></label></div>

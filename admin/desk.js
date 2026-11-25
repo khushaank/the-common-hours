@@ -1611,7 +1611,7 @@ async function loadModerationCount() {
       if (!missingColumn(error)) throw error;
       count = await api(pendingComments, options);
     }
-    if (revision === moderationRevision) pendingCount.textContent = String(count);
+    if (revision === moderationRevision) pendingCount.textContent = count + (count === 1 ? " pending comment" : " pending comments");
   } catch {
     if (revision === moderationRevision) pendingCount.textContent = "View pending comments";
   } finally {
@@ -1629,9 +1629,7 @@ async function openStats() {
     await stats.load();
   } catch {
     document.querySelector("#stats-placeholder").hidden = true;
-    for (const id of ["#dashboard-latest", "#dashboard-publishing", "#dashboard-activity"]) {
-      document.querySelector(id).removeAttribute("aria-busy");
-    }
+    document.querySelector("#dashboard-latest").removeAttribute("aria-busy");
     showFailure(document.querySelector("#stats-status"), "The dashboard could not open.", openStats);
   }
 }
