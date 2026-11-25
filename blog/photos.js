@@ -49,7 +49,6 @@ export async function startSlideshow(get, demo) {
   const picture = figure.querySelector("img");
   const caption = figure.querySelector("#photo-caption");
   const status = document.querySelector("#featured-photo-status");
-  const previousButton = figure.querySelector("#slide-previous");
   const nextButton = figure.querySelector("#slide-next");
   const count = figure.querySelector("#slide-count");
   const slide = figure.querySelector(".slide");
@@ -57,7 +56,6 @@ export async function startSlideshow(get, demo) {
   let hovered = false;
   let timer;
   let revision = 0;
-  let index = 0;
   let requestedIndex = 0;
   const images = new Map();
 
@@ -86,19 +84,14 @@ export async function startSlideshow(get, demo) {
     slide.tabIndex = 0;
     slide.setAttribute("aria-label", "Photo carousel. Use Left and Right arrow keys to change photos.");
   }
+  nextButton.hidden = figure.hidden || photos.length < 2;
 
   function schedule() {
     clearTimeout(timer);
     if (!motion.matches && !hovered && !slide.hasAttribute("data-controls-open") &&
-        !slide.contains(document.activeElement) && !document.hidden && requestedIndex < photos.length - 1) {
+        !slide.contains(document.activeElement) && !document.hidden && photos.length > 1) {
       timer = setTimeout(() => void show(requestedIndex + 1), 10000);
     }
-  }
-
-  function showArrows() {
-    previousButton.hidden = nextButton.hidden = figure.hidden || photos.length < 2;
-    previousButton.setAttribute("aria-disabled", String(requestedIndex === 0));
-    nextButton.setAttribute("aria-disabled", String(requestedIndex === photos.length - 1));
   }
 
   function prepare(photo) {
@@ -109,13 +102,12 @@ export async function startSlideshow(get, demo) {
     return images.get(photo.id);
   }
 
-  async function show(next) {
-    if (next < 0 || next >= photos.length) return;
+  async function show(position) {
+    const next = (position + photos.length) % photos.length;
     clearTimeout(timer);
     const loading = ++revision;
     requestedIndex = next;
     const photo = photos[next];
-    showArrows();
     status.hidden = true;
     let data;
     try {
@@ -139,11 +131,9 @@ export async function startSlideshow(get, demo) {
       if (loading !== revision) return;
       if (!picture.hasAttribute("src") && next < photos.length - 1) { await show(next + 1); return; }
       photoFailure("This photo could not load.", () => show(next));
-      showArrows();
       return;
     }
     if (loading !== revision) return;
-    index = next;
     const details = publicPhoto(photo, data.alt);
     picture.alt = details.alt;
     picture.width = data.width;
@@ -153,13 +143,12 @@ export async function startSlideshow(get, demo) {
     figure.removeAttribute("aria-busy");
     caption.removeAttribute("aria-busy");
     caption.textContent = photoTitle(photo.title);
-    count.textContent = photos.length > 1 ? (index + 1) + " / " + photos.length : "";
-    showArrows();
-    if (index + 1 < photos.length) void prepare(photos[index + 1]).catch(() => {});
+    count.textContent = photos.length > 1 ? (next + 1) + " / " + photos.length : "";
+    nextButton.hidden = photos.length < 2;
+    if (photos.length > 1) void prepare(photos[(next + 1) % photos.length]).catch(() => {});
     schedule();
   }
 
-  previousButton.addEventListener("click", () => void show(requestedIndex - 1));
   nextButton.addEventListener("click", () => void show(requestedIndex + 1));
   slide.addEventListener("keydown", event => {
     if (photos.length < 2 || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;

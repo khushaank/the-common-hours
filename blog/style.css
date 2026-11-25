@@ -113,11 +113,9 @@ html[data-journal-page] .layout:has(#content[data-refresh-pending]) > #sidebar {
 .slide-label { position: absolute; left: 16px; bottom: 16px; padding: 7px 11px; border-radius: 4px; color: #fff; background: #252821e8; opacity: 0; transition: opacity .2s ease; }
 .slide:hover .slide-label, .slide:focus-within .slide-label { opacity: 1; }
 .slide-arrow { position: absolute; right: 12px; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 44px; padding: 0; border: 1px solid #eee9df; border-radius: 50%; color: var(--ink); background: #fbfaf7f0; box-shadow: 0 2px 8px #2224202b; opacity: 0; pointer-events: none; transition: opacity .16s ease; }
-#slide-previous { left: 12px; right: auto; }
 .slide[data-controls-open] .slide-arrow, .slide:focus-visible .slide-arrow, .slide-arrow:focus-visible { opacity: 1; pointer-events: auto; }
 @media (hover: hover) { .slide:hover .slide-arrow { opacity: 1; pointer-events: auto; } }
-.slide-arrow:hover:not([aria-disabled="true"]) { background: white; }
-.slide:is(:hover, :focus-within, [data-controls-open]) .slide-arrow[aria-disabled="true"] { opacity: .45; cursor: default; }
+.slide-arrow:hover { background: white; }
 @media (prefers-reduced-motion: reduce) { .slide-arrow { transition: none; } }
 .featured-photo figcaption, .slide-actions { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
 .featured-photo figcaption { justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: 13px; }

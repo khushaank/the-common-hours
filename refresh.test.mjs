@@ -43,8 +43,9 @@ test("the featured photo and footer navigation are available in the initial home
   assert.doesNotMatch(pages.get("archive.html"), /featured\.webp|id="featured-snapshot"/);
 });
 
-function carousel(get) {
+function carousel(get, reducedMotion = true) {
   const attributes = new Map();
+  let advance;
   const element = () => {
     const handlers = new Map();
     const attrs = new Map();
@@ -61,13 +62,13 @@ function carousel(get) {
     set src(value) { attributes.set("src", value); } };
   const caption = { ...element(), busy: false, setAttribute() { this.busy = true; }, removeAttribute() { this.busy = false; } };
   const status = element();
-  const items = { img: picture, "#photo-caption": caption, "#slide-previous": element(), "#slide-next": element(), "#slide-count": element(), ".slide": element() };
+  const items = { img: picture, "#photo-caption": caption, "#slide-next": element(), "#slide-count": element(), ".slide": element() };
   const figure = { ...element(), hidden: true, querySelector: selector => items[selector], removeAttribute() {} };
   const source = photosSource.slice(photosSource.indexOf("async function optional"), photosSource.indexOf("\nasync function getImage")) +
     photosSource.slice(photosSource.indexOf("async function featurePhotos"), photosSource.indexOf("\nfunction photoDate"));
   const run = runInNewContext(source.replace("export ", "") + "\nstartSlideshow", {
     document: { querySelector: selector => selector === "#featured-photo-status" ? status : figure, addEventListener() {}, hidden: false },
-    matchMedia: () => ({ matches: true, addEventListener() {} }),
+    matchMedia: () => ({ matches: reducedMotion, addEventListener() {} }),
     publicData: () => { throw new Error("The featured list must not reuse a cached fallback"); },
     publicPhoto: photo => photo,
     photoTitle,
@@ -75,26 +76,28 @@ function carousel(get) {
     cover: { id: "cover", title: "Cover" },
     allRows: (get, path) => get(path), weeklyFields: "id,week,media_id",
     getImage: async (_, photo) => ({ src: photo.id === "cover" ? "cover.jpg" : "live.jpg", width: 1200, height: 800 }),
-    Image: class { async decode() {} }, clearTimeout() {}, setTimeout() {},
+    Image: class { async decode() {} }, clearTimeout() {}, setTimeout(callback) { advance = callback; },
   });
-  return { run: () => run(get, false), attributes, figure, caption, status, slide: items[".slide"], arrow: items["#slide-next"] };
+  return { run: () => run(get, false), attributes, figure, caption, status, slide: items[".slide"], arrow: items["#slide-next"],
+    advance: () => advance() };
 }
 
-test("the featured slideshow stops at both ends and can go back from the last photo", async () => {
-  const view = carousel(async () => [{ id: "first", title: "First" }, { id: "second", title: "Second" }]);
+test("the featured slideshow loops through the next button, keyboard, and autoplay", async () => {
+  const view = carousel(async () => [{ id: "first", title: "First" }, { id: "second", title: "Second" }], false);
   await view.run();
-  const step = async key => {
-    view.slide.dispatch("keydown", { key, preventDefault() {} });
+  const step = async action => {
+    action();
     await new Promise(resolve => setImmediate(resolve));
   };
-  await step("ArrowLeft");
-  assert.equal(view.caption.textContent, "First");
-  await step("ArrowRight");
-  await step("ArrowRight");
+  await step(() => view.slide.dispatch("keydown", { key: "ArrowLeft", preventDefault() {} }));
   assert.equal(view.caption.textContent, "Second");
-  assert.equal(view.arrow.getAttribute("aria-disabled"), "true");
-  await step("ArrowLeft");
+  await step(() => view.arrow.dispatch("click"));
   assert.equal(view.caption.textContent, "First");
+  await step(view.advance);
+  assert.equal(view.caption.textContent, "Second");
+  await step(view.advance);
+  assert.equal(view.caption.textContent, "First");
+  assert.doesNotMatch(template, /id="slide-previous"/);
 });
 
 test("tapping the featured photo reveals the next arrow without changing the photo", async () => {
