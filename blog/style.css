@@ -141,7 +141,6 @@ html[data-journal-page] .layout:has(#content[data-refresh-pending]) > #sidebar {
 .note-title { font: 400 clamp(32px, 4.5vw, 52px)/1.05 var(--serif); margin: 7px 0 11px; letter-spacing: -.022em; }
 .notes-feed .note-row .note-text { font: 400 18px/1.62 Georgia, serif; margin-inline-end: 0; }
 .note-copy { min-width: 0; }
-.note-open { margin-top: 12px; }
 .note-page .layout { display: block; }
 .note-page #sidebar { display: none; }
 .note-detail-layout .article { width: 100%; min-width: 0; }
@@ -165,24 +164,30 @@ html[data-journal-page] .layout:has(#content[data-refresh-pending]) > #sidebar {
 .note-gallery:not([data-count="1"], [data-count="2"], [data-count="3"], [data-count="4"]) > .media-slot { aspect-ratio: 5 / 4; }
 .note-carousel { margin: 19px 0 4px; }
 .note-stage, .viewer-stage { position: relative; touch-action: pan-y pinch-zoom; }
-html[data-interactive] .note-gallery[data-carousel] {
+@media screen and (scripting: enabled) {
+.note-gallery[data-carousel] {
   display: block; position: relative; width: 100%; height: clamp(235px, 53vw, 478px);
   aspect-ratio: auto; margin: 0; border-radius: 0;
 }
-html[data-interactive] .note-gallery[data-carousel] > .media-slot {
+.note-gallery[data-carousel] > .media-slot {
   display: grid; position: absolute; inset: 0; place-items: center; aspect-ratio: auto;
   background: transparent; visibility: hidden; opacity: 0; transform: scale(.78);
   transition: transform .32s ease, opacity .28s ease, visibility .28s;
 }
-html[data-interactive] .note-gallery[data-carousel] > [data-position="current"] { visibility: visible; opacity: 1; transform: none; z-index: 2; }
-html[data-interactive] .note-gallery[data-carousel] > [data-position="previous"] { visibility: visible; opacity: .6; transform: translateX(-33%) scale(.79); z-index: 1; }
-html[data-interactive] .note-gallery[data-carousel] > [data-position="next"] { visibility: visible; opacity: .6; transform: translateX(33%) scale(.79); z-index: 1; }
-html[data-interactive] .note-gallery[data-carousel] :is(.media-slot, .zoom-image) { pointer-events: none; }
-html[data-interactive] .note-gallery[data-carousel] img {
+.note-gallery[data-carousel] > [data-position="current"],
+.note-gallery[data-carousel]:not([data-active]) > :first-child { visibility: visible; opacity: 1; transform: none; z-index: 2; }
+.note-gallery[data-carousel] > [data-position="previous"] { visibility: visible; opacity: .6; transform: translateX(-33%) scale(.79); z-index: 1; }
+.note-gallery[data-carousel] > [data-position="next"],
+.note-gallery[data-carousel]:not([data-active]) > :nth-child(2) { visibility: visible; opacity: .6; transform: translateX(33%) scale(.79); z-index: 1; }
+.note-gallery[data-carousel] > [data-position=""],
+.note-gallery[data-carousel]:not([data-active]) > :nth-child(n+3) { display: none; }
+.note-gallery[data-carousel] :is(.media-slot, .zoom-image) { pointer-events: none; }
+.note-gallery[data-carousel] img {
   position: static; width: auto; height: auto; max-width: 80%; max-height: 100%;
   object-fit: contain; border-radius: 7px; pointer-events: auto;
 }
-html[data-interactive] .note-gallery[data-carousel] .zoom-image { display: grid; place-items: center; grid-template-rows: minmax(0, 1fr); }
+.note-gallery[data-carousel] .zoom-image { display: grid; place-items: center; grid-template-rows: minmax(0, 1fr); }
+}
 .note-gallery:focus-visible, .note-gallery .zoom-image:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .note-carousel-controls { display: none; }
 html[data-interactive] .note-carousel-controls { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 32px; font: 13px/1.4 var(--sans); color: var(--muted); }
@@ -203,7 +208,7 @@ html:not([data-interactive]) .note-stage .gallery-arrow { display: none; }
   :is(.note-stage, .image-viewer):is(:hover, :focus-within) .gallery-arrow { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-interactive] .note-gallery[data-carousel] > .media-slot, .gallery-arrow { transition: none; }
+  .note-gallery[data-carousel] > .media-slot, .gallery-arrow { transition: none; }
 }
 .note-gallery .media-slot, .prose .note-gallery .media-slot {
   display: grid;
@@ -419,8 +424,8 @@ button:focus-visible { text-decoration: underline; text-underline-offset: .2em; 
   .article .prose { font: 11pt/1.5 Georgia, serif; }
   .article .prose p { margin: 0 0 .85em; }
   .article .prose img { width: auto; height: auto; max-width: 100%; max-height: 112mm; margin: 0 auto; border-radius: 0; }
-  html[data-interactive] .note-gallery[data-carousel] { display: grid; height: auto; }
-  html[data-interactive] .note-gallery[data-carousel] > .media-slot { position: relative; aspect-ratio: 5 / 4; visibility: visible; transform: none; opacity: 1; }
+  .note-gallery[data-carousel] { display: grid; height: auto; }
+  .note-gallery[data-carousel] > .media-slot { display: grid; position: relative; aspect-ratio: 5 / 4; visibility: visible; transform: none; opacity: 1; }
   html[data-interactive] .note-carousel-controls { display: none; }
   .article :is(.media-slot, blockquote, .video, tr) { break-inside: avoid; }
   .article .prose :is(h1, h2, h3, h4, h5, h6) { font: bold 14pt/1.25 Georgia, serif; margin: 1.35em 0 .42em; break-after: avoid; }

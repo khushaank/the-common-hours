@@ -7,7 +7,7 @@ const name = "common-hours-public-v1";
 const recent = new Map();
 const open = () => typeof caches === "undefined" ? null : caches.open(name).catch(() => null);
 
-export async function publicData(key, fetchData, maxAge = 45000) {
+export async function publicData(key, fetchData, maxAge = 45000, { fallback = true } = {}) {
   if (recent.has(key)) return recent.get(key);
   const task = (async () => {
     const cache = await open();
@@ -19,13 +19,9 @@ export async function publicData(key, fetchData, maxAge = 45000) {
     }
     let data;
     try {
-      if (!navigator.onLine) {
-        if (stored) return await stored.json();
-        throw new Error("This content isn’t saved for offline reading.");
-      }
       data = await fetchData();
     } catch (error) {
-      if (stored && (!error.status || error.status >= 500)) {
+      if (fallback && stored && (!error.status || error.status >= 500)) {
         try { return await stored.json(); } catch { /* Keep the original error. */ }
       }
       throw error;

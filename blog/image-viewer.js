@@ -163,21 +163,42 @@ export function setupNoteCarousels() {
 }
 
 const queuedNoteImages = new WeakSet();
+const queuedCarousels = new WeakSet();
+
+function nearViewport(elements, reveal) {
+  if (typeof IntersectionObserver !== "function") {
+    for (const element of elements) reveal(element);
+    return;
+  }
+  const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting && entry.target.isConnected) continue;
+      observer.unobserve(entry.target);
+      if (entry.target.isConnected) reveal(entry.target);
+    }
+  }, { rootMargin: "250px" });
+  for (const element of elements) observer.observe(element);
+}
 
 export async function loadCarousels(target, read, loadImage, readCover = () => null) {
-  const galleries = [...target.querySelectorAll("[data-carousel-id], [data-carousel-cover]")];
+  const galleries = [...target.querySelectorAll("[data-carousel-id], [data-carousel-cover]")]
+    .filter(gallery => !queuedCarousels.has(gallery));
   const requests = new Map();
-  await Promise.allSettled(galleries.map(async gallery => {
+  for (const gallery of galleries) queuedCarousels.add(gallery);
+  nearViewport(galleries, async gallery => {
     const id = gallery.dataset.carouselId || gallery.dataset.carouselCover;
-    if (!requests.has(id)) requests.set(id, read(id));
-    const [photos, coverId] = await Promise.all([requests.get(id), gallery.dataset.carouselCover ? readCover(id) : null]);
-    if (!gallery.isConnected) return;
-    const cover = gallery.dataset.carouselCover && coverPhoto(photos, coverId);
-    const identity = gallery.dataset.carouselCover ? cover?.id || "" : photos.map(photo => photo.id).join(",");
-    if (gallery.dataset.photos === identity) return;
-    gallery.dataset.photos = identity;
-    gallery.innerHTML = gallery.dataset.carouselCover ? (cover ? photoSlot(cover) : "") : photoGallery(photos);
-  }));
+    try {
+      if (!requests.has(id)) requests.set(id, read(id));
+      const [photos, coverId] = await Promise.all([requests.get(id), gallery.dataset.carouselCover ? readCover(id) : null]);
+      if (!gallery.isConnected) return;
+      const cover = gallery.dataset.carouselCover && coverPhoto(photos, coverId);
+      const identity = gallery.dataset.carouselCover ? cover?.id || "" : photos.map(photo => photo.id).join(",");
+      if (gallery.dataset.photos === identity) return;
+      gallery.dataset.photos = identity;
+      gallery.innerHTML = gallery.dataset.carouselCover ? (cover ? photoSlot(cover) : "") : photoGallery(photos);
+      await loadNoteImages(gallery, loadImage);
+    } catch { /* Keep any published photos when a refresh fails. */ }
+  });
   await loadNoteImages(target, loadImage);
 }
 
@@ -200,16 +221,6 @@ export async function loadNoteImages(target, loadImage) {
     if (gallery && !slot.dataset.position) slot.addEventListener("show-note-photo", render, { once: true });
     else render();
   };
-  const observer = typeof IntersectionObserver === "function" ? new IntersectionObserver(entries => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting && entry.target.isConnected) continue;
-      observer.unobserve(entry.target);
-      reveal(entry.target);
-    }
-  }, { rootMargin: "250px" }) : null;
-  for (const slot of slots) {
-    queuedNoteImages.add(slot);
-    if (observer) observer.observe(slot);
-    else reveal(slot);
-  }
+  for (const slot of slots) queuedNoteImages.add(slot);
+  nearViewport(slots, reveal);
 }

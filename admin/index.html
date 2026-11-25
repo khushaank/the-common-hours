@@ -157,6 +157,7 @@
                 </div>
               </div>
               <div class="editor-body" id="write-panel" hidden>
+                <label class="writing-label" for="entry-text"><span class="entry-only">Markdown</span><span class="note-only">Note body</span></label>
                 <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
                 <div id="note-compose-tools" class="actions">
                   <button type="button" id="note-add-image" title="Add photo (@image)">Add photo</button>
@@ -165,8 +166,7 @@
                 <ul id="note-attachments" aria-label="Note attachments" hidden></ul>
               </div>
               <section class="editor-preview" id="entry-preview" aria-label="Entry preview">
-                <p id="preview-meta" class="muted"></p>
-                <p id="preview-excerpt" class="muted"></p>
+                <div class="writing-heading"><span class="writing-label">Entry body</span><p id="preview-meta" class="muted"></p></div>
                 <div class="prose" id="preview-body" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Entry body" aria-controls="command-menu" data-placeholder="Start writing…"></div>
                 <p id="preview-prompt" hidden></p>
               </section>
@@ -179,7 +179,7 @@
           </form>
       </section>
       <section id="site-panel" data-desk-panel hidden>
-        <div class="section-heading"><h1>Featured Photo</h1></div>
+        <div class="section-heading"><h1>Featured Photo</h1><button type="button" id="refresh-featured">Refresh</button></div>
         <form id="photo-form" class="card photo-workspace" method="post">
           <div class="photo-main">
           <div id="photo-upload" class="photo-upload">
@@ -223,7 +223,7 @@
         </div>
       </section>
       <section id="references-panel" data-desk-panel hidden>
-        <div class="section-heading"><div class="help-row"><h1>References</h1><span class="field-help"><button type="button" aria-label="Help with References" aria-describedby="reference-help">i</button><span id="reference-help" role="tooltip">Save links to external sites or specific public pages. Type @ in the entry body to find a saved shortcut or published entry.</span></span></div><button type="button" class="primary" id="add-reference" aria-haspopup="dialog" aria-controls="reference-dialog">Add reference</button></div>
+        <div class="section-heading"><div class="help-row"><h1>References</h1><span class="field-help"><button type="button" aria-label="Help with References" aria-describedby="reference-help">i</button><span id="reference-help" role="tooltip">Save links to external sites or specific public pages. Type @ in the entry body to find a saved shortcut or published entry.</span></span></div><div class="actions"><button type="button" id="refresh-references">Refresh</button><button type="button" class="primary" id="add-reference" aria-haspopup="dialog" aria-controls="reference-dialog">Add reference</button></div></div>
         <div id="reference-status" role="status"></div>
         <section class="card reference-directory" aria-labelledby="saved-references-title">
           <h2 id="saved-references-title">Saved references</h2>
@@ -232,7 +232,7 @@
         </section>
       </section>
       <section id="stats-panel" data-desk-panel hidden>
-        <div class="section-heading"><h1>Dashboard</h1></div>
+        <div class="section-heading"><h1>Dashboard</h1><button type="button" id="refresh-dashboard">Refresh</button></div>
         <section class="card dashboard-writing" aria-labelledby="dashboard-writing-heading">
           <div class="body-heading">
             <h2 id="dashboard-writing-heading">Writing</h2>

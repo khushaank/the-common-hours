@@ -91,27 +91,24 @@ test("tapping the featured photo reveals the next arrow without changing the pho
   assert.equal(view.caption.textContent, "First");
 });
 
-test("startup notices appear on actual script failure or connection loss and can be closed", async () => {
+test("startup notices appear on script failure but stay hidden on a saved page", async () => {
   const code = await readFile(new URL("./blog/boot.js", import.meta.url), "utf8");
   const handlers = new Map();
   const listen = prefix => (name, handler) => handlers.set(prefix + name, handler);
   const label = {};
   const notice = { hidden: true, querySelector: selector => selector === "p" ? label : { addEventListener: listen("close:") } };
   runInNewContext(code, {
-    navigator: { onLine: true }, window: { addEventListener: listen("window:") },
+    navigator: { onLine: false }, window: { addEventListener: listen("window:") },
     document: { querySelector: selector => selector === "#site-notice" ? notice : { addEventListener: listen("script:") },
-      documentElement: { hasAttribute: () => false } },
+      documentElement: { hasAttribute: name => name === "data-offline-copy" } },
   });
   assert.equal(notice.hidden, true);
-  handlers.get("window:offline")();
-  assert.match(label.textContent, /offline/);
+  assert.equal(handlers.has("window:offline"), false);
+  handlers.get("window:error")({ target: { id: "journal-start" } });
+  assert.equal(notice.hidden, false);
+  assert.match(label.textContent, /JavaScript could not load/);
   handlers.get("close:click")();
   assert.equal(notice.hidden, true);
-  handlers.get("window:online")();
-  handlers.get("window:offline")();
-  assert.equal(notice.hidden, false);
-  handlers.get("window:error")({ target: { id: "journal-start" } });
-  assert.match(label.textContent, /JavaScript could not load/);
 });
 
 test("hero stays hidden during a delayed request, then shows the decoded photo directly", async () => {

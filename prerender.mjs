@@ -5,7 +5,7 @@ import { readNote } from "./shared/note.js";
 import { carouselSlot, coverPhoto } from "./shared/carousel.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
-import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
+import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNoteNavigation, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
 import { seriesDirectory, seriesMembership, seriesNavigation } from "./shared/series.js";
 import { startIntroduction, startEmpty } from "./blog/reading-copy.js";
 import { photoText, photoTitle, publicPhoto } from "./shared/photo-text.js";
@@ -219,6 +219,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     page({ view }, view === "privacy" ? "Privacy" : "Terms", `<article class="legal">${body}</article>`, `Read the ${view === "privacy" ? "privacy policy" : "terms"} for The Common Hours.`, "policy-page");
   }
   page({ view: "topics" }, "All topics", renderTopics(topicCounts), "Browse the journal by topic.");
+  const notes = posts.filter(post => post.is_note);
   for (const post of posts) {
     if (!/^[a-z0-9-]{1,120}$/.test(post.slug)) throw new Error("Invalid published entry slug.");
     const membership = seriesMembership(post, posts);
@@ -227,7 +228,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;
     const postRevision = publicationRevision([post], true);
     if (post.is_note) {
-      page({ post: post.slug }, post.title, renderNoteDetail(post, date, notePicture), post.excerpt || post.title, "article-page note-page");
+      page({ post: post.slug }, post.title, renderNoteDetail(post, date, notePicture) + renderNoteNavigation(notes, post), post.excerpt || post.title, "article-page note-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>

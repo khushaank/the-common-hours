@@ -381,7 +381,9 @@ test("Dashboard, Entries, and the editor are separate screens with the correct n
   const nav = ["stats", "entries", "notes", "comments"].map(name => ({ dataset: { section: name }, setAttribute(key, value) { this[key] = value; } }));
   const title = element();
   let writing;
+  let referenceLoads = 0;
   const show = runInNewContext(deskSource.slice(deskSource.indexOf("function showSection("), deskSource.indexOf("async function loadPrivacyRequests")) + "\nshowSection", {
+    openedSections: new Set(), loadReferences() { referenceLoads++; },
     sections: nav, listScreen: "entries", isListScreen: section => ["entries", "notes"].includes(section),
     entryType: element(), entryFilter: element(), newPost: element(), newNote: element(), postList: element(), search: element(), renderPostList() {},
     entryListScroll: 0, updateDeskAddress() {}, window: { scrollY: 240, scrollTo() {} }, document: { querySelector: selector => selector === "#entries-panel" ? panels[1] : title, querySelectorAll: () => panels, body: { classList: { toggle(name, value) { writing = value; } } } },
@@ -397,6 +399,21 @@ test("Dashboard, Entries, and the editor are separate screens with the correct n
   assert.equal(nav[2]["aria-pressed"], "true");
   show("compose");
   assert.equal(nav[2]["aria-pressed"], "true");
+  assert.equal(referenceLoads, 1);
+});
+
+test("desk navigation loads private lists only once per tab", () => {
+  const calls = [];
+  const inbox = {};
+  const open = runInNewContext(deskSource.slice(deskSource.indexOf("function openSection("), deskSource.indexOf("async function restoreDeskSection")) + "\nopenSection", {
+    openedSections: new Set(), showSection() {}, inbox,
+    photoTools: { loadPhoto() { calls.push("site"); } },
+    loadPrivacyRequests() { calls.push("inbox"); }, openComments() { calls.push("comments"); },
+  });
+  for (let visit = 0; visit < 3; visit++) {
+    for (const section of ["entries", "site", "inbox", "comments"]) open(section);
+  }
+  assert.deepEqual(calls, ["site", "inbox", "comments"]);
 });
 
 test("section links retain their screen on refresh and preserve private draft addresses", () => {
@@ -483,12 +500,14 @@ test("publishing recency uses published dates, ignores future entries, and handl
   assert.deepEqual(posts.map(post => post.id), ["old", "draft", "last", "future"]);
 });
 
-test("Dashboard sums daily page views for the busiest day without requesting hourly data", async () => {
+test("Dashboard sums daily traffic and waits for Refresh to fetch another period", async () => {
   const nodes = new Map();
   const query = selector => { if (!nodes.has(selector)) nodes.set(selector, element()); return nodes.get(selector); };
   query("#stats-period").value = "30";
   query("#stats-report").querySelector = () => query("chart");
   const paths = [];
+  let changePeriod;
+  query("#stats-period").addEventListener = (_, listener) => { changePeriod = listener; };
   const setup = runInNewContext(statsSource.replace(/^import[^\n]+\n/, "").replaceAll("export ", "") + "\nsetupStats", {
     document: { querySelector: query, createElement: element }, journalToday: () => "2026-11-16", escape: value => value,
     allRows: (api, path) => api(path), missingFeature: () => false,
@@ -505,6 +524,14 @@ test("Dashboard sums daily page views for the busiest day without requesting hou
   assert.match(query("#stats-report").innerHTML, /<details class="traffic-table"><summary>Most-read entries<\/summary>/);
   assert.equal(paths.length, 1);
   assert.match(paths[0], /^traffic\?/);
+  stats.renderPublishing();
+  query("#stats-period").value = "7";
+  changePeriod();
+  assert.equal(paths.length, 1);
+  assert.match(query("#stats-status").textContent, /Choose Refresh/);
+  await stats.load();
+  assert.equal(paths.length, 2);
+  assert.match(paths[1], /day=gte\.2026-11-10/);
 });
 
 test("Comments includes published and pending comments and filters them independently of Inbox", async () => {
@@ -517,6 +544,7 @@ test("Comments includes published and pending comments and filters them independ
   let requests = 0;
   const { loadComments, renderComments } = runInNewContext(deskSource.slice(deskSource.indexOf("let commentRows"), deskSource.indexOf("async function openDesk(")) + "\n({loadComments,renderComments})", {
     comments, commentsRevision: 0, posts: [{ id: "one", title: "Market" }], api() {},
+    updateModerationCount() {},
     allRows: async () => { requests++; return rows; },
     document: { querySelector: selector => selector === "#comment-filter" ? filter : summary, createElement: element },
   });

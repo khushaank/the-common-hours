@@ -35,6 +35,7 @@ export function setupStats(api, getPosts, editEntry) {
   let latest;
   let revision = 0;
   let loaded = false;
+  let shownPeriod;
   lastEntry.addEventListener("click", () => { if (latest) editEntry(latest, lastEntry); });
 
   function renderPublishing() {
@@ -118,6 +119,7 @@ export function setupStats(api, getPosts, editEntry) {
     const selectedPeriod = period.value;
     const days = periodDays(selectedPeriod, journalToday());
     renderPublishing();
+    period.disabled = true;
     report.setAttribute("aria-busy", "true");
     skeleton.hidden = loaded;
     status.textContent = loaded ? "Updating traffic…" : "Loading traffic…";
@@ -126,6 +128,7 @@ export function setupStats(api, getPosts, editEntry) {
       if (revision === loading) {
         render(days, rows, selectedPeriod);
         loaded = true;
+        shownPeriod = selectedPeriod;
       }
     } catch (error) {
       if (revision !== loading) return;
@@ -134,19 +137,17 @@ export function setupStats(api, getPosts, editEntry) {
     } finally {
       if (revision === loading) {
         skeleton.hidden = true;
+        period.disabled = false;
         report.removeAttribute("aria-busy");
       }
     }
   }
 
-  period.addEventListener("change", load);
+  period.addEventListener("change", () => {
+    status.textContent = period.value === shownPeriod ? "" : "Choose Refresh to load traffic for this period.";
+  });
   return {
     load,
-    clear() {
-      revision++;
-      loaded = false;
-      report.replaceChildren();
-      status.textContent = "";
-    },
+    renderPublishing,
   };
 }

@@ -2,7 +2,7 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
+import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNoteNavigation, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { articleTopics } from "./text.js";
@@ -28,7 +28,6 @@ const isJournal = document.documentElement.classList.contains("home-page");
 
 const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo";
-const offline = () => !navigator.onLine || document.documentElement.hasAttribute("data-offline-copy");
 const currentNav = ["archive", "series", "topics"].includes(view) || month ? "archive" :
   view === "notes" || document.documentElement.classList.contains("note-page") ? "notes" : view === "start" ? "start" : "journal";
 function setCurrentNav(name) {
@@ -67,7 +66,8 @@ const publicCarouselCover = id => publicData("carousel-cover:" + id, async () =>
 
 async function loadPublicPosts() {
   if (demo) return [];
-  return publicData("posts", fetchPublicPosts, 0);
+  const hasPublishedCopy = content.dataset.prerendered && content.dataset.refreshPending === undefined;
+  return publicData("posts", fetchPublicPosts, 0, { fallback: !hasPublishedCopy });
 }
 
 async function fetchPublicPosts() {
@@ -85,7 +85,7 @@ async function fetchPublicPosts() {
   }
 }
 
-function loadBody(currentSlug) {
+function loadBody(currentSlug, maxAge) {
   return publicData("post:" + currentSlug, async () => {
     const read = select => get("posts?" + new URLSearchParams({ select, slug: "eq." + currentSlug, published: "eq.true" }));
     try { return (await read("body,reader_prompt"))[0] || null; }
@@ -93,7 +93,7 @@ function loadBody(currentSlug) {
       if (!missingColumn(error)) throw error;
       return (await read("body"))[0] || null;
     }
-  });
+  }, maxAge, { fallback: maxAge !== 0 || !content.dataset.prerendered || content.dataset.refreshPending !== undefined });
 }
 
 function saveLatestForOffline(posts) {
@@ -174,7 +174,7 @@ async function renderPost(posts, index, firstBody) {
   }
   if (!demo) {
     const prefetched = post.slug === slug && firstBody ? await firstBody : undefined;
-    const detail = prefetched === undefined ? await loadBody(post.slug) : prefetched;
+    const detail = prefetched === undefined ? await loadBody(post.slug, 0) : prefetched;
     if (!detail) return renderPost([], 0);
     Object.assign(post, detail);
   }
@@ -194,9 +194,10 @@ async function renderPost(posts, index, firstBody) {
   if (post.is_note) {
     if (!retain) content.innerHTML = renderNoteDetail(post, dateLabel);
     const notes = posts.filter(item => item.is_note);
-    const position = notes.indexOf(post);
-    content.querySelector(".note-detail-layout").insertAdjacentHTML("afterend",
-      `<nav class="post-nav" aria-label="Adjacent notes">${nav(notes[position + 1], "← Older note")}${nav(notes[position - 1], "Newer note →")}</nav>`);
+    const navigation = renderNoteNavigation(notes, post);
+    const existingNav = content.querySelector(".note-detail-layout + .post-nav");
+    if (existingNav) existingNav.outerHTML = navigation;
+    else content.querySelector(".note-detail-layout").insertAdjacentHTML("afterend", navigation);
     const { restoreArticleAnchors } = await import("./reading.js");
     restoreArticleAnchors(content.querySelector("#entry-body"));
     recordView("post", post.id);
@@ -332,10 +333,28 @@ async function start() {
     recordView(view);
     return;
   }
-  const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug).catch(() => undefined) : null;
+  const body = !view && slug && !demo && /^[a-z0-9-]{1,120}$/.test(slug) ? loadBody(slug, 0).catch(() => undefined) : null;
   const posts = await loadPublicPosts();
   const unchanged = content.dataset.refreshPending === undefined &&
     document.querySelector("#public-pages")?.dataset.publication === publicationRevision(posts);
+  if (view === "notes") {
+    document.title = "Notes - The Common Hours";
+    if (!unchanged) {
+      const currentFeed = content.querySelector(".notes-feed");
+      if (currentFeed && content.dataset.refreshPending === undefined) {
+        const template = document.createElement("template");
+        template.innerHTML = renderNotes(posts, dateLabel);
+        const currentNotes = new Map([...currentFeed.querySelectorAll(".note-row")].map(note =>
+          [note.querySelector(".note-permalink").getAttribute("href"), note]));
+        for (const note of template.content.querySelectorAll(".note-row")) {
+          const current = currentNotes.get(note.querySelector(".note-permalink").getAttribute("href"));
+          if (current?.dataset.publication === note.dataset.publication) note.replaceWith(current);
+        }
+        currentFeed.replaceWith(template.content);
+      } else content.innerHTML = renderNotes(posts, dateLabel);
+    }
+    return;
+  }
   if (unchanged && !slug) {
     if (isJournal) {
       saveLatestForOffline(posts);
@@ -352,11 +371,6 @@ async function start() {
       group.open = true;
       group.scrollIntoView({ block: "nearest" });
     }
-    return;
-  }
-  if (view === "notes") {
-    document.title = "Notes - The Common Hours";
-    content.innerHTML = renderNotes(posts, dateLabel);
     return;
   }
   if (view === "start" || series) {
@@ -400,26 +414,25 @@ async function load() {
   content.setAttribute("aria-busy", "true");
   document.querySelector("#refresh-status")?.remove();
   try {
-    if (content.dataset.prerendered && content.dataset.refreshPending === undefined && offline()) return;
     await start();
-    if (view !== "review") await loadCarousels(content.parentElement, publicCarousel, publicImage, publicCarouselCover);
+    if (view !== "review") void loadCarousels(content.parentElement, publicCarousel, publicImage, publicCarouselCover).catch(() => {});
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
-    if (content.dataset.prerendered) {
+    if (content.dataset.prerendered && content.dataset.refreshPending === undefined) {
+      if (document.documentElement?.hasAttribute("data-offline-copy")) return;
       const status = document.createElement("div");
       status.id = "refresh-status";
       status.className = "unexpected-error";
       content.after(status);
       showFailure(status, "The latest updates could not load. You can still read this published copy.", load, "Try again", () => status.remove());
-    } else showFailure(content, navigator.onLine ? "The journal could not load. Check your connection and try again." :
-      "This page hasn’t been saved on this device. Reconnect to open it.", load, "Try again", true);
+    } else showFailure(content, "The journal could not load. Try again.", load, "Try again", true);
   } finally {
     delete content.dataset.refreshPending;
     content.setAttribute("aria-busy", "false");
   }
 }
 
-if (isJournal && !offline()) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {
+if (isJournal && !document.documentElement.hasAttribute("data-offline-copy")) void import("./photos.js").then(({ startSlideshow }) => startSlideshow(get, demo)).catch(() => {
   document.querySelector("#photo-caption")?.removeAttribute("aria-busy");
   const status = document.querySelector("#featured-photo-status");
   status.hidden = false;

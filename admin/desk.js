@@ -139,6 +139,7 @@ let editorialFields = true;
 let entriesRevision = 0;
 let commentsRevision = 0;
 let referencesRevision = 0;
+const openedSections = new Set();
 let entryListScroll = 0;
 let listScreen = "entries";
 
@@ -844,12 +845,6 @@ document.querySelector("#refresh-entries").addEventListener("click", event => ru
   button?.scrollIntoView({ block: "nearest" });
 }));
 
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden || !session || busy) return;
-  void refreshEntries();
-  if (!document.querySelector("#stats-panel").hidden) void loadModerationCount();
-});
-
 let commentRows = [];
 let supportsIgnore = true;
 
@@ -868,6 +863,7 @@ async function loadComments() {
   if (revision !== commentsRevision) return;
   supportsIgnore = canIgnore;
   commentRows = rows;
+  updateModerationCount();
   renderComments();
 }
 
@@ -917,6 +913,7 @@ function renderComments() {
       const [changed] = await api(path, { method: "PATCH", body, prefer: "return=representation" });
       if (!changed) throw new Error("The comment is unavailable.");
       Object.assign(row, body);
+      updateModerationCount();
       renderComments();
       document.querySelector("#comment-summary").textContent = message;
       document.querySelector("#refresh-comments").focus({ preventScroll: true });
@@ -930,6 +927,7 @@ function renderComments() {
         const deleted = await api(path, { method: "DELETE", prefer: "return=representation" });
         if (!deleted.length) throw new Error("The comment is unavailable.");
         commentRows = commentRows.filter(item => item.id !== row.id);
+        updateModerationCount();
         renderComments();
         document.querySelector("#comment-summary").textContent = "Comment deleted.";
         document.querySelector("#refresh-comments").focus({ preventScroll: true });
@@ -955,7 +953,6 @@ async function openDesk() {
     throw new Error("This account does not have access to the writing desk.");
   }
   draftOwner = allowed[0].user_id;
-  void loadReferences();
   await loadPosts();
   const section = deskSection();
   const address = composeAddress(section);
@@ -1486,6 +1483,10 @@ function updateDeskAddress(section, navigate = false) {
 }
 
 function showSection(section, navigate = false) {
+  if ((section === "compose" || section === "references") && !openedSections.has("references")) {
+    openedSections.add("references");
+    void loadReferences();
+  }
   if (!document.querySelector("#entries-panel").hidden) entryListScroll = window.scrollY;
   if (isListScreen(section) && listScreen !== section) {
     listScreen = section;
@@ -1552,11 +1553,6 @@ async function loadPrivacyRequests() {
   }
 }
 
-async function openInbox() {
-  inbox.textContent = "Loading privacy requests…";
-  await loadPrivacyRequests();
-}
-
 async function openComments() {
   comments.textContent = "Loading comments…";
   await loadComments().catch(() => showFailure(comments, "Comments could not load.", openComments));
@@ -1567,6 +1563,16 @@ const moderationQueue = document.querySelector("#moderation-queue");
 const pendingCount = document.querySelector("#pending-comment-count");
 const pendingComments = "comments?select=id&approved=eq.false&post_id=not.is.null";
 let moderationRevision = 0;
+
+function showModerationCount(count) {
+  pendingCount.textContent = count + (count === 1 ? " pending comment" : " pending comments");
+}
+
+function updateModerationCount() {
+  moderationRevision++;
+  moderationQueue.removeAttribute("aria-busy");
+  showModerationCount(commentRows.filter(row => row.post_id && !row.approved && !row.ignored).length);
+}
 
 moderationQueue.addEventListener("click", () => {
   if (busy || !canLeaveDraft()) return;
@@ -1611,7 +1617,7 @@ async function loadModerationCount() {
       if (!missingColumn(error)) throw error;
       count = await api(pendingComments, options);
     }
-    if (revision === moderationRevision) pendingCount.textContent = count + (count === 1 ? " pending comment" : " pending comments");
+    if (revision === moderationRevision) showModerationCount(count);
   } catch {
     if (revision === moderationRevision) pendingCount.textContent = "View pending comments";
   } finally {
@@ -1619,18 +1625,28 @@ async function loadModerationCount() {
   }
 }
 
-async function openStats() {
+const refreshDashboard = document.querySelector("#refresh-dashboard");
+async function openStats(refreshData = false) {
   renderDraftQueue();
-  void loadModerationCount();
+  if (stats && !refreshData) {
+    stats.renderPublishing();
+    return;
+  }
+  if (!refreshData && openedSections.has("stats")) return;
+  if (refreshDashboard.disabled) return;
+  openedSections.add("stats");
+  refreshDashboard.disabled = true;
   try {
     const { setupStats } = await import("./stats.js");
-    if (!session || document.querySelector("#stats-panel").hidden) return;
+    if (!session) return;
     stats ??= setupStats(api, () => posts, editEntry);
-    await stats.load();
+    await Promise.all([loadModerationCount(), stats.load(), refreshData && refreshEntries().then(() => stats.renderPublishing())]);
   } catch {
     document.querySelector("#stats-placeholder").hidden = true;
     document.querySelector("#dashboard-latest").removeAttribute("aria-busy");
-    showFailure(document.querySelector("#stats-status"), "The dashboard could not open.", openStats);
+    showFailure(document.querySelector("#stats-status"), "The dashboard could not open.", () => openStats(true));
+  } finally {
+    refreshDashboard.disabled = false;
   }
 }
 
@@ -1678,15 +1694,22 @@ async function openMedia() {
   }
 }
 
-document.querySelector("#refresh-privacy").addEventListener("click", loadPrivacyRequests);
+document.querySelector("#refresh-privacy").addEventListener("click", event => run(event.currentTarget, loadPrivacyRequests));
+document.querySelector("#refresh-references").addEventListener("click", event => run(event.currentTarget, loadReferences));
+document.querySelector("#refresh-featured").addEventListener("click", event => run(event.currentTarget, () => photoTools.loadPhoto({ preserve: true })));
+refreshDashboard.addEventListener("click", () => openStats(true));
 function openSection(section, navigate = false) {
   showSection(section, navigate);
+  if (section === "stats") return void openStats();
+  if (section === "media") return void openMedia();
+  if (openedSections.has(section)) return;
+  openedSections.add(section);
   if (section === "site") void photoTools.loadPhoto();
-  if (section === "inbox") void openInbox();
+  if (section === "inbox") {
+    inbox.textContent = "Loading privacy requests…";
+    void loadPrivacyRequests();
+  }
   if (section === "comments") void openComments();
-  if (section === "stats") void openStats();
-  if (section === "media") void openMedia();
-  if (section === "references") void loadReferences();
 }
 
 async function restoreDeskSection() {

@@ -128,7 +128,6 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   let attachmentId;
   let linkRange;
   let library;
-  let previewRevision = 0;
   let previousBody;
   let displayMarkdown = true;
   let note = false;
@@ -647,8 +646,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       button.disabled = cancel.disabled = false;
     }
   });
-  async function renderPreview() {
-    const revision = ++previewRevision;
+  function renderPreview() {
     const fields = editor.elements;
     const published = fields.namedItem("published_on").value;
     const date = published ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
@@ -663,11 +661,8 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
         previousBody = value;
         renderText(previewBody, value, image, { markdown: displayMarkdown, editable: true });
       }
-      const excerpt = fields.namedItem("excerpt").value || (value && await entryExcerpt(value, fields.namedItem("title").value, displayMarkdown));
-      if (revision !== previewRevision || previewPanel.hidden) return;
-      document.querySelector("#preview-excerpt").textContent = excerpt;
     } catch {
-      if (revision === previewRevision) status.textContent = "Preview could not load. Open Markdown to continue.";
+      status.textContent = "Preview could not load. Open Markdown to continue.";
     }
   }
 
@@ -679,7 +674,6 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     previewMode.setAttribute("aria-pressed", String(show));
     if (!show) displayMarkdown = true;
     if (show) void renderPreview();
-    else previewRevision++;
   }
 
   for (const button of [writeMode, previewMode]) {
@@ -719,7 +713,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       body.maxLength = note ? 500 : 99960;
       body.required = !note;
       body.placeholder = note ? "Write a note…" : "Start writing…";
-      body.setAttribute("aria-label", note ? "Note text" : "Entry body in Markdown");
+      body.setAttribute("aria-label", note ? "Note body" : "Entry body in Markdown");
       if (note) body.setAttribute("aria-description", "Type @image for photos, @carousel for a reusable carousel, or / to link a published article.");
       else body.removeAttribute("aria-description");
       setPreview(!note);

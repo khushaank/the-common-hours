@@ -189,7 +189,7 @@ test("offline documents retain their exact route, and live requests revalidate H
   }
 });
 
-test("the first online visit saves recent articles and offers them on the offline screen", async () => {
+test("the reader reopens the latest saved homepage and still offers saved articles for uncached routes", async () => {
   const entry = "entry-first-entry.html";
   const articleUrl = "https://example.com/" + entry;
   const imageUrl = "https://example.com/media-" + imageId + ".jpg";
@@ -219,6 +219,7 @@ test("the first online visit saves recent articles and offers them on the offlin
     self: { registration: { scope: "https://example.com/" }, addEventListener: (name, handler) => { handlers[name] = handler; }, skipWaiting() {} },
     fetch: async request => {
       if (!online) throw new Error("Offline");
+      if (request.url === "https://example.com/") return new Response("<html><h1>Latest entries</h1><p>Latest published journal</p></html>");
       if (request.url === articleUrl || request.url.endsWith("entry-read-first.html")) return new Response(
         '<html><title>Saved &amp; readable - The Common Hours</title><p>Original article</p><img src="media-' + imageId + '.jpg"></html>');
       assert.equal(request.url, imageUrl);
@@ -231,22 +232,25 @@ test("the first online visit saves recent articles and offers them on the offlin
   handlers.message({ data: "save-public-page", source: { url: "https://example.com/entry-read-first.html" },
     waitUntil: task => { install = task; } });
   await install;
-  online = false;
   async function request(path, options) {
     let result;
     handlers.fetch({ request: { url: "https://example.com" + path, method: "GET", ...options },
-      waitUntil() {}, respondWith: task => { result = task; } });
+      waitUntil: task => { install = task; }, respondWith: task => { result = task; } });
     return result;
   }
+  await request("/", { mode: "navigate" });
+  await install;
+  online = false;
   const offlineHome = await request("/", { mode: "navigate" });
-  const policy = offlineHome.headers.get("content-security-policy");
+  assert.match(await offlineHome.text(), /<html data-offline-copy><h1>Latest entries<\/h1><p>Latest published journal/);
+  const fallback = await request("/entry-not-saved", { mode: "navigate" });
+  const policy = fallback.headers.get("content-security-policy");
   assert.match(policy, /default-src 'none';.*font-src 'self'/);
   assert.doesNotMatch(policy, /unsafe-eval|script-src/);
-  const home = await offlineHome.text();
-  assert.match(home, /You’re offline/);
-  assert.match(home, /Available offline/);
-  assert.match(home, /href="https:\/\/example\.com\/entry-first-entry\.html">Saved &amp; readable/);
-  assert.match(home, /href="https:\/\/example\.com\/entry-read-first\.html"/);
+  const unavailable = await fallback.text();
+  assert.match(unavailable, /This page is unavailable/);
+  assert.match(unavailable, /href="https:\/\/example\.com\/entry-first-entry\.html">Saved &amp; readable/);
+  assert.match(unavailable, /href="https:\/\/example\.com\/entry-read-first\.html"/);
   assert.match(await (await request("/" + entry, { mode: "navigate" })).text(), /<html data-offline-copy>.*Original article/);
   assert.equal(await (await request(new URL(imageUrl).pathname, { destination: "image" })).text(), "Photo");
 });
@@ -308,6 +312,8 @@ test("note photos and references appear on notes and archive pages, with carouse
     assert.equal(html.includes('data-carousel role="group"'), file !== "archive.html");
   }
   const homepage = pages.get("index.html");
+  assert.doesNotMatch(pages.get("notes.html"), />Open note</);
+  assert.match(pages.get("entry-old-0.html"), /href="entry-photo-note"><span>Newer note →<\/span>/);
   assert.match(homepage, /<h1>Latest entries<\/h1>[\s\S]*?href="entry-first-entry"/);
   assert.match(homepage, new RegExp(`<img src="${thumb}" width="144" height="144"`));
   assert.match(homepage, /href="notes">View all notes/);

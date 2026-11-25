@@ -56,10 +56,9 @@ export function noteCard(post, dateLabel, picture, carousel = false) {
   const date = `<p class="meta"><a class="note-permalink" href="${permalink}" aria-label="${escape("Read note: " + post.title)}">${noteNumber(post)}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>`;
   if (!carousel) return `<article class="entry journal-note">${date}${noteText(text)}${noteExtras(post.body, picture)}</article>`;
   const title = noteHeading(post, text);
-  return `<article class="entry journal-note note-row"><div class="note-copy">${date}
+  return `<article class="entry journal-note note-row" data-publication="${publicationRevision([post], true)}"><div class="note-copy">${date}
     ${title ? `<h2 class="note-title"><a href="${permalink}">${escape(title)}</a></h2>` : ""}
-    ${noteText(text)}${noteExtras(post.body, picture, true)}
-    <a class="back note-open" href="${permalink}">Open note</a></div></article>`;
+    ${noteText(text)}${noteExtras(post.body, picture, true)}</div></article>`;
 }
 
 function noteHeading(post, text) {
@@ -78,6 +77,13 @@ export function renderNoteDetail(post, dateLabel, picture) {
     <div class="note-detail-layout"><article class="article journal-note" data-publication="${publicationRevision([post], true)}">
       <p class="meta">${noteNumber(post)}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time> <span class="byline">By Ellis Vale</span></p>
       <h1>${escape(title)}</h1><div class="prose" id="entry-body">${noteBody(post.body, picture, true)}</div></article></div>`;
+}
+
+export function renderNoteNavigation(notes, post) {
+  const index = notes.indexOf(post);
+  const link = (note, label) => note
+    ? `<a href="${escape(pageHref({ post: note.slug }))}"><span>${label}</span>${escape(note.title)}</a>` : "<div></div>";
+  return `<nav class="post-nav" aria-label="Adjacent notes">${link(notes[index + 1], "← Older note")}${link(notes[index - 1], "Newer note →")}</nav>`;
 }
 
 export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot, cover = () => null) {

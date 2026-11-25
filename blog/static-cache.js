@@ -25,10 +25,14 @@ async function store(cacheKey, request, response, limit) {
   for (const oldest of keys.slice(0, Math.max(0, keys.length - limit))) await cache.delete(oldest);
 }
 
-async function loadMedia(request) {
+async function loadMedia(request, waitUntil) {
   const response = await checkNetwork(request);
   if (response.status >= 500) throw new Error("Photo unavailable");
-  if (response.ok) await store(imageCache, request, response.clone(), 36).catch(() => {});
+  if (response.ok) {
+    const saved = store(imageCache, request, response.clone(), 36).catch(() => {});
+    if (waitUntil) waitUntil(saved);
+    else await saved;
+  }
   else if ([404, 410].includes(response.status)) {
     const cache = await caches.open(imageCache);
     await cache.delete(request, { ignoreSearch: true });
@@ -36,14 +40,15 @@ async function loadMedia(request) {
   return response;
 }
 
-async function saveDocument(request, response) {
+async function saveDocument(request, response, warmPhotos = false) {
   if (!response.ok) return;
   const url = new URL(request.url);
   if (home(url) && (url.searchParams.has("post") || url.searchParams.has("view"))) return;
-  const copy = response.clone();
+  const copy = warmPhotos ? response.clone() : null;
   await store(pageCache, request, response, 30);
-  if (/^notes(?:\.html)?$/.test(file(url))) return;
+  if (!copy || /^notes(?:\.html)?$/.test(file(url))) return;
   const html = await copy.text();
+  if (/^<html\b[^>]*\bnote-page\b/im.test(html)) return;
   const photos = new Set([...html.matchAll(/<img src="(media-[0-9a-f-]{36}\.jpg)"/gi)].map(match => match[1]));
   await Promise.allSettled([...photos].map(async name => {
     const request = new Request(new URL(name, scope));
@@ -54,7 +59,7 @@ async function saveDocument(request, response) {
 async function warmDocument(url) {
   const request = new Request(url);
   if (await caches.match(request, { cacheName: pageCache })) return;
-  await saveDocument(request, await checkNetwork(request));
+  await saveDocument(request, await checkNetwork(request), true);
 }
 
 self.addEventListener("install", event => {
@@ -100,9 +105,9 @@ async function offlineScreen(url) {
   }
   const style = [...urls].find(path => file(new URL(path)) === "style.css");
   const page = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<meta name="theme-color" content="#fbfaf7"><title>Offline - The Common Hours</title>' +
+    '<meta name="theme-color" content="#fbfaf7"><title>Page unavailable - The Common Hours</title>' +
     (style ? '<link rel="stylesheet" href="' + escapeAttribute(style) + '">' : '') +
-    '<main class="wrap offline-page"><p>The Common Hours</p><h1>You’re offline</h1>' +
+    '<main class="wrap offline-page"><p>The Common Hours</p><h1>This page is unavailable</h1>' +
     (home(url) ? '' : '<p>This page isn’t saved on this device.</p>') +
     (articles.size ? '<h2>Available offline</h2><ul>' + [...articles.values()].join("") + '</ul>' : '<p>Visit the journal online to save articles for your next visit.</p>') +
     '<p><a class="back" href="' + escapeAttribute(url.href) + '">Try again</a></p></main></html>';
@@ -117,7 +122,7 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET" || !urls.size) return;
   const url = new URL(request.url);
   if (request.mode === "navigate" && readable(url)) {
-    const online = checkNetwork(request).then(response => {
+    const online = fetch(new Request(request, { cache: "no-cache" })).then(response => {
       if (response.status >= 500) throw new Error("The journal is temporarily unavailable.");
       return response;
     });
@@ -128,15 +133,20 @@ self.addEventListener("fetch", event => {
       } else if (response.ok) await saveDocument(request, response.clone());
     }).catch(() => {}));
     event.respondWith(online.catch(async () => {
-      if (!home(url)) {
-        const cached = await caches.match(request, { cacheName: pageCache });
-        if (cached) return offlineCopy(cached);
+      const cached = await caches.match(request, { cacheName: pageCache });
+      if (cached) return offlineCopy(cached);
+      if (home(url) && !["view", "post", "series", "month", "tag", "year", "page", "photo"].some(key => url.searchParams.has(key))) {
+        const latest = await caches.match(new URL(".", scope).href, { cacheName: pageCache }) ||
+          await caches.match(shell.href, { cacheName: pageCache }) ||
+          await caches.match(shell.href, { cacheName });
+        if (latest) return offlineCopy(latest);
       }
       return offlineScreen(url);
     }));
   } else if (urls.has(request.url)) {
     event.respondWith(caches.match(request, { cacheName }).then(cached => cached || fetch(request)));
   } else if (inScope(url) && request.destination === "image" && mediaFile.test(file(url))) {
-    event.respondWith(loadMedia(request).catch(async () => (await caches.match(request, { cacheName: imageCache })) || Response.error()));
+    event.respondWith(loadMedia(request, task => event.waitUntil(task)).catch(async () =>
+      (await caches.match(request, { cacheName: imageCache })) || Response.error()));
   }
 });
