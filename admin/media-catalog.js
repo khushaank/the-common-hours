@@ -16,7 +16,10 @@ async function readImages(api) {
 
 export async function readCarouselCatalog(api) {
   const [carousels, members] = await Promise.all([
-    optionalRows(api, "carousels?select=id,title&order=title,id"),
+    optionalRows(api, "carousels?select=id,title,cover_media_id&order=title,id").catch(error => {
+      if (!missingColumn(error)) throw error;
+      return optionalRows(api, "carousels?select=id,title&order=title,id");
+    }),
     optionalRows(api, "carousel_photos?select=carousel_id,media_id,alt,media:qmargin_b74_media(width,height,alt)&order=position"),
   ]);
   const groups = new Map(carousels.map(item => [item.id, { ...item, kind: "carousel", type: "carousel", photos: [] }]));

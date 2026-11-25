@@ -420,6 +420,9 @@ dialog .actions { justify-content: flex-end; }
 #carousel-photos li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-block: 9px; border-top: 1px solid var(--line); }
 #carousel-photos img { width: 72px; height: 56px; object-fit: cover; border-radius: 4px; }
 #carousel-photos li > span { flex: 1 1 140px; overflow-wrap: anywhere; }
+.carousel-cover-label { display: block; color: var(--accent); font-size: .8rem; }
+.carousel-photo-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.carousel-photo-actions button[data-move] { min-width: 44px; }
 .carousel-embed[contenteditable="false"] { border: 1px solid var(--line); padding: 12px; color: var(--muted); border-radius: 5px; }
 .dashboard-queue { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin-block: 12px; }
 .dashboard-queue h2 { margin: 0 0 8px; }

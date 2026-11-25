@@ -91,6 +91,10 @@ from an article or Note, type **@carousel** and press **Enter**. The Media Libra
 also has a **New carousel** button. Open a carousel there to see its photo count,
 resolutions, and members. **Remove from carousel** keeps the original photo in
 Media. **Delete photo** removes it permanently when nothing else uses it.
+Use **↑** and **↓** to reorder photos, or **Set cover** to pick the thumbnail
+used in Media and for the carousel's public previews. The cover is independent
+of the slide order. Changes to a carousel apply to every Note and article that
+uses it.
 Multiple individual photos attached to a Note become a carousel on publication.
 Carousels have no app-imposed photo count limit and stop at the first and last
 slide.
@@ -99,6 +103,8 @@ note. The left and right arrow keys work while the carousel has focus.
 
 Apply [the reusable carousels upgrade](supabase/reusable-carousels.sql) before
 deploying this version. It assigns existing public Notes a permanent number.
+Apply [the carousel order and cover upgrade](supabase/carousel-order-and-cover.sql)
+after that schema to enable those controls.
 After deploying the reader and Writing Desk, run [the existing photo
 grouping script](supabase/group-existing-note-photos.sql) and publish again.
 Article comments still use the existing moderation workflow.

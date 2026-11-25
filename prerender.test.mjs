@@ -94,7 +94,7 @@ test("a successful refresh keeps the published marker when the published DOM is 
     const content = { dataset: { prerendered: "true" }, querySelector: () => retained, setAttribute(name, value) { this[name] = value; } };
     await runInNewContext(load + "\nload()", {
       content, location: { search: "" }, document: { querySelector: () => null }, start: async () => {},
-      view: null, offline: () => false, loadCarousels: async () => {}, publicCarousel() {}, publicImage() {},
+      view: null, offline: () => false, loadCarousels: async () => {}, publicCarousel() {}, publicImage() {}, publicCarouselCover() {},
     });
     assert.equal(content.dataset.prerendered, retained ? "true" : undefined);
     assert.equal(content["aria-busy"], "false");
@@ -323,18 +323,27 @@ test("a saved carousel renders in an article and a numbered Note", () => {
   const article = { ...post, body: markdownMarker + "Before\n\n" + carouselMarkup(id) + "\n\nAfter" };
   const note = { ...post, id: "short", slug: "short-note", is_note: true, note_number: 7, body: writeNote("", { photos: [], references: [], carousels: [id] }) };
   const images = new Map(photos.map(({ id }) => [id, { src: "media-" + id + ".jpg", width: 800, height: 600 }]));
-  const pages = renderPublicPages(template, { posts: [note, article], photos: [], images, files: new Map(),
-    carousels: new Map([[id, photos]]), comments: [{ post_id: note.id, display_name: "Reader", body: "Hidden Note comment" }] });
+  const chosen = photos.at(-1).id;
+  const thumb = "note-thumb-" + chosen + ".webp";
+  const pages = renderPublicPages(template, { posts: [note, article], photos: [], images, files: new Map([[thumb, new Uint8Array()]]),
+    carousels: new Map([[id, photos]]), carouselCovers: new Map([[id, chosen]]),
+    comments: [{ post_id: note.id, display_name: "Reader", body: "Hidden Note comment" }] });
   for (const file of ["entry-first-entry.html", "entry-short-note.html", "notes.html"]) {
     const html = pages.get(file);
     assert.match(html, /class="note-gallery" data-count="20"/);
     assert.match(html, /Enlarge photo: Photo 20/);
+    assert.ok(html.includes('data-photos="' + photos.map(photo => photo.id).join(",") + '"'));
     assert.doesNotMatch(html, /Hidden Note comment|data-note-like/);
   }
   assert.match(pages.get("notes.html"), /Note 007/);
   assert.match(pages.get("entry-short-note.html"), /rel="canonical" href="https:\/\/commonhours\.qd\.je\/entry-short-note"/);
   assert.doesNotMatch(pages.get("entry-short-note.html"), /<h2>Comments<\/h2>/);
   assert.match(pages.get("entry-first-entry.html"), /<h2>Comments<\/h2>/);
+  assert.ok(pages.get("index.html").includes('data-carousel-cover="' + id + '" data-photos="' + chosen + '"'));
+  assert.ok(pages.get("index.html").includes('src="' + thumb + '"'));
+  for (const file of ["entry-short-note.html", "entry-first-entry.html"]) {
+    assert.ok(pages.get(file).includes('property="og:image" content="https://commonhours.qd.je/media-' + chosen + '.jpg"'));
+  }
 });
 
 test("series articles show membership before the title and keep links in part order", () => {

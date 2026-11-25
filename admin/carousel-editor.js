@@ -1,7 +1,8 @@
 import { imageSource, readMediaImage } from "./common.js";
 import { carouselSummary, photoResolution, readCarouselCatalog } from "./media-catalog.js";
+import { coverPhoto } from "./carousel.js";
 
-export function setupCarouselEditor(api, openImages, deletePhoto) {
+export function setupCarouselEditor(api, openImages, deletePhoto, movePhoto) {
   const dialog = document.querySelector("#carousel-dialog");
   const form = document.querySelector("#carousel-form");
   const chooser = document.querySelector("#carousel-chooser");
@@ -15,6 +16,7 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
   const status = document.querySelector("#carousel-status");
   const list = document.querySelector("#carousel-photos");
   const summary = document.querySelector("#carousel-summary");
+  const autoCover = document.querySelector("#carousel-auto-cover");
   let groups = [];
   let current;
   let pick;
@@ -25,6 +27,7 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
 
   function render() {
     const asset = groups.find(group => group.id === current);
+    const cover = coverPhoto(asset?.photos, asset?.cover_media_id);
     title.value = asset?.title || "";
     summary.textContent = asset ? carouselSummary(asset) : "";
     select.replaceChildren(new Option("New carousel", ""), ...groups.map(group =>
@@ -32,6 +35,7 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
     select.value = current || "";
     save.textContent = current ? "Save title" : "Create carousel";
     add.hidden = !asset;
+    autoCover.hidden = !asset?.cover_media_id;
     insert.hidden = !pick;
     insert.disabled = !asset?.photos.length;
     list.replaceChildren();
@@ -51,6 +55,7 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
     }, { root: dialog, rootMargin: "120px" }) : null;
     for (const [index, photo] of (asset?.photos || []).entries()) {
       const row = document.createElement("li");
+      row.dataset.photo = photo.id;
       const image = document.createElement("img");
       image.alt = "";
       image.width = 72;
@@ -58,6 +63,35 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
       image.dataset.id = photo.id;
       const label = document.createElement("span");
       label.textContent = (index + 1) + ". " + (photo.alt || "Photo") + (photoResolution(photo) ? " · " + photoResolution(photo) : "");
+      if (photo.id === cover?.id) {
+        const marker = document.createElement("strong");
+        marker.className = "carousel-cover-label";
+        marker.textContent = "Cover";
+        label.append(marker);
+      }
+      const controls = document.createElement("div");
+      controls.className = "carousel-photo-actions";
+      for (const [direction, glyph, action] of [[-1, "↑", "Move up"], [1, "↓", "Move down"]]) {
+        const move = document.createElement("button");
+        move.type = "button";
+        move.dataset.move = direction;
+        move.textContent = glyph;
+        move.title = action;
+        move.setAttribute("aria-label", action + " " + (photo.alt || "photo " + (index + 1)));
+        move.disabled = index + direction < 0 || index + direction >= asset.photos.length;
+        move.addEventListener("click", () => void change(async () => {
+          if (!await movePhoto(current, photo.id, direction)) throw new Error("This photo is already at the end of the list or was removed.");
+          return "Photo order updated.";
+        }, photo.id, '[data-move="' + direction + '"]'));
+        controls.append(move);
+      }
+      const chooseCover = document.createElement("button");
+      chooseCover.type = "button";
+      chooseCover.dataset.setCover = "";
+      chooseCover.textContent = "Set cover";
+      chooseCover.disabled = photo.id === asset.cover_media_id;
+      chooseCover.setAttribute("aria-label", "Set " + (photo.alt || "photo " + (index + 1)) + " as cover");
+      chooseCover.addEventListener("click", () => void change(() => setCover(photo.id), photo.id));
       const remove = document.createElement("button");
       remove.type = "button";
       remove.textContent = "Remove from carousel";
@@ -75,14 +109,21 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
           return "Photo deleted.";
         });
       });
-      row.append(image, label, remove, erase);
+      controls.append(chooseCover, remove, erase);
+      row.append(image, label, controls);
       list.append(row);
       if (observer) observer.observe(image);
       else void reveal(image);
     }
   }
 
-  async function change(action) {
+  async function setCover(id) {
+    await api("carousels?id=eq." + current, { method: "PATCH", body: { cover_media_id: id } });
+    return id ? "Carousel cover updated." : "The first photo is now the cover.";
+  }
+  autoCover.addEventListener("click", () => void change(() => setCover(null)));
+
+  async function change(action, focusPhoto, control = "[data-set-cover]") {
     if (busy) return;
     busy = true;
     for (const element of dialog.querySelectorAll("button, input, select")) element.disabled = true;
@@ -97,6 +138,11 @@ export function setupCarouselEditor(api, openImages, deletePhoto) {
       busy = false;
       for (const element of dialog.querySelectorAll("button, input, select")) element.disabled = false;
       render();
+      if (focusPhoto) {
+        const row = [...list.children].find(item => item.dataset.photo === focusPhoto);
+        const preferred = row?.querySelector(control);
+        (preferred && !preferred.disabled ? preferred : row?.querySelector("button:not(:disabled)"))?.focus();
+      }
     }
   }
 

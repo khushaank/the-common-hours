@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { articleTopics, entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
 import { readNote } from "./shared/note.js";
-import { carouselSlot } from "./shared/carousel.js";
+import { carouselSlot, coverPhoto } from "./shared/carousel.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
 import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
@@ -23,7 +23,8 @@ export async function loadPublicSnapshot(config) {
   const images = new Map();
   const attachments = new Map();
   const carousels = new Map();
-  if (!config.origin) return { posts: [], photos: [], comments: [], files, images, attachments, carousels };
+  const carouselCovers = new Map();
+  if (!config.origin) return { posts: [], photos: [], comments: [], files, images, attachments, carousels, carouselCovers };
   async function get(path) {
     const response = await fetch(config.origin + "/rest/v1/qmargin_b74_" + path, {
       headers: { apikey: config.key }, signal: AbortSignal.timeout(12000), redirect: "error",
@@ -74,7 +75,13 @@ export async function loadPublicSnapshot(config) {
     }
   }
   if (carouselIds.size) {
-    const members = await rows("carousel_photos", ["carousel_id,media_id,alt"], "&order=position.asc", true);
+    const [members, galleries] = await Promise.all([
+      rows("carousel_photos", ["carousel_id,media_id,alt"], "&order=position.asc", true),
+      rows("carousels", ["id,cover_media_id", "id"], "&order=id.asc", true),
+    ]);
+    for (const { id, cover_media_id } of galleries) {
+      if (carouselIds.has(id) && cover_media_id) carouselCovers.set(id, cover_media_id);
+    }
     for (const { carousel_id, media_id, alt } of members) {
       if (!carouselIds.has(carousel_id)) continue;
       if (!carousels.has(carousel_id)) carousels.set(carousel_id, []);
@@ -84,7 +91,8 @@ export async function loadPublicSnapshot(config) {
   }
   const thumbnailIds = new Set(posts.filter(post => post.is_note).slice(0, 3).map(post => {
     const note = readNote(post.body);
-    return (note.photos[0] || carousels.get(note.carousels[0])?.[0])?.id;
+    const gallery = note.carousels[0];
+    return (note.photos[0] || coverPhoto(carousels.get(gallery), carouselCovers.get(gallery)))?.id;
   }));
   for (const id of ids) {
     if (!mediaId.test(id || "")) continue;
@@ -113,10 +121,10 @@ export async function loadPublicSnapshot(config) {
     files.set(src, bytes);
     attachments.set(id, src);
   }
-  return { posts, photos, comments, files, images, attachments, carousels };
+  return { posts, photos, comments, files, images, attachments, carousels, carouselCovers };
 }
 
-export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map(), carousels = new Map() }, featured) {
+export function renderPublicPages(template, { posts, photos, comments = [], images, files, attachments = new Map(), carousels = new Map(), carouselCovers = new Map() }, featured) {
   const pages = new Map(files);
   const pageImages = new Map();
   const commentsByPost = new Map();
@@ -158,8 +166,12 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
   const months = grouped(posts, post => post.published_on.slice(0, 7));
   const topicCounts = [...grouped(posts, articleTopics)].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   function page(values, title, content, description, classes = "wide-page") {
+    let galleryCover;
     content = content.replace(/<div class="carousel-embed" data-carousel-id="([a-f0-9-]{36})" data-photos=""><\/div>/g,
-      (_, id) => carouselSlot(id, false, carousels.get(id), notePicture));
+      (_, id) => {
+        galleryCover ||= images.get(carouselCovers.get(id))?.src;
+        return carouselSlot(id, false, carousels.get(id), notePicture);
+      });
     const address = pageHref(values);
     const file = address === "./" ? "index.html" : pageHref(values, { filename: true });
     if (file !== "index.html" && !generatedFile.test(file)) throw new Error("Invalid public page filename.");
@@ -168,7 +180,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const imagePaths = new Set([...content.matchAll(/<img src="(media-[0-9a-f-]{36}\.jpg)"/g)].map(match => match[1]));
     if (file === "index.html" && featured) imagePaths.add("featured.webp");
     pageImages.set(file, imagePaths);
-    const image = [...imagePaths][0];
+    const image = values.post && galleryCover || [...imagePaths][0];
     let html = template.replace('<html lang="en">', () => `<html lang="en" class="${classes}" data-route="${escape(new URLSearchParams(values))}">`)
       .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escape(fullTitle)}</title>`)
       .replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escape(description)}">`)
@@ -177,7 +189,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
       .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}" data-publication="${revision}"></template></body>`)
       .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true"')
       .replace('<aside id="sidebar" aria-label="Journal index"></aside>', () =>
-        `<aside id="sidebar" aria-label="Journal index">${file === "index.html" ? renderRecentNotes(posts, date, thumbnail, id => carousels.get(id)?.[0]) : ""}${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
+        `<aside id="sidebar" aria-label="Journal index">${file === "index.html" ? renderRecentNotes(posts, date, thumbnail, id => coverPhoto(carousels.get(id), carouselCovers.get(id))) : ""}${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
       .replace("<!-- featured-snapshot -->", file === "index.html" ? featured?.markup || "" : "");
     if (!["privacy", "terms"].includes(values.view)) {
       const active = classes.includes("note-page") || values.view === "notes" ? "notes" : ["archive", "series", "topics"].includes(values.view) ? "archive" : values.view === "start" ? "start" : "journal";

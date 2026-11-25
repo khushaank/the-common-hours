@@ -1,4 +1,4 @@
-import { photoArrows, photoGallery, photoSlot } from "./carousel.js";
+import { coverPhoto, photoArrows, photoGallery, photoSlot } from "./carousel.js";
 
 const carousel = ".note-gallery[data-carousel]";
 const direction = event => event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
@@ -164,18 +164,19 @@ export function setupNoteCarousels() {
 
 const queuedNoteImages = new WeakSet();
 
-export async function loadCarousels(target, read, loadImage) {
+export async function loadCarousels(target, read, loadImage, readCover = () => null) {
   const galleries = [...target.querySelectorAll("[data-carousel-id], [data-carousel-cover]")];
   const requests = new Map();
   await Promise.allSettled(galleries.map(async gallery => {
     const id = gallery.dataset.carouselId || gallery.dataset.carouselCover;
     if (!requests.has(id)) requests.set(id, read(id));
-    const photos = await requests.get(id);
+    const [photos, coverId] = await Promise.all([requests.get(id), gallery.dataset.carouselCover ? readCover(id) : null]);
     if (!gallery.isConnected) return;
-    const identity = photos.map(photo => photo.id).join(",");
+    const cover = gallery.dataset.carouselCover && coverPhoto(photos, coverId);
+    const identity = gallery.dataset.carouselCover ? cover?.id || "" : photos.map(photo => photo.id).join(",");
     if (gallery.dataset.photos === identity) return;
     gallery.dataset.photos = identity;
-    gallery.innerHTML = gallery.dataset.carouselCover ? (photos[0] ? photoSlot(photos[0]) : "") : photoGallery(photos);
+    gallery.innerHTML = gallery.dataset.carouselCover ? (cover ? photoSlot(cover) : "") : photoGallery(photos);
   }));
   await loadNoteImages(target, loadImage);
 }

@@ -1561,7 +1561,8 @@ let carouselEditor;
 async function openCarousels(options) {
   const { setupCarouselEditor } = await import("./carousel-editor.js");
   carouselEditor ??= setupCarouselEditor(api, editorTools.openImageLibrary,
-    (carousel, photo) => adminRpc("delete_carousel_photo", { p_carousel: carousel, p_id: photo }));
+    (carousel, photo) => adminRpc("delete_carousel_photo", { p_carousel: carousel, p_id: photo }),
+    (carousel, photo, direction) => adminRpc("move_carousel_photo", { p_carousel: carousel, p_id: photo, p_direction: direction }));
   return carouselEditor(options);
 }
 

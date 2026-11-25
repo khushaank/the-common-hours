@@ -2,6 +2,7 @@ import { escape } from "./text.js";
 
 export const carouselMarkup = id => "![carousel](carousel:" + id + ")";
 export const carouselLine = /^!\[carousel\]\(carousel:([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\)$/;
+export const coverPhoto = (photos = [], coverId) => photos.find(photo => photo.id === coverId) || photos[0];
 export function carouselSlot(id, editable = false, photos = [], picture) {
   const identity = photos.map(photo => photo.id).join(",");
   return '<div class="carousel-embed" data-carousel-id="' + id + '" data-photos="' + identity + '"' +

@@ -1,5 +1,6 @@
 import { imageSource, missingFeature, showFailure } from "./common.js";
 import { carouselSummary, loadCatalog } from "./media-catalog.js";
+import { coverPhoto } from "./carousel.js";
 import { isSupportedImage, promptImageAlt } from "./editor-tools.js";
 
 const types = { image: "Image", pdf: "PDF", document: "Document", file: "File", carousel: "Carousel" };
@@ -97,7 +98,7 @@ export function setupMediaEditor(api, storage) {
       const frame = document.createElement("span");
       frame.className = "media-thumbnail";
       frame.setAttribute("aria-hidden", "true");
-      const cover = asset.kind === "carousel" ? asset.photos[0]?.id : asset.kind === "image" ? asset.id : null;
+      const cover = asset.kind === "carousel" ? coverPhoto(asset.photos, asset.cover_media_id)?.id : asset.kind === "image" ? asset.id : null;
       if (cover) {
         const image = document.createElement("img");
         image.alt = "";

@@ -40,6 +40,7 @@ test("one carousel can hold many photos and serve both Notes and articles", asyn
       create function qmargin_b74_private.note_likes(uuid[], uuid) returns boolean language sql as $$ select true $$;
     `);
     await db.exec(await readFile(new URL("./reusable-carousels.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("./carousel-order-and-cover.sql", import.meta.url), "utf8"));
     const photos = Array.from({ length: 90 }, (_, index) => ({
       id: "10000000-0000-0000-0000-" + String(index).padStart(12, "0"),
       alt: "Photograph " + (index + 1).toString().padStart(2, "0") + " along an ordinary country road",
@@ -82,7 +83,19 @@ test("one carousel can hold many photos and serve both Notes and articles", asyn
     const { rows: [republished] } = await db.query("update public.qmargin_b74_posts set published=true where id=$1 returning note_number", [note]);
     assert.equal(republished.note_number, 1);
     await db.exec(`set role authenticated; set request.uid = '${editor}'; set request.jwt = '{"aal":"aal2"}';`);
+    const move = async (photo, direction) => (await db.query(
+      "select public.qmargin_b74_move_carousel_photo($1,$2,$3) as moved", [carousel, photo, direction])).rows[0].moved;
+    assert.equal(await move(photos[0].id, -1), false);
+    assert.equal(await move(photos.at(-1).id, 1), false);
+    await db.query("update public.qmargin_b74_carousels set cover_media_id=$2 where id=$1", [carousel, photos[0].id]);
+    assert.equal(await move(photos[0].id, 1), true);
+    assert.deepEqual((await members()).slice(0, 3), [photos[1].id, photos[0].id, photos[2].id]);
+    const cover = async () => (await db.query(
+      "select cover_media_id from public.qmargin_b74_carousels where id=$1", [carousel])).rows[0].cover_media_id;
+    assert.equal(await cover(), photos[0].id);
+    await assert.rejects(db.query("update public.qmargin_b74_carousels set cover_media_id=$2 where id=$1", [carousel, article]), { code: "23503" });
     await db.query("delete from public.qmargin_b74_carousel_photos where carousel_id=$1 and media_id=$2", [carousel, photos[0].id]);
+    assert.equal(await cover(), null);
     assert.equal((await members()).length, 89);
     assert.equal((await db.query("select id from public.qmargin_b74_media where id=$1", [photos[0].id])).rows.length, 0);
     assert.equal((await db.query("select public.qmargin_b74_delete_carousel_photo($1,$2) as deleted", [carousel, photos[1].id])).rows[0].deleted, true);

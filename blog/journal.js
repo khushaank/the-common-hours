@@ -55,6 +55,15 @@ const publicImage = id => publicData("image:" + id, () => readMediaImage(get, id
 const publicCarousel = id => publicData("carousel:" + id, async () =>
   (await allRows(get, "carousel_photos?select=media_id,alt&carousel_id=eq." + encodeURIComponent(id) + "&order=position"))
     .map(row => ({ id: row.media_id, alt: row.alt })), 0);
+const publicCarouselCover = id => publicData("carousel-cover:" + id, async () => {
+  try {
+    const [carousel] = await get("carousels?select=cover_media_id&id=eq." + encodeURIComponent(id));
+    return carousel?.cover_media_id || null;
+  } catch (error) {
+    if (missingColumn(error) || missingFeature(error)) return null;
+    throw error;
+  }
+}, 0);
 
 async function loadPublicPosts() {
   if (demo) return [];
@@ -393,7 +402,7 @@ async function load() {
   try {
     if (content.dataset.prerendered && content.dataset.refreshPending === undefined && offline()) return;
     await start();
-    if (view !== "review") await loadCarousels(content.parentElement, publicCarousel, publicImage);
+    if (view !== "review") await loadCarousels(content.parentElement, publicCarousel, publicImage, publicCarouselCover);
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
     if (content.dataset.prerendered) {

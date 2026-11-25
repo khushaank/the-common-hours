@@ -86,8 +86,8 @@ export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot, c
     ${notes.length ? '<ul class="recent-notes">' + notes.map(post => {
       const { text, photos, carousels } = readNote(post.body ?? post.excerpt);
       const photo = photos[0] || cover(carousels[0]);
-      const thumb = photo ? `<span class="note-thumb">${thumbnail(photo)}</span>` :
-        carousels.length ? `<span class="note-thumb" data-carousel-cover="${escape(carousels[0])}"></span>` : "";
+      const gallery = !photos.length && carousels[0];
+      const thumb = photo || gallery ? `<span class="note-thumb"${gallery ? ` data-carousel-cover="${escape(gallery)}" data-photos="${escape(photo?.id || "")}"` : ""}>${photo ? thumbnail(photo) : ""}</span>` : "";
       const date = escape(dateLabel(post.published_on));
       return `<li><a href="${escape(pageHref({ post: post.slug }))}">${thumb}
         <span><span class="note-preview-meta">${noteNumber(post)}<time datetime="${escape(post.published_on)}">${date}</time></span><span class="note-preview">${escape(plainNoteText(text) || "Photo note")}</span></span></a></li>`;
