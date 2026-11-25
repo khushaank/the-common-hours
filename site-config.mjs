@@ -3,8 +3,8 @@ import { loadEnvFile } from "node:process";
 export const blogFiles = [
   "manifest.webmanifest", "logo.png", "app-192.png", "app-512.png", "app-maskable.png",
   "index.html", "404.html", "style.css", "route.js", "boot.js", "start.js", "journal.js", "legal.js", "legal-content.js", "photos.js", "reading.js", "reading-copy.js", "bookmarks.js", "cover.jpg", "static-cache.js", "public-cache.js", "image-viewer.js",
-  "newsreader.woff2", "newsreader-italic.woff2", "instrument-sans.woff2", "reader-poll.js",
-  "LICENSE-Newsreader.txt", "LICENSE-Instrument-Sans.txt",
+  "newsreader.woff2", "newsreader-italic.woff2", "instrument-sans.woff2", "serif.woff2", "reader-poll.js",
+  "LICENSE-Newsreader.txt", "LICENSE-Instrument-Sans.txt", "LICENSE-Instrument-Serif.txt",
 ];
 export const adminFiles = [
   "index.html", "logo.png", "style.css", "desk-start.js", "desk.js", "editor-tools.js", "photo-tools.js", "image-library.js", "media-catalog.js", "media-editor.js", "carousel-editor.js", "stats.js", "confirm-delete.js",
