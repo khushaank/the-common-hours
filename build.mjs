@@ -110,7 +110,8 @@ async function buildApp(app, destination, files, config, childDirectory, feature
 
 try {
   const config = process.argv.includes("--offline-feed") ? {} : readSiteConfig({ required: true });
-  const [feed, featured, snapshot] = await Promise.all([renderFeed(config), featuredSnapshot(config), loadPublicSnapshot(config)]);
+  const [featured, snapshot] = await Promise.all([featuredSnapshot(config), loadPublicSnapshot(config)]);
+  const feed = await renderFeed(config, snapshot.posts);
   await buildApp("blog", "./dist", blogFiles, config, deskPath, featured, snapshot);
   await buildApp("admin", "./dist/" + deskPath, adminFiles, config);
   await writeFile(new URL("./dist/feed.xml", import.meta.url), feed);

@@ -2,17 +2,17 @@ import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, renderTopics } from "./archive.js";
+import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
-import { entryTags } from "./text.js";
-import { noteExtras, readNote } from "./note.js";
+import { articleTopics } from "./text.js";
+import { noteBody } from "./note.js";
 import { loadNoteImages } from "./image-viewer.js";
 
 const content = document.querySelector("#content");
 const sidebar = document.querySelector("#sidebar");
 const params = pageParams();
-const view = ["archive", "topics", "privacy", "terms", "photo", "photos", "start", "series", "review"].includes(params.get("view")) ? params.get("view") : null;
+const view = ["archive", "notes", "topics", "privacy", "terms", "photo", "photos", "start", "series", "review"].includes(params.get("view")) ? params.get("view") : null;
 const slug = params.get("post");
 const month = params.get("month");
 const tag = params.get("tag");
@@ -31,11 +31,14 @@ const isLegal = view === "privacy" || view === "terms";
 const isPhoto = view === "photo";
 const offline = () => !navigator.onLine || document.documentElement.hasAttribute("data-offline-copy");
 const currentNav = ["archive", "series", "topics"].includes(view) || month ? "archive" :
-  view === "start" ? "start" : "journal";
-for (const item of document.querySelectorAll(".mast nav a")) {
-  if (!isLegal && view !== "review" && item.id === currentNav + "-link") item.setAttribute("aria-current", "page");
-  else item.removeAttribute("aria-current");
+  view === "notes" || document.documentElement.classList.contains("note-page") ? "notes" : view === "start" ? "start" : "journal";
+function setCurrentNav(name) {
+  for (const item of document.querySelectorAll(".mast nav a")) {
+    if (item.id === name + "-link") item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  }
 }
+setCurrentNav(isLegal || view === "review" ? "" : currentNav);
 const canonical = document.querySelector('link[rel="canonical"]') || document.createElement("link");
 canonical.rel = "canonical";
 const canonicalParams = new URLSearchParams();
@@ -126,11 +129,11 @@ function recordView(page, post = null) {
 
 function metadata(post, byline = false) {
   return `<p class="meta"><time datetime="${escape(post.published_on)}">${dateLabel(post.published_on)}</time>
-    ${entryTags(post.tag).map(tag => `<a class="tag" href="${link({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ")}${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
+    ${articleTopics(post).map(tag => `<a class="tag" href="${link({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ")}${byline ? '<span class="byline">By Ellis Vale</span>' : ""}</p>`;
 }
 
 function renderList(posts) {
-  const filtered = posts.filter(post => (!month || post.published_on.startsWith(month + "-")) && (!tag || entryTags(post.tag).includes(tag)));
+  const filtered = posts.filter(post => !post.is_note && (!month || post.published_on.startsWith(month + "-")) && (!tag || articleTopics(post).includes(tag)));
   const title = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? monthLabel(month) : tag || "Latest entries";
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const page = Math.min(totalPages, Math.max(1, Number.parseInt(params.get("page"), 10) || 1));
@@ -141,7 +144,7 @@ function renderList(posts) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
     .filter(number => number === 1 || number === totalPages || Math.abs(page - number) <= 1);
   content.innerHTML = `<div class="section-head"><${heading}>${escape(title)}</${heading}><span class="section-note">${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}</span></div>
-    ${entries.map(post => post.is_note ? noteCard(post, dateLabel) : `<article class="entry">${metadata(post)}
+    ${entries.map(post => `<article class="entry">${metadata(post)}
       <${entryHeading} class="entry-title"><a href="${postLink(post)}"><span class="headline">${escape(post.title)}</span><span class="arrow" aria-hidden="true">↗</span></a></${entryHeading}>
       <p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>"}
     ${totalPages > 1 ? `<nav class="pagination" aria-label="Journal pages">
@@ -164,7 +167,8 @@ async function renderPost(posts, index, firstBody) {
     if (!detail) return renderPost([], 0);
     Object.assign(post, detail);
   }
-  const hasFormatting = post.body.startsWith(markdownMarker);
+  if (post.is_note) setCurrentNav("notes");
+  const hasFormatting = !post.is_note && post.body.startsWith(markdownMarker);
   const published = content.querySelector(".published-copy .article");
   const retain = content.dataset.refreshPending === undefined && published?.dataset.publication === publicationRevision([post], true);
   const renderer = !retain && hasFormatting ? await import("./rich.js").catch(() => null) : null;
@@ -172,7 +176,8 @@ async function renderPost(posts, index, firstBody) {
   const nav = (neighbor, label) => neighbor
     ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
   const previousNext = `<nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>`;
-  if (!retain) content.innerHTML = `<a class="back" href="./">← Back to the journal</a><article class="article${post.is_note ? " journal-note" : ""}">
+  const back = post.is_note ? '<a class="back" href="notes.html">← Back to Notes</a>' : '<a class="back" href="./">← Back to the journal</a>';
+  if (!retain) content.innerHTML = `${back}<article class="article${post.is_note ? " journal-note" : ""}">
     ${seriesMembership(post, posts)}<h1>${escape(post.is_note ? "Note" : post.title)}</h1>${metadata(post, true)}
     <div class="prose" id="entry-body"></div></article>
     ${seriesNavigation(posts, post)}
@@ -199,8 +204,7 @@ async function renderPost(posts, index, firstBody) {
       void import("./rich.js").then(({ enhanceVideos }) => enhanceVideos(bodyElement)).catch(() => {});
     }
   } else if (post.is_note) {
-    const { text } = readNote(post.body);
-    bodyElement.innerHTML = (text ? `<p class="note-text">${escape(text)}</p>` : "") + noteExtras(post.body);
+    bodyElement.innerHTML = noteBody(post.body, undefined, true);
   } else if (renderer) {
     renderer.renderText(bodyElement, post.body, publicImage, { loadAttachment: fetchAttachment, preparePrint: true, enlargeImages: true });
   } else if (hasFormatting) {
@@ -328,6 +332,11 @@ async function start() {
     }
     return;
   }
+  if (view === "notes") {
+    document.title = "Notes - The Common Hours";
+    content.innerHTML = renderNotes(posts, dateLabel);
+    return;
+  }
   if (view === "start" || series) {
     const { renderReadingList } = await import("./reading.js");
     if (series) renderReadingList(content, series, seriesEntries(posts, series));
@@ -338,7 +347,7 @@ async function start() {
     return;
   }
   const months = grouped(posts, post => post.published_on.slice(0, 7));
-  const topics = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
+  const topics = [...grouped(posts, articleTopics)].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   if (view === "topics") {
     document.title = "All topics - The Common Hours";
     content.innerHTML = renderTopics(topics);
@@ -350,11 +359,13 @@ async function start() {
   } else if (slug) {
     await renderPost(posts, await resolveEntry(posts), body);
   } else {
-    renderList(posts);
-    if (isJournal) saveLatestForOffline(posts);
+    if (isJournal) {
+      content.innerHTML = renderLatest(posts, dateLabel, pageSize);
+      saveLatestForOffline(posts);
+    } else renderList(posts);
     recordView("journal");
   }
-  if (!unchanged) sidebar.innerHTML = renderSidebar(months, topics, month, tag);
+  if (!unchanged) sidebar.innerHTML = (isJournal ? renderRecentNotes(posts, dateLabel) : "") + renderSidebar(months, topics, month, tag);
 }
 
 async function load() {
@@ -369,7 +380,7 @@ async function load() {
   try {
     if (content.dataset.prerendered && content.dataset.refreshPending === undefined && offline()) return;
     await start();
-    if (view !== "review") await loadNoteImages(content, publicImage);
+    if (view !== "review") await loadNoteImages(content.parentElement, publicImage);
     if (!content.querySelector(":scope > .published-copy")) delete content.dataset.prerendered;
   } catch {
     if (content.dataset.prerendered) {

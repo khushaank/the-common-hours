@@ -18,7 +18,7 @@ const files = new Set(app === "blog" ? [...blogFiles, "feed.xml"] : adminFiles);
 const built = app === "blog" && process.argv.includes("--built");
 for (const file of sharedFiles) files.add(file);
 files.add("config.js");
-const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", png: "image/png", svg: "image/svg+xml", webmanifest: "application/manifest+json", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml", bin: "application/octet-stream" };
+const types = { html: "text/html", css: "text/css", js: "text/javascript", jpg: "image/jpeg", webp: "image/webp", png: "image/png", svg: "image/svg+xml", webmanifest: "application/manifest+json", woff2: "font/woff2", txt: "text/plain", xml: "application/rss+xml", bin: "application/octet-stream" };
 let config;
 let publicPages;
 try {

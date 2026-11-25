@@ -74,7 +74,9 @@ Dashboard uses the existing daily traffic totals and each entry’s publication
 date. No new database migration is required for this layout.
 
 **New note** opens a short, title-free composer. Notes support up to 500
-characters, can be saved as drafts, and appear alongside entries in the journal.
+characters and can be saved as drafts. Published notes appear at `notes.html`
+and keep their individual links. The Journal shows the three most recent notes
+beside the latest articles.
 Apply [`supabase/upgrade-notes-and-photos.sql`](supabase/upgrade-notes-and-photos.sql)
 after the existing security and desk upgrades before deploying this version.
 The upgrade enables publishing notes and retires the old editorial photo fields.
@@ -84,6 +86,8 @@ Apply [the note media and search upgrade](supabase/upgrade-note-media-and-search
 before publishing this version. Notes can include up to four photos.
 Type **@image** and press **Enter** to open the Media Library.
 Type **/** in a note to find and attach a published article link.
+Use Markdown for emphasis and external links. Notes with two or more photos
+automatically get a swipeable carousel on the Notes page and their permalinks.
 
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
 after the Notes and live review upgrades. It carries the current homepage photos

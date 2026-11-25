@@ -2,7 +2,7 @@ import { pageHref } from "./page-url.js";
 import { escape, request } from "./common.js";
 import { cachedEntries } from "./public-cache.js";
 import { noteCard } from "./archive.js";
-import { noteExtras, readNote } from "./note.js";
+import { noteBody } from "./note.js";
 import { loadNoteImages } from "./image-viewer.js";
 import { searchExcerpt } from "./text.js";
 
@@ -89,9 +89,8 @@ export async function renderReview(content) {
     return;
   }
   if (draft.is_note) {
-    const { text } = readNote(draft.body);
     content.innerHTML = '<article class="article journal-note"><p class="meta">Private draft review</p><h1>Note</h1>' +
-      (text ? '<p class="note-text">' + escape(text) + '</p>' : '') + noteExtras(draft.body) +
+      noteBody(draft.body, undefined, true) +
       (draft.reader_prompt ? '<p class="reader-prompt">' + escape(draft.reader_prompt) + '</p>' : '') + '</article>';
     await loadNoteImages(content, read);
     return;

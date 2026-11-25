@@ -1,5 +1,6 @@
 import { pageHref } from "./page-url.js";
 import { escape, mediaId } from "./text.js";
+import { renderNoteText } from "./rich.js";
 
 const separator = "\n\n<!-- common-hours-note-extras -->\n";
 export const notePhotoLimit = 4;
@@ -33,11 +34,23 @@ export function writeNote(text, { photos, references }) {
   return extras.length ? text + separator + extras.join("\n") : text;
 }
 
-export function noteExtras(body, picture = ({ id, alt }) =>
-  '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '"></span>') {
+export const noteImageSlot = ({ id, alt }) =>
+  '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '"></span>';
+
+export function noteExtras(body, picture = noteImageSlot, carousel = false) {
   const { photos, references } = readNote(body);
-  const gallery = photos.length ? '<div class="note-gallery" data-count="' + photos.length + '">' + photos.map(picture).join("") + "</div>" : "";
+  const slides = carousel && photos.length > 1;
+  const gallery = photos.length ? `<div class="note-gallery" data-count="${photos.length}"${slides ? ' data-carousel role="group" aria-label="Note photos" tabindex="0"' : ""}>${photos.map(picture).join("")}</div>` : "";
+  const controls = slides ? `<div class="note-carousel-controls"><button type="button" data-photo-step="-1" aria-label="Previous photo">‹</button><span aria-live="polite">1 of ${photos.length}</span><button type="button" data-photo-step="1" aria-label="Next photo">›</button></div>` : "";
   const links = references.length ? '<ul class="note-references" aria-label="Referenced articles">' + references.map(({ slug, title }) =>
     '<li><a href="' + escape(pageHref({ post: slug })) + '">' + escape(title) + "</a></li>").join("") + "</ul>" : "";
-  return gallery + links;
+  return gallery + controls + links;
+}
+
+export function noteText(text) {
+  return text ? '<p class="note-text">' + renderNoteText(text) + '</p>' : "";
+}
+
+export function noteBody(body, picture, carousel = false) {
+  return noteText(readNote(body).text) + noteExtras(body, picture, carousel);
 }

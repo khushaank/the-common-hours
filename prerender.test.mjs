@@ -36,9 +36,9 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.doesNotMatch(article, /id="comment-form"/);
   for (const name of ["index", "archive", "start"]) assert.match(pages.get(name + ".html"), /href="entry-first-entry.html"/);
   const topics = pages.get("topics.html");
-  assert.match(topics, /all-topics">[\s\S]*?href="archive-tag-[^"]+"[^>]*>Notes<span>1<\/span>/);
+  assert.doesNotMatch(topics, /Notes<span>/);
   assert.doesNotMatch(topics, /href="entry-first-entry.html"/);
-  assert.equal(pages.has("notes.html"), false);
+  assert.match(pages.get("notes.html"), /<h1>Notes<\/h1>/);
   assert.match(article, /alt="An image" draggable="false"/);
   assert.match(article, /og:image" content="https:\/\/commonhours\.qd\.je\/media-/);
   assert.match(pages.get("sitemap.xml"), /<image:loc>https:\/\/commonhours\.qd\.je\/media-/);
@@ -50,7 +50,7 @@ test("static pages contain readable content, public links, safe formatting, and 
   assert.doesNotMatch(pages.get("photo-" + imageId + ".html"), /The description/);
   const canonicals = [];
   for (const [name, html] of pages) {
-    if (!name.endsWith(".html") || ["photos.html", "collections.html", "photo-essays.html"].includes(name)) continue;
+    if (!name.endsWith(".html") || ["photos.html", "collections.html", "photo-essays.html", pageHref({ view: "archive", tag: "Notes" })].includes(name)) continue;
     const canonical = html.match(/rel="canonical" href="([^"]+)"/)[1];
     canonicals.push(canonical);
     assert.match(html, /aria-busy="false" data-prerendered="true"/);
@@ -278,31 +278,40 @@ test("legal pages offer email without scripts, and reading sections explain thei
   for (const name of ["photo-essays.html", "collections.html"]) assert.match(pages.get(name), /url=archive\.html/);
 });
 
-test("notes render without an entry title and preserve their lines as text", () => {
-  const body = "First line\n<script>Second line</script>";
+test("notes render without an entry title and support inline formatting and links", () => {
+  const body = "First line\n**Second line** with [a link](https://example.com/)";
   const note = { ...post, slug: "short-note", title: "First line", body, excerpt: body, is_note: true };
   const pages = renderPublicPages(template, { posts: [note], photos: [], images: new Map(), files: new Map() });
-  for (const name of ["index", "archive", "entry-short-note"]) {
-    assert.match(pages.get(name + ".html"), /class="note-text">First line\n&lt;script&gt;Second line&lt;\/script&gt;/);
+  for (const name of ["notes", "archive", "entry-short-note"]) {
+    assert.match(pages.get(name + ".html"), /class="note-text">First line<br>\n<strong>Second line<\/strong> with <a[^>]+href="https:\/\/example.com\/"/);
   }
   assert.match(pages.get("entry-short-note.html"), /<h1>Note<\/h1>/);
 });
 
-test("note photos and article references appear inline on both archive and standalone pages", () => {
+test("note photos and references appear on notes and archive pages, with carousels on the feed and permalink", () => {
   const second = "22345678-1234-1234-1234-123456789abc";
   const photos = [{ id: imageId, alt: "First & best" }, { id: second, alt: "Second" }];
   const references = [{ slug: post.slug, title: "Related <article>" }];
   const note = { ...post, id: "note", slug: "photo-note", title: "Photo note", excerpt: "Photo note", is_note: true,
     body: writeNote("", { photos, references }) };
   const images = new Map(photos.map(({ id }) => [id, { src: "media-" + id + ".jpg", width: 800, height: 600 }]));
-  const pages = renderPublicPages(template, { posts: [note, post], photos: [], images, files: new Map() });
-  for (const file of ["index.html", "archive.html", "entry-photo-note.html"]) {
+  const thumb = `note-thumb-${imageId}.webp`;
+  const older = Array.from({ length: 3 }, (_, index) => ({ ...note, id: `old-${index}`, slug: `old-${index}`, body: "Earlier note" }));
+  const pages = renderPublicPages(template, { posts: [note, ...older, post], photos: [], images, files: new Map([[thumb, new Uint8Array()]]) });
+  for (const file of ["notes.html", "archive.html", "entry-photo-note.html"]) {
     const html = pages.get(file);
     assert.match(html, /class="note-gallery" data-count="2"/);
     assert.match(html, /class="zoom-image" href="media-12345678-1234-1234-1234-123456789abc\.jpg" aria-label="Enlarge photo: First &amp; best"/);
     assert.match(html, /href="entry-first-entry\.html">Related &lt;article&gt;/);
     assert.doesNotMatch(html, /common-hours-note-extras/);
+    assert.equal(html.includes('data-carousel role="group"'), file !== "archive.html");
   }
+  const homepage = pages.get("index.html");
+  assert.match(homepage, /<h1>Latest entries<\/h1>[\s\S]*?entry-first-entry\.html/);
+  assert.match(homepage, new RegExp(`<img src="${thumb}" width="144" height="144"`));
+  assert.match(homepage, /href="notes\.html">View all notes/);
+  assert.equal((homepage.match(/<span class="note-preview">/g) ?? []).length, 3);
+  assert.doesNotMatch(homepage, /class="note-gallery"|href="entry-old-2\.html"|src="media-/);
 });
 
 test("series articles show membership before the title and keep links in part order", () => {
@@ -386,20 +395,22 @@ test("an empty entry archive renders a readable empty state", () => {
 test("each comma-separated tag gets its own linked topic and archive page", () => {
   const tagged = { ...post, tag: "Notes, AI, ai" };
   const pages = renderPublicPages(template, { posts: [tagged], photos: [], images: new Map(), files: new Map() });
-  for (const tag of ["Notes", "AI"]) {
-    const path = pageHref({ view: "archive", tag });
-    assert.match(pages.get(path), /href="entry-first-entry.html"/);
-    assert.ok(pages.get("entry-first-entry.html").includes('href="' + path + '">' + tag + "</a>"));
-  }
+  const path = pageHref({ view: "archive", tag: "AI" });
+  assert.match(pages.get(path), /href="entry-first-entry.html"/);
+  assert.ok(pages.get("entry-first-entry.html").includes('href="' + path + '">AI</a>'));
+  const oldNotes = pageHref({ view: "archive", tag: "Notes" });
+  assert.match(pages.get(oldNotes), /url=notes\.html/);
+  assert.doesNotMatch(pages.get("topics.html"), /Notes<span>/);
   assert.equal(pages.has(pageHref({ view: "archive", tag: "ai" })), false);
 });
 
 test("new routes and legacy query links resolve to the same entries and filters", () => {
-  for (const values of [{ post: "first-entry" }, { view: "privacy" }, { view: "photo", photo: imageId }, { view: "photos", year: "2026", series: "A & B" }, { view: "review" }, { tag: "A & B", page: "2" }]) {
+  for (const values of [{ post: "first-entry" }, { view: "notes" }, { view: "privacy" }, { view: "photo", photo: imageId }, { view: "photos", year: "2026", series: "A & B" }, { view: "review" }, { tag: "A & B", page: "2" }]) {
     const url = new URL(pageHref(values), "https://example.com/");
     assert.deepEqual(Object.fromEntries(pageParams(url.search, url.pathname)), values);
   }
   assert.equal(pageParams("?post=old-entry", "/").get("post"), "old-entry");
+  assert.equal(pageParams("?view=archive&tag=Notes", "/").get("view"), "notes");
   assert.equal(pageParams("?view=photo-essays", "/").get("view"), "archive");
   assert.equal(pageParams("", "/collections.html").get("view"), "archive");
   assert.equal(pageHref({ post: "../../private" }), "./?post=..%2F..%2Fprivate");

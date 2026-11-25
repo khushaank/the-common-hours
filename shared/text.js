@@ -24,6 +24,8 @@ export function entryTags(value = "") {
   return [...tags.values()];
 }
 
+export const articleTopics = post => post.is_note ? [] : entryTags(post.tag ?? "").filter(tag => tag.toLowerCase() !== "notes");
+
 export function imageSource(image) {
   if (!image || typeof image.encoded !== "string" || image.encoded.length > 1333336 ||
       !/^[A-Za-z0-9+/]+={0,2}$/.test(image.encoded)) return "";

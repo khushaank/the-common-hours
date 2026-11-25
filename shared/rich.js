@@ -12,6 +12,7 @@ md.validateLink = url => /^https:\/\//i.test(url) || /^#[a-z0-9_-]+$/i.test(url)
 md.renderer.rules.image = (tokens, index, options, env, self) => {
   const token = tokens[index];
   const alt = self.renderInlineAsText(token.children, options, env);
+  if (env.note) return escape(alt);
   const id = assetId(token.attrGet("src") || "", "media:");
   const legacyCaption = env.editable && token.attrGet("title");
   return id ? '<span class="media-slot" aria-busy="true" data-image="' + id + '" data-alt="' + escape(alt) + '"' +
@@ -125,6 +126,15 @@ export function mediaReferences(body) {
 }
 
 export const renderMarkup = (body, environment) => md.render(body.startsWith(markdownMarker) ? body.slice(markdownMarker.length) : body, environment);
+export const renderNoteText = text => md.renderInline(text, { note: true });
+
+export function plainNoteText(text) {
+  const [line] = md.parseInline(text, {});
+  return line.children.map(token => {
+    if (token.type === "softbreak" || token.type === "hardbreak") return " ";
+    return token.content;
+  }).join("").replace(/\s+/gu, " ").trim();
+}
 
 export function loadImageSlot(slot, loadImage, enlarge = false) {
   return Promise.resolve().then(() => loadImage(slot.dataset.image)).then(image => {

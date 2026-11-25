@@ -1,7 +1,7 @@
 import { showFailure, watchUnexpectedErrors } from "./feedback.js";
 import { setupShortcuts } from "./keyboard.js";
 import { pageHref, pageParams } from "./page-url.js";
-import { setupImageViewer } from "./image-viewer.js";
+import { setupImageViewer, setupNoteCarousels } from "./image-viewer.js";
 
 watchUnexpectedErrors("Part of the journal ran into a problem. You can keep reading or reload the page.",
   () => document.documentElement.hasAttribute("data-interactive"));
@@ -37,6 +37,7 @@ import("./journal.js").catch(() => {
 
 setupSearch();
 setupImageViewer();
+setupNoteCarousels();
 const activate = selector => () => document.querySelector(selector).click();
 setupShortcuts("Journal shortcuts", [
   ["Alt + K", "Open journal search", activate("#search-link")],

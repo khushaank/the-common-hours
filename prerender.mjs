@@ -1,15 +1,16 @@
-import { entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
+import sharp from "sharp";
+import { articleTopics, entryTags, escape, imageSource, markdownMarker, mediaId } from "./shared/text.js";
 import { mediaReferences, renderMarkup } from "./shared/rich.js";
-import { noteExtras, readNote } from "./shared/note.js";
+import { noteBody, readNote } from "./shared/note.js";
 import { pageHref } from "./shared/page-url.js";
 import { notice, terms } from "./blog/legal-content.js";
-import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderSidebar, renderTopics } from "./shared/archive.js";
+import { archiveEntries, archivePageSize, archiveTitle, commentCards, grouped, noteCard, publicationRevision, renderArchive, renderLatest, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./shared/archive.js";
 import { seriesDirectory, seriesMembership, seriesNavigation } from "./shared/series.js";
 import { startIntroduction, startEmpty } from "./blog/reading-copy.js";
 import { photoText, photoTitle, publicPhoto } from "./shared/photo-text.js";
 
 const home = "https://commonhours.qd.je/";
-export const generatedFile = /^(?:(?:archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html|media-[0-9a-f-]{36}\.jpg|attachment-[0-9a-f-]{36}\.bin|sitemap\.xml|robots\.txt)$/i;
+export const generatedFile = /^(?:(?:archive(?:-(?:year-\d{4}|month-\d{4}-\d{2}|tag-[A-Za-z0-9_~]+))?(?:-page-[1-9]\d*)?|notes|topics|photos|start|series|privacy|terms|collections|photo-essays|entry-[a-z0-9-]{1,120}|photo-(?:[0-9a-f-]{36}|month-\d{4}-\d{2}))\.html|media-[0-9a-f-]{36}\.jpg|note-thumb-[0-9a-f-]{36}\.webp|attachment-[0-9a-f-]{36}\.bin|sitemap\.xml|robots\.txt)$/i;
 const missingColumn = error => ["42703", "PGRST204"].includes(error.code);
 const missingTable = error => ["42P01", "PGRST205"].includes(error.code);
 const date = value => new Date(value).toLocaleDateString("en", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });
@@ -56,6 +57,7 @@ export async function loadPublicSnapshot(config) {
   const photos = [...weeks, ...months.map(photo => ({ ...photo, id: "month-" + photo.month.slice(0, 7), title: photo.caption || "From the journal" }))]
     .sort((a, b) => photoDate(b).localeCompare(photoDate(a)));
   const ids = new Set(photos.map(photo => photo.media_id));
+  const thumbnailIds = new Set(posts.filter(post => post.is_note).slice(0, 3).map(post => readNote(post.body).photos[0]?.id));
   const downloads = new Set();
   for (const post of posts) {
     if (post.is_note) {
@@ -72,8 +74,14 @@ export async function loadPublicSnapshot(config) {
     const [image] = await rows("media", ["encoded,width,height,alt", "encoded,width,height"], "&id=eq." + id);
     if (!imageSource(image)) continue;
     const src = "media-" + id + ".jpg";
-    files.set(src, Buffer.from(image.encoded, "base64"));
+    const bytes = Buffer.from(image.encoded, "base64");
+    files.set(src, bytes);
     images.set(id, { ...image, encoded: undefined, src });
+    if (thumbnailIds.has(id)) {
+      try {
+        files.set(`note-thumb-${id}.webp`, await sharp(bytes).resize(144, 144).webp({ quality: 80 }).toBuffer());
+      } catch { /* The full photo remains available if a thumbnail can't be encoded. */ }
+    }
   }
   for (const id of downloads) {
     const response = await fetch(config.origin + "/storage/v1/object/qmargin-b74-attachments/" + id, {
@@ -99,7 +107,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     .replace(/\bid="[^"]*"/g, "");
   photos = photos.map(photo => publicPhoto(photo, images.get(photo.media_id)?.alt));
   const archiveRoutes = [{ view: "archive" }];
-  for (const [key, values] of [["year", posts.map(post => post.published_on.slice(0, 4))], ["month", posts.map(post => post.published_on.slice(0, 7))], ["tag", posts.flatMap(post => entryTags(post.tag))]]) {
+  for (const [key, values] of [["year", posts.map(post => post.published_on.slice(0, 4))], ["month", posts.map(post => post.published_on.slice(0, 7))], ["tag", posts.flatMap(articleTopics)]]) {
     for (const value of new Set(values)) archiveRoutes.push({ view: "archive", [key]: value });
   }
   const archivePages = archiveRoutes.flatMap(values => Array.from({ length: Math.max(1, Math.ceil(archiveEntries(posts, new URLSearchParams(values)).length / archivePageSize)) }, (_, index) =>
@@ -109,7 +117,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     ...photos.map(photo => pageHref({ view: "photo", photo: photo.id })),
     ...archivePages.map(pageHref), ...attachments.values(),
   ]);
-  const tagLinks = post => entryTags(post.tag).map(tag => `<a class="tag" href="${href({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ");
+  const tagLinks = post => articleTopics(post).map(tag => `<a class="tag" href="${href({ view: "archive", tag })}">${escape(tag)}</a>`).join(" · ");
   const cards = entries => entries.map(post => post.is_note ? noteCard(post, date, notePicture) : `<article class="entry"><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)}</p><h2 class="entry-title"><a href="${href({ post: post.slug })}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>";
   const picture = (id, escapedAlt, eager = false) => {
     const image = images.get(id);
@@ -121,8 +129,12 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     return image ? `<a class="zoom-image" href="${escape(image.src)}" aria-label="Enlarge photo: ${photoText(alt) || escape(photoText(image.alt)) || "Photograph"}">${picture(id, alt)}</a>` : picture(id, alt);
   };
   const notePicture = ({ id, alt }) => `<span class="media-slot">${zoomPicture(id, escape(alt))}</span>`;
+  const thumbnail = ({ id, alt }) => {
+    const src = `note-thumb-${id}.webp`;
+    return files.has(src) ? `<img src="${src}" width="144" height="144" alt="${escape(photoText(alt) || photoText(images.get(id)?.alt) || "Photograph")}" loading="lazy" decoding="async">` : picture(id, escape(alt));
+  };
   const months = grouped(posts, post => post.published_on.slice(0, 7));
-  const topicCounts = [...grouped(posts, post => entryTags(post.tag))].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
+  const topicCounts = [...grouped(posts, articleTopics)].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b));
   function page(values, title, content, description, classes = "wide-page") {
     const address = pageHref(values);
     const file = address === "./" ? "index.html" : address;
@@ -140,11 +152,11 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
       .replace(/<!-- public-content -->[\s\S]*?<!-- \/public-content -->/, () => '<div class="published-copy">' + content + '</div>' + loading)
       .replace("</body>", () => `<template id="public-pages" data-files="${escape([...publicFiles].join(" "))}" data-publication="${revision}"></template></body>`)
       .replace('aria-label="Journal content" aria-busy="true"', 'aria-label="Journal content" aria-busy="false" data-prerendered="true"')
-      .replace('<aside id="sidebar" aria-label="Blog archive"></aside>', () =>
-        `<aside id="sidebar" aria-label="Blog archive">${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
+      .replace('<aside id="sidebar" aria-label="Journal index"></aside>', () =>
+        `<aside id="sidebar" aria-label="Journal index">${file === "index.html" ? renderRecentNotes(posts, date, thumbnail) : ""}${renderSidebar(months, topicCounts, values.month, values.tag)}</aside>`)
       .replace("<!-- featured-snapshot -->", file === "index.html" ? featured?.markup || "" : "");
     if (!["privacy", "terms"].includes(values.view)) {
-      const active = ["archive", "series", "topics"].includes(values.view) ? "archive" : values.view === "start" ? "start" : "journal";
+      const active = classes.includes("note-page") || values.view === "notes" ? "notes" : ["archive", "series", "topics"].includes(values.view) ? "archive" : values.view === "start" ? "start" : "journal";
       html = html.replace(`id="${active}-link"`, `$& aria-current="page"`);
     }
     if (file === "index.html" && featured) {
@@ -158,7 +170,8 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     pages.set(file, html.replace(/<a(?= )/g, '<a draggable="false"'));
   }
   const heading = title => `<div class="section-head"><h1>${escape(title)}</h1></div>`;
-  page({}, "An independent journal", heading("Latest entries") + cards(posts.slice(0, 5)) + '<p><a class="back" href="archive.html">Browse all entries →</a></p>', "An independent journal by Ellis Vale.", "home-page");
+  page({}, "An independent journal", renderLatest(posts, date, 5), "An independent journal by Ellis Vale.", "home-page");
+  page({ view: "notes" }, "Notes", renderNotes(posts, date, notePicture), "Short observations and photographs from The Common Hours.");
   for (const values of archivePages) {
     const selection = [values.year, values.month, values.tag, values.page && "Page " + values.page].filter(Boolean).join(" · ");
     page(values, archiveTitle(new URLSearchParams(values)), renderArchive(posts, new URLSearchParams(values), notePicture), "Browse the journal archive" + (selection ? " · " + selection : " by year, month, or topic") + ".");
@@ -183,9 +196,7 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     const commentsSection = `<section class="comments"${discussion ? "" : " hidden"}><h2>Comments</h2><div id="comment-list" aria-live="polite">${discussion}</div></section>`;
     const postRevision = publicationRevision([post], true);
     if (post.is_note) {
-      const { text } = readNote(post.body);
-      const body = (text ? `<p class="note-text">${escape(text)}</p>` : "") + noteExtras(post.body, notePicture);
-      page({ post: post.slug }, post.title, `<a class="back" href="./">← Back to the journal</a><article class="article journal-note" data-publication="${postRevision}">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> ${tagLinks(post)} · By Ellis Vale</p><div class="prose" id="entry-body">${body}</div></article>${navigation}${commentsSection}`, post.excerpt || post.title, "article-page");
+      page({ post: post.slug }, post.title, `<a class="back" href="notes.html">← Back to Notes</a><article class="article journal-note" data-publication="${postRevision}">${membership}<h1>Note</h1><p class="meta"><time datetime="${escape(post.published_on)}">${date(post.published_on)}</time> <span class="byline">By Ellis Vale</span></p><div class="prose" id="entry-body">${noteBody(post.body, notePicture, true)}</div></article>${navigation}${commentsSection}`, post.excerpt || post.title, "article-page note-page");
       continue;
     }
     const attachmentNames = new Map(mediaReferences(post.body).filter(reference => reference.kind === "file").map(reference =>
@@ -208,6 +219,13 @@ export function renderPublicPages(template, { posts, photos, comments = [], imag
     [...images].map(src => `<image:image><image:loc>${escape(new URL(src, home).href)}</image:loc></image:image>`).join("") + "</url>");
   pages.set("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' + urls.join("") + "</urlset>\n");
   pages.set("robots.txt", "User-agent: *\nAllow: /\nSitemap: " + home + "sitemap.xml\n");
+  const legacyNoteTags = new Set(["Notes", ...posts.flatMap(post => entryTags(post.tag)).filter(tag => tag.toLowerCase() === "notes")]);
+  for (const tag of legacyNoteTags) {
+    const oldPages = Math.ceil(posts.filter(post => entryTags(post.tag).includes(tag)).length / archivePageSize);
+    for (let number = 1; number <= Math.max(1, oldPages); number++) {
+      pages.set(pageHref({ view: "archive", tag, page: number }), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Notes - The Common Hours</title><link rel="canonical" href="https://commonhours.qd.je/notes.html"><meta http-equiv="refresh" content="0; url=notes.html"><p><a href="notes.html">Read the notes</a></p></html>');
+    }
+  }
   for (const name of ["collections.html", "photo-essays.html"]) {
     pages.set(name, '<!doctype html><html lang="en"><meta charset="utf-8"><title>Archive - The Common Hours</title><meta http-equiv="refresh" content="0; url=archive.html"><p><a href="archive.html">Browse the archive</a></p></html>');
   }

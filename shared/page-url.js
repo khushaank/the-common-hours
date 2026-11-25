@@ -1,4 +1,4 @@
-const views = ["archive", "topics", "photos", "start", "series", "privacy", "terms"];
+const views = ["archive", "notes", "topics", "photos", "start", "series", "privacy", "terms"];
 const retired = ["collections", "photo-essays"];
 const slugPattern = /^[a-z0-9-]{1,120}$/;
 const photoPattern = /^(?:[0-9a-f-]{36}|month-\d{4}-\d{2}|cover)$/i;
@@ -6,6 +6,9 @@ const tagKey = value => btoa(String.fromCharCode(...new TextEncoder().encode(val
 
 export function pageParams(search = location.search, pathname = location.pathname) {
   const params = new URLSearchParams(search);
+  if (!params.has("post") && (!params.has("view") || params.get("view") === "archive") && params.get("tag")?.toLowerCase() === "notes") {
+    return new URLSearchParams({ view: "notes" });
+  }
   if (retired.includes(params.get("view"))) {
     params.set("view", "archive");
     params.delete("collection");

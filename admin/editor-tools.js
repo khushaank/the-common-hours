@@ -676,7 +676,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       body.maxLength = note ? 500 : 99960;
       body.placeholder = note ? "Write a note…" : "Start writing…";
       body.setAttribute("aria-label", note ? "Note text" : "Entry body in Markdown");
-      if (note) body.setAttribute("aria-description", "Type @image and press Enter to add photos. Type / to link a published article.");
+      if (note) body.setAttribute("aria-description", "Type @image and press Enter to add photos. Type / to link a published article. Notes support Markdown for emphasis and links.");
       else body.removeAttribute("aria-description");
       setPreview(!note);
       refresh();

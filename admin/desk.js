@@ -1,6 +1,6 @@
 import { getProjectOrigin } from "./config.js";
 import { allRows, fetchAttachment, journalToday, listAttachments, markdownMarker, mediaId, missingColumn, missingFeature, readMediaImage, removeAttachment, request, showFailure, table, uploadAttachment } from "./common.js";
-import { entryTags } from "./text.js";
+import { articleTopics, entryTags } from "./text.js";
 import { readNote, writeNote } from "./note.js";
 import { entryExcerpt, isSupportedImage, setupEditorTools, uploadImage } from "./editor-tools.js";
 import { setupPhotoTools } from "./photo-tools.js";
@@ -624,7 +624,7 @@ function showTags() {
   const value = tagInput.value.trim();
   const query = value.toLowerCase();
   const existing = entryTags(tagField.value).map(tag => tag.toLowerCase());
-  const all = entryTags(posts.map(post => post.tag).join(",")).filter(tag => !existing.includes(tag.toLowerCase())).sort((a,b) => a.localeCompare(b));
+  const all = entryTags(posts.flatMap(articleTopics).join(",")).filter(tag => !existing.includes(tag.toLowerCase())).sort((a,b) => a.localeCompare(b));
   const matches = (query ? all.filter(topic => topic.toLowerCase().includes(query)) : all)
     .sort((a,b) => Number(b.toLowerCase().startsWith(query)) - Number(a.toLowerCase().startsWith(query)));
   const exact = matches.findIndex(topic => topic.toLowerCase() === query);

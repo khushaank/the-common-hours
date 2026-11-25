@@ -1,6 +1,7 @@
-import { entryTags, escape } from "./text.js";
+import { articleTopics, escape } from "./text.js";
 import { pageHref } from "./page-url.js";
-import { noteExtras, readNote } from "./note.js";
+import { noteExtras, noteImageSlot, noteText, readNote } from "./note.js";
+import { plainNoteText } from "./rich.js";
 
 export const archivePageSize = 15;
 
@@ -46,9 +47,36 @@ export function renderSidebar(months, topics, month, tag) {
     ${topics.length > 10 ? '<a class="back" href="topics.html">All topics →</a>' : ""}</section>` : ""}`;
 }
 
-export function noteCard(post, dateLabel, picture) {
+export function noteCard(post, dateLabel, picture, carousel = false) {
   const text = post.body === undefined ? post.excerpt : readNote(post.body).text;
-  return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">Note · <time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>${text ? `<p class="note-text">${escape(text)}</p>` : ""}${noteExtras(post.body, picture)}</article>`;
+  return `<article class="entry journal-note"><p class="meta"><a href="${escape(pageHref({ post: post.slug }))}" aria-label="${escape("Read note: " + post.title)}">${carousel ? "" : "Note · "}<time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time></a></p>${noteText(text)}${noteExtras(post.body, picture, carousel)}</article>`;
+}
+
+export function renderNotes(posts, dateLabel, picture) {
+  return `<div class="notes-feed"><div class="section-head"><h1>Notes</h1></div>
+    ${posts.filter(post => post.is_note).map(post => noteCard(post, dateLabel, picture, true)).join("") || '<p>No notes have been published yet.</p>'}</div>`;
+}
+
+export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot) {
+  const notes = posts.filter(post => post.is_note).slice(0, 3);
+  return `<section class="side-section"><h2 class="side-title">Recent notes</h2>
+    ${notes.length ? '<ul class="recent-notes">' + notes.map(post => {
+      const { text, photos } = readNote(post.body ?? post.excerpt);
+      const date = escape(dateLabel(post.published_on));
+      return `<li><a href="${escape(pageHref({ post: post.slug }))}">${photos[0] ? `<span class="note-thumb">${thumbnail(photos[0])}</span>` : ""}
+        <span><time datetime="${escape(post.published_on)}">${date}</time><span class="note-preview">${escape(plainNoteText(text) || "Photo note")}</span></span></a></li>`;
+    }).join("") + '</ul>' : '<p class="status">No published notes yet.</p>'}
+    <a class="back" href="notes.html">View all notes</a></section>`;
+}
+
+export function renderLatest(posts, dateLabel, limit) {
+  const entries = posts.filter(post => !post.is_note).slice(0, limit);
+  return `<div class="section-head"><h1>Latest entries</h1></div>${entries.map(post => `<article class="entry">
+    <p class="meta"><time datetime="${escape(post.published_on)}">${escape(dateLabel(post.published_on))}</time>
+      ${articleTopics(post).map(tag => `<a class="tag" href="${href({ tag })}">${escape(tag)}</a>`).join(" · ")}</p>
+    <h2 class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></h2>
+    <p>${escape(post.excerpt)}</p></article>`).join("") || '<p>No entries here yet.</p>'}
+    <p><a class="back" href="archive.html">Browse all articles</a></p>`;
 }
 
 export function renderTopics(topicCounts) {
@@ -65,7 +93,7 @@ export function commentCards(comments) {
 export function archiveEntries(posts, params) {
   return posts.filter(post => (!params.get("year") || post.published_on.startsWith(params.get("year") + "-")) &&
     (!params.get("month") || post.published_on.startsWith(params.get("month") + "-")) &&
-    (!params.get("tag") || entryTags(post.tag).includes(params.get("tag"))));
+    (!params.get("tag") || articleTopics(post).includes(params.get("tag"))));
 }
 
 export function renderArchive(posts, params, picture) {
@@ -82,11 +110,11 @@ export function renderArchive(posts, params, picture) {
       <details${selection ? " open" : ""}><summary>Browse by year, month, or topic</summary>
         <h2>Year</h2><div>${links("year", unique(posts.map(post => post.published_on.slice(0, 4))))}</div>
         <h2>Month</h2><div>${links("month", unique(posts.map(post => post.published_on.slice(0, 7))), monthLabel)}</div>
-        <h2>Topic</h2><div>${links("tag", unique(posts.flatMap(post => entryTags(post.tag))).sort((a, b) => a.localeCompare(b)))}</div>
+        <h2>Topic</h2><div>${links("tag", unique(posts.flatMap(articleTopics)).sort((a, b) => a.localeCompare(b)))}</div>
       </details>
     </nav>${selection ? `<p class="status">Showing ${escape(selection)}</p>` : ""}
     ${entries.slice((page - 1) * archivePageSize, page * archivePageSize).map(post => post.is_note ? noteCard(post, value => value, picture) : `<article class="entry">
-      <p class="meta"><time datetime="${escape(post.published_on)}">${escape(post.published_on)}</time>${entryTags(post.tag).map(tag => `<a href="${href({ tag })}">${escape(tag)}</a>`).join(" · ")}</p>
+      <p class="meta"><time datetime="${escape(post.published_on)}">${escape(post.published_on)}</time>${articleTopics(post).map(tag => `<a href="${href({ tag })}">${escape(tag)}</a>`).join(" · ")}</p>
       <h2 class="entry-title"><a href="${escape(pageHref({ post: post.slug }))}">${escape(post.title)}</a></h2><p>${escape(post.excerpt)}</p></article>`).join("") || "<p>No entries here yet.</p>"}
     ${totalPages > 1 ? `<nav class="pagination" aria-label="Archive pages">
       ${page > 1 ? `<a rel="prev" href="${href({ ...selected, page: page - 1 })}">← Previous</a>` : ""}
