@@ -19,10 +19,11 @@ function element() {
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; this.scrollTop = 0; },
     querySelector() { return this.children[0]; },
+    contains(child) { return this.children.includes(child); },
   };
 }
 
-function editorTools(value, start = 0, end = value.length, getReferences, getEntries = () => [], openLibrary) {
+function editorTools(value, start = 0, end = value.length, getReferences, getEntries = () => [], openLibrary, attachments = {}) {
   const nodes = new Map();
   const query = selector => { if (!nodes.has(selector)) nodes.set(selector, element()); return nodes.get(selector); };
   const body = Object.assign(element(), {
@@ -41,15 +42,16 @@ function editorTools(value, start = 0, end = value.length, getReferences, getEnt
   query("#entry-preview").hidden = true;
   const editorSource = source.slice(source.indexOf("const markdownLabel")).replaceAll("export ", "")
     .replace('import("./image-library.js")', "loadLibrary()");
+  const document = Object.assign(element(), { querySelector: query, createElement: element });
   const setup = runInNewContext(editorSource + "\nsetupEditorTools", {
-    document: { querySelector: query, createElement: element }, Event, URL,
+    document, Event, URL,
     allowedImages: new Set(), async readMediaImage() {}, imageSource() {}, createVisualEditor: () => ({}), renderText() {},
     loadLibrary: async () => ({ setupImageLibrary: () => openLibrary }),
     noteReferenceLimit, readNote, writeNote,
   });
-  const tools = setup(editor, () => {}, {}, getEntries, getReferences);
+  const tools = setup(editor, () => {}, attachments, getEntries, getReferences);
   const format = key => query(".format-tools").dispatchEvent({ type: "click", target: { closest: () => ({ dataset: { format: key } }) } });
-  return { body, query, tools, format };
+  return { body, query, tools, format, document };
 }
 
 test("toolbar formats only the selection and keeps slash command insertion working", () => {
@@ -97,11 +99,39 @@ test("slash menu omits toolbar formatting and retains every other insert command
   const view = editorTools("/", 1, 1);
   view.body.dispatchEvent(new Event("input"));
   const names = Array.from(view.query("#command-menu").children, button => button.dataset.command);
-  assert.deepEqual(names, ["image", "carousel", "file", "pdf", "entry", "footnote"]);
+  assert.deepEqual(names, ["image", "carousel", "file", "pdf", "entry", "poll", "footnote"]);
   for (const name of ["heading", "bold", "italic", "list", "numbered", "quote", "library", "video", "divider"]) {
     const removed = editorTools("/" + name, name.length + 1, name.length + 1);
     removed.body.dispatchEvent(new Event("input"));
     assert.equal(removed.query("#command-menu").hidden, true);
+  }
+});
+
+test("slash opens the poll in notes and articles and closes on outside clicks or unrelated typing", () => {
+  for (const note of [false, true]) {
+    let opened = 0;
+    const view = editorTools("/", 1, 1, undefined, undefined, undefined, { poll() { opened++; } });
+    if (note) view.tools.setNote(true, "/");
+    const menu = view.query("#command-menu");
+    view.body.dispatchEvent(new Event("input"));
+    assert.equal(menu.hidden, false);
+    view.document.dispatchEvent({ type: "pointerdown", target: view.body });
+    assert.equal(menu.hidden, true);
+    view.body.value = "/something";
+    view.body.setSelectionRange(10, 10);
+    view.body.dispatchEvent(new Event("input"));
+    assert.equal(menu.hidden, true);
+    view.body.value = note ? "/poll" : "/p";
+    view.body.setSelectionRange(view.body.value.length, view.body.value.length);
+    view.body.dispatchEvent(new Event("input"));
+    if (!note) {
+      view.body.dispatchEvent({ type: "keydown", key: "ArrowUp", preventDefault() {} });
+      view.body.dispatchEvent({ type: "keydown", key: "ArrowUp", preventDefault() {} });
+      view.body.dispatchEvent({ type: "keydown", key: "ArrowDown", preventDefault() {} });
+    }
+    view.body.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
+    assert.equal(opened, 1);
+    assert.equal(view.body.value, "");
   }
 });
 

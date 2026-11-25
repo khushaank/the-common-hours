@@ -79,11 +79,13 @@ export function renderNoteDetail(post, dateLabel, picture) {
       <h1>${escape(title)}</h1><div class="prose" id="entry-body">${noteBody(post.body, picture, true)}</div></article></div>`;
 }
 
-export function renderNoteNavigation(notes, post) {
-  const index = notes.indexOf(post);
-  const link = (note, label) => note
-    ? `<a href="${escape(pageHref({ post: note.slug }))}"><span>${label}</span>${escape(note.title)}</a>` : "<div></div>";
-  return `<nav class="post-nav" aria-label="Adjacent notes">${link(notes[index + 1], "← Older note")}${link(notes[index - 1], "Newer note →")}</nav>`;
+export function renderPostNavigation(posts, post) {
+  const isNote = post.is_note;
+  const entries = isNote ? posts.filter(entry => entry.is_note) : posts;
+  const index = entries.indexOf(post);
+  const link = (entry, label, from) => entry
+    ? `<a href="${escape(pageHref({ post: entry.slug, ...(from && { from }) }))}"><span>${label}</span>${escape(entry.title)}</a>` : "<div></div>";
+  return `<nav class="post-nav" aria-label="Adjacent ${isNote ? "notes" : "posts"}">${link(entries[index + 1], isNote ? "← Older note" : "← Previous post")}${link(entries[index - 1], isNote ? "Newer note →" : "Next post →", "next")}</nav>`;
 }
 
 export function renderRecentNotes(posts, dateLabel, thumbnail = noteImageSlot, cover = () => null) {

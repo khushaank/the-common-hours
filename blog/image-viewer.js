@@ -107,10 +107,10 @@ export function setupImageViewer() {
       dialog = document.createElement("dialog");
       dialog.className = "image-viewer";
       dialog.setAttribute("aria-label", "Enlarged photo");
+      dialog.setAttribute("closedby", "any");
       dialog.innerHTML = '<button class="viewer-close" type="button" aria-label="Close photo viewer" title="Close (Esc)" autofocus>×</button><div class="viewer-stage"><img data-view-photo="previous" alt="" hidden><img data-view-photo="next" alt="" hidden><img data-view-photo="current" alt="">' + photoArrows + '</div><p class="viewer-count" aria-live="polite"></p>';
       dialog.querySelector(".viewer-close").addEventListener("click", () => dialog.close());
       dialog.addEventListener("click", click => {
-        if (click.target === dialog) dialog.close();
         const button = click.target.closest("[data-photo-step]");
         if (button) step(Number(button.dataset.photoStep));
       });

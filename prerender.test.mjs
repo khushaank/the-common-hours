@@ -101,6 +101,19 @@ test("a successful refresh keeps the published marker when the published DOM is 
   }
 });
 
+test("reader counts arrival categories without retaining referrer URLs", async () => {
+  const source = await readFile(new URL("./blog/journal.js", import.meta.url), "utf8");
+  const arrival = runInNewContext(source.slice(source.indexOf("function arrivalSource("), source.indexOf("function recordView(")) +
+    "\narrivalSource", { pageParams, URL });
+  const entry = new URL("https://example.test/entry-article?from=next");
+  assert.equal(arrival("", entry), "direct");
+  assert.equal(arrival("https://example.test/", entry), "home");
+  assert.equal(arrival("https://example.test/notes", entry), "internal");
+  assert.equal(arrival("https://example.test/entry-note", entry), "next");
+  assert.equal(arrival("https://example.test/entry-note", entry, "reload"), "direct");
+  assert.equal(arrival("https://external.test/private?q=sensitive", entry), "external");
+});
+
 test("search highlights the matching context and escapes the entire excerpt", async () => {
   const source = await readFile(new URL("./blog/reading.js", import.meta.url), "utf8");
   const render = runInNewContext(source.slice(source.indexOf("function searchCards"), source.indexOf("export async function renderReview")) +
@@ -313,7 +326,7 @@ test("note photos and references appear on notes and archive pages, with carouse
   }
   const homepage = pages.get("index.html");
   assert.doesNotMatch(pages.get("notes.html"), />Open note</);
-  assert.match(pages.get("entry-old-0.html"), /href="entry-photo-note"><span>Newer note →<\/span>/);
+  assert.match(pages.get("entry-old-0.html"), /href="entry-photo-note\?from=next"><span>Newer note →<\/span>/);
   assert.match(homepage, /<h1>Latest entries<\/h1>[\s\S]*?href="entry-first-entry"/);
   assert.match(homepage, new RegExp(`<img src="${thumb}" width="144" height="144"`));
   assert.match(homepage, /href="notes">View all notes/);

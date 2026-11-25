@@ -10,7 +10,8 @@ export const notice = `<h1>Privacy</h1><div class="prose">
   <p>The journal previously stored salted network fingerprints for note likes. Those records are no longer used.</p>
   <h2>Services and embeds</h2>
   <p>GitHub Pages hosts the website and logs visitor IP addresses for security. Supabase hosts the journal database and downloadable files and processes requests to them. When an embedded video loads, your browser connects to its provider, such as YouTube or Vimeo. The provider handles that connection under its own privacy policy.</p>
-  <p>The journal keeps daily totals for page views and visits. Your browser stores a timestamp in the current tab to estimate a new visit after 30 minutes without opening another page. The journal’s traffic counters store no IP addresses, visitor identifiers, or browsing history. Traffic counting respects Do Not Track and Global Privacy Control.</p>
+  <p>The journal keeps daily totals for page views, visits, and broad arrival sources such as the journal homepage or another website. Your browser stores a timestamp in the current tab to estimate a new visit after 30 minutes without opening another page. Traffic counters store no IP addresses, visitor identifiers, referring URLs, or browsing history. Traffic counting respects Do Not Track and Global Privacy Control.</p>
+  <p>If you vote in a reader poll, the journal stores your selection with a randomly generated browser identifier to count one vote per browser per poll. You can remove the identifier from your device by clearing this site’s browser data.</p>
   <p>Your browser keeps a local copy of some public journal pages and images for offline reading. You can remove these copies by clearing this site’s browser data.</p>
   <ul>
     <li><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a></li>

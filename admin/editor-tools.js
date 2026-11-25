@@ -58,6 +58,7 @@ const commands = [
   ["file", "File"],
   ["pdf", "PDF"],
   ["entry", "Link to entry"],
+  ["poll", "Reader poll"],
   ["footnote", "Footnote", "^[Footnote text]"],
 ];
 
@@ -179,6 +180,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.command = key;
+      button.dataset.index = index;
       button.classList.toggle("active", index === active);
       button.textContent = name;
       const shortcut = document.createElement("kbd");
@@ -199,13 +201,15 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       /(?:^|[^\p{L}\p{N}_@./-])([/@])([a-z0-9_-]*)$/iu.exec(before);
     if ((range ? !range.collapsed : body.selectionEnd !== end) || !match) { closeMenu(); return; }
     const [, trigger, value] = match;
+    if (/\s$/.test(value)) { closeMenu(); return; }
     const query = value.toLowerCase();
     if (note && trigger === "@") {
       matches = [["@image", "Add a photo"], ["@carousel", "Photo carousel"]].filter(([key]) => key.slice(1).startsWith(query));
     } else if (note) {
       matches = getEntries().filter(entry => entry.published && !entry.is_note &&
-        [entry.slug, entry.title].some(field => field.toLowerCase().includes(query.trim())))
+        [entry.slug, entry.title].some(field => field.toLowerCase().includes(query)))
         .slice(0, 12).map(entry => [entry.slug, entry.title, entry]);
+      if ("poll".startsWith(query)) matches.unshift(commands.find(([key]) => key === "poll"));
     } else if (trigger === "@") {
       const saved = getReferences().filter(ref => ref.alias.startsWith(query) || ref.label.toLowerCase().startsWith(query));
       const entries = getEntries().filter(entry => entry.published && query &&
@@ -217,6 +221,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     } else {
       matches = commands.filter(([key, name]) => key.startsWith(query) || name.toLowerCase().startsWith(query));
     }
+    if (!matches.length) { closeMenu(); return; }
     if (range) {
       range.setStart(range.startContainer, end - value.length - 1);
       command = { start: range };
@@ -330,9 +335,6 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     }).catch(error => { status.textContent = error.message; });
   }
 
-  document.querySelector("#note-add-image").addEventListener("click", () => addNotePhoto(body.selectionEnd, body.selectionEnd));
-  document.querySelector("#note-add-carousel").addEventListener("click", () => addCarousel(body.selectionEnd, body.selectionEnd));
-
   blockFormat.addEventListener("change", () => {
     if (!previewPanel.hidden) {
       visual.format("formatBlock", blockFormat.value ? "h" + blockFormat.value : "p");
@@ -353,6 +355,11 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   function choose([type, name, template], selected = "") {
     const { start, end } = command;
     closeMenu();
+    if (type === "poll" && !template) {
+      replace("", start, end);
+      attachments.poll();
+      return;
+    }
     if (type === "@carousel" || type === "carousel" && !note) {
       addCarousel(start, end);
       return;
@@ -476,11 +483,13 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     }
     updateMenu();
   });
-  previewBody.addEventListener("click", updateMenu);
+  document.addEventListener("pointerdown", event => {
+    if (!menu.hidden && !menu.contains(event.target)) closeMenu();
+  });
   previewBody.addEventListener("blur", event => {
     if (!menu.contains(event.relatedTarget)) closeMenu();
   });
-  body.addEventListener("click", () => { updateMenu(); updateBlockFormat(); });
+  body.addEventListener("click", updateBlockFormat);
   body.addEventListener("blur", event => {
     if (!menu.contains(event.relatedTarget)) closeMenu();
   });
@@ -492,8 +501,10 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
+      const moveFocus = menu.contains(document.activeElement);
       active = (active + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
       renderMenu();
+      if (moveFocus) menu.children[active]?.focus();
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -501,6 +512,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
     }
   }
   previewBody.addEventListener("keydown", commandKey);
+  menu.addEventListener("keydown", commandKey);
   body.addEventListener("keydown", event => {
     if (event.isComposing) return;
     if (menu.hidden) {
@@ -532,7 +544,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
   menu.addEventListener("mousedown", event => event.preventDefault());
   menu.addEventListener("click", event => {
     const button = event.target.closest("[data-command]");
-    if (button && command) choose(matches.find(([key]) => key === button.dataset.command));
+    if (button && command) choose(matches[Number(button.dataset.index)]);
   });
   const formatTools = document.querySelector(".format-tools");
   formatTools.addEventListener("mousedown", event => { if (!event.target.closest("select")) event.preventDefault(); });
@@ -714,7 +726,7 @@ export function setupEditorTools(editor, api, attachments, getEntries, getRefere
       body.required = !note;
       body.placeholder = note ? "Write a note…" : "Start writing…";
       body.setAttribute("aria-label", note ? "Note body" : "Entry body in Markdown");
-      if (note) body.setAttribute("aria-description", "Type @image for photos, @carousel for a reusable carousel, or / to link a published article.");
+      if (note) body.setAttribute("aria-description", "Type @ for photos and carousels, or / for reader polls and article links.");
       else body.removeAttribute("aria-description");
       setPreview(!note);
       refresh();

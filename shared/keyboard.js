@@ -2,6 +2,7 @@ export function setupShortcuts(title, commands, enabled = () => true, fallbackFo
   const dialog = document.createElement("dialog");
   dialog.id = "shortcut-dialog";
   dialog.className = "shortcut-dialog";
+  dialog.setAttribute("closedby", "any");
   dialog.setAttribute("aria-labelledby", "shortcut-title");
   dialog.innerHTML = '<div class="shortcut-heading"><h2 id="shortcut-title"></h2><button type="button" autofocus>Close</button></div><dl></dl>';
   dialog.querySelector("h2").textContent = title;
@@ -23,6 +24,24 @@ export function setupShortcuts(title, commands, enabled = () => true, fallbackFo
     list.append(row);
   }
   document.body.append(dialog);
+
+  if (!("closedBy" in dialog)) {
+    let pressedOutside;
+    const outsideDialog = event => {
+      const target = event.target;
+      if (!target.matches?.('dialog[open][closedby="any"]')) return null;
+      const bounds = target.getBoundingClientRect();
+      return event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom ? target : null;
+    };
+    document.addEventListener("pointerdown", event => { pressedOutside = outsideDialog(event); });
+    document.addEventListener("pointerup", event => {
+      const target = outsideDialog(event);
+      if (!target || target !== pressedOutside) return;
+      if (target.requestClose) target.requestClose();
+      else if (target.dispatchEvent(new Event("cancel", { cancelable: true }))) target.close();
+    });
+  }
 
   function toggle() {
     if (dialog.open) dialog.close();

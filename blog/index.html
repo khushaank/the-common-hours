@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#fbfaf7">
 <meta name="description" content="The Common Hours, an independent journal by Ellis Vale.">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="same-origin">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-GkyGV9Lfb30cBTMvpUMnPVE9h6RJnrNmC2VcocGMxQs='; worker-src 'self'; manifest-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; media-src https:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <script>const l=new URLSearchParams(location.search),w=l.get("view");if(["archive","notes","topics","photos","start","series","privacy","terms","collections","photo-essays"].includes(w)){const t=new URL(w,location.href);l.delete("view");l.delete("post");t.search=l.toString();t.hash=location.hash;location.replace(t.href)}const q=new URLSearchParams(document.documentElement.dataset.route),f=location.pathname.split("/").pop().replace(/\.html$/,"");if(!q.size&&f&&f!=="index"){if(f.startsWith("entry-"))q.set("post",f.slice(6));else if(f.startsWith("photo-")&&f!=="photo-essays"){q.set("view","photo");q.set("photo",f.slice(6))}else q.set("view",f)}for(const[k,v]of new URLSearchParams(location.search))q.set(k,v);const v=q.get("view"),p=q.get("post"),h=document.documentElement;h.classList.remove("article-page","home-page","wide-page","policy-page");if(p)h.classList.add("article-page");if(v==="search"||v==="saved"||!["view","post","month","tag","series","page"].some(k=>q.has(k)))h.classList.add("home-page");h.dataset.journalPage=({notes:"notes",photos:"photos",photo:"photo",archive:"archive",topics:"archive",series:"archive",review:"article",privacy:"article",terms:"article"})[v]|| (p?"article":"journal");if(["notes","photos","photo","review","start","series","topics"].includes(v)||q.get("series"))h.classList.add("wide-page");if(v==="privacy"||v==="terms")h.classList.add("policy-page");</script>
 <title>The Common Hours - An independent journal</title>
@@ -14,8 +14,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <!-- public-api-connection -->
 <link rel="alternate" type="application/rss+xml" title="The Common Hours" href="feed.xml">
-<link rel="preload" as="font" type="font/woff2" href="serif.woff2" crossorigin>
-<link rel="preload" as="font" type="font/woff2" href="sans.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="newsreader.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="instrument-sans.woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="scrollbars.css">
 <link rel="stylesheet" href="interface.css">
@@ -33,7 +33,7 @@
     <nav aria-label="Main navigation">
       <a href="./" id="journal-link">Journal</a><a href="notes" id="notes-link" aria-keyshortcuts="Alt+N">Notes</a><a href="archive" id="archive-link">Archive</a>
       <a href="start" id="start-link">Start here</a>
-      <button id="search-link" class="search-icon js-only" type="button" aria-expanded="false" aria-controls="nav-search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>Search</button>
+      <button id="search-link" class="search-icon" type="button" aria-expanded="false" aria-controls="nav-search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>Search</button>
     </nav>
     <div id="nav-search" class="nav-search" hidden>
       <form id="entry-search" role="search">

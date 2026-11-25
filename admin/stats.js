@@ -26,6 +26,32 @@ export function publishingSummary(posts, today = journalToday()) {
   return { last, days: last ? Math.floor((Date.parse(today) - Date.parse(last.published_on)) / 86400000) : null };
 }
 
+export function renderEntryStats(data) {
+  const metric = (label, value) => '<div class="stats-metric"><span>' + label + '</span><strong>' + number.format(value) + '</strong></div>';
+  const sources = [
+    ["direct", "Direct or unknown"], ["home", "Journal homepage"], ["internal", "Another page on the site"],
+    ["next", "Next entry or newer note"], ["external", "Another website"],
+  ].map(([key, label]) => [label, Number(data.sources[key] || 0)]).sort((a, b) => b[1] - a[1]);
+  const tracked = sources.reduce((sum, [, count]) => sum + count, 0);
+  const rows = (items, total) => '<ul class="traffic-leaders entry-stats-breakdown">' + items.map(([label, count]) =>
+    '<li><span>' + escape(label) + '</span><span>' + number.format(count) + '</span>' +
+    (total ? '<meter aria-label="' + escape(label) + '" max="' + total + '" value="' + count + '"></meter>' : '') +
+    '</li>').join("") + '</ul>';
+  const poll = data.poll;
+  const votes = poll?.counts.reduce((sum, count) => sum + Number(count), 0);
+  return '<section class="card"><h2>Overview</h2><div class="stats-metrics">' +
+    metric("Views", data.views) + metric("Visits started here", data.visits) + metric("Comments", data.comments.total) +
+    '</div><p class="muted">' + number.format(data.comments.published) + ' published · ' +
+    number.format(data.comments.pending) + ' pending · ' + number.format(data.comments.ignored) + ' ignored</p></section>' +
+    '<section class="card"><h2>How readers arrived</h2>' +
+    (tracked ? rows(sources, tracked) : '<p class="muted">No arrival sources recorded yet.</p>') +
+    (data.views > tracked ? '<p class="muted">' + number.format(data.views - tracked) + ' views without source information</p>' : '') +
+    '</section><section class="card"><h2>Reader poll</h2>' +
+    (poll ? '<h3>' + escape(poll.question) + '</h3><p class="muted">' + number.format(votes) + (votes === 1 ? ' vote' : ' votes') +
+      '</p>' + rows(poll.options.map((option, index) => [option, Number(poll.counts[index])]), votes) :
+      '<p class="muted">This entry has no reader poll.</p>') + '</section>';
+}
+
 export function setupStats(api, getPosts, editEntry) {
   const period = document.querySelector("#stats-period");
   const status = document.querySelector("#stats-status");

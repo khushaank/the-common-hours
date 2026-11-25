@@ -115,6 +115,11 @@ export function createVisualEditor(target, loadImage) {
       document.execCommand(command, false, value);
     },
     insert(markdown, start) {
+      if (!markdown) {
+        restore(start);
+        if (!start.collapsed) document.execCommand("delete");
+        return;
+      }
       const fragment = document.createElement("template");
       fragment.innerHTML = renderMarkup(markdown, { docId: crypto.randomUUID(), editable: true });
       for (const item of fragment.content.querySelectorAll(".media-slot, .video, .footnote-ref, .footnotes")) {

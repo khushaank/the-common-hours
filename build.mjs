@@ -53,7 +53,10 @@ async function buildApp(app, destination, files, config, childDirectory, feature
   const revision = release.digest("hex").slice(0, 16);
   const version = path => versioned.has(path.replace(/^\.\//, "")) ? path + "?v=" + revision : path;
   if (app === "blog") { allowedFiles.add("feed.xml"); allowedFiles.add("featured.jpg"); allowedFiles.add("featured.webp"); allowedFiles.add("_headers"); allowedFiles.add("_redirects"); }
-  const retiredAssets = app === "blog" ? ["favicon.svg", "footer-landscape.jpg", "photo-shell.js", "note-likes.js"] : ["favicon.svg"];
+  const retiredAssets = app === "blog"
+    ? ["favicon.svg", "footer-landscape.jpg", "photo-shell.js", "note-likes.js", "serif.woff2", "serif-italic.woff2",
+      "sans.woff2", "sans-semibold.woff2", "LICENSE-DM-Sans.txt", "LICENSE-Instrument-Serif.txt"]
+    : ["favicon.svg"];
   const existing = await readdir(output, { withFileTypes: true });
   if (existing.some(entry => entry.isDirectory()
     ? entry.name !== childDirectory

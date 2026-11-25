@@ -131,7 +131,18 @@
                 <label id="series-part" hidden>Part number <input name="series_order" type="number" min="1" max="9999" readonly></label>
               </div>
               <label class="checkbox entry-only"><input name="start_here" type="checkbox" value="true"> Feature this entry on Start here</label>
-              <div><div class="help-row"><label for="reader-prompt">Reader prompt</label><span class="field-help"><button type="button" aria-label="Help with the reader prompt" aria-describedby="reader-prompt-help">i</button><span id="reader-prompt-help" role="tooltip">This optional question appears above the comment form.</span></span></div><textarea id="reader-prompt" name="reader_prompt" rows="2" maxlength="500"></textarea></div>
+              <div class="entry-only"><div class="help-row"><label for="reader-prompt">Reader prompt</label><span class="field-help"><button type="button" aria-label="Help with the reader prompt" aria-describedby="reader-prompt-help">i</button><span id="reader-prompt-help" role="tooltip">This optional question appears with your poll and comment form.</span></span></div><textarea id="reader-prompt" name="reader_prompt" rows="2" maxlength="500"></textarea></div>
+              <details id="poll-settings">
+                <summary>Reader poll</summary>
+                <label>Question <input name="poll_question" maxlength="180"></label>
+                <div id="poll-choices"></div>
+                <input name="poll_options" type="hidden">
+                <div class="actions">
+                  <button type="button" id="poll-add-option" class="icon-button" aria-label="Add poll option" title="Add poll option"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                  <button type="button" id="poll-clear">Clear poll</button>
+                </div>
+                <p class="muted">Add 2 to 6 options. Readers see the results after voting.</p>
+              </details>
               </div>
             </section>
             <div class="editor-workspace">
@@ -159,10 +170,6 @@
               <div class="editor-body" id="write-panel" hidden>
                 <label class="writing-label" for="entry-text"><span class="entry-only">Markdown</span><span class="note-only">Note body</span></label>
                 <textarea id="entry-text" name="body" rows="13" wrap="soft" maxlength="99960" required aria-label="Entry body in Markdown" aria-controls="command-menu" placeholder="Start writing…"></textarea>
-                <div id="note-compose-tools" class="actions">
-                  <button type="button" id="note-add-image" title="Add photo (@image)">Add photo</button>
-                  <button type="button" id="note-add-carousel" title="Add carousel (@carousel)">Add carousel</button>
-                </div>
                 <ul id="note-attachments" aria-label="Note attachments" hidden></ul>
               </div>
               <section class="editor-preview" id="entry-preview" aria-label="Entry preview">
@@ -267,6 +274,14 @@
           <div id="stats-report"></div>
         </section>
       </section>
+      <section id="entry-stats-panel" data-desk-panel hidden>
+        <div class="section-heading">
+          <div><button type="button" id="back-entry-stats">← Back to entries</button><h1 id="entry-stats-title" tabindex="-1">Entry stats</h1></div>
+          <button type="button" id="refresh-entry-stats">Refresh</button>
+        </div>
+        <p id="entry-stats-status" role="status"></p>
+        <div id="entry-stats-report"></div>
+      </section>
       <section id="comments-panel" data-desk-panel hidden>
         <div class="section-heading"><h1>Comments</h1><label>Show <select id="comment-filter"><option value="all">All comments</option><option value="published">Published</option><option value="pending">Pending</option><option value="ignored">Ignored</option></select></label></div>
         <section class="card moderation">
@@ -289,7 +304,7 @@
     <div class="media-skeleton" aria-hidden="true"><span></span><span></span></div>
     <div class="media-skeleton" aria-hidden="true"><span></span><span></span></div>
   </template>
-  <dialog id="insert-dialog" aria-labelledby="insert-title">
+  <dialog id="insert-dialog" closedby="any" aria-labelledby="insert-title">
     <form id="insert-form" method="dialog">
       <h2 id="insert-title">Insert</h2>
       <label id="insert-label">Link text <input name="label" maxlength="200"></label>
@@ -299,12 +314,12 @@
       <div class="actions"><button type="button" id="cancel-insert">Cancel</button><button class="primary" type="submit">Insert</button></div>
     </form>
   </dialog>
-  <dialog id="entry-link-dialog" aria-labelledby="entry-link-title">
+  <dialog id="entry-link-dialog" closedby="any" aria-labelledby="entry-link-title">
     <div class="body-heading"><h2 id="entry-link-title">Link to an entry</h2><button type="button" id="entry-link-close">Close</button></div>
     <label>Search by title <input type="search" id="entry-link-search"></label>
     <div id="entry-link-results"></div>
   </dialog>
-  <dialog id="media-dialog" aria-labelledby="media-title">
+  <dialog id="media-dialog" closedby="any" aria-labelledby="media-title">
     <form id="media-form" method="dialog">
       <div class="body-heading"><h2 id="media-title">Edit media</h2><button type="button" id="media-close">Close</button></div>
       <div id="media-preview-frame" class="photo-preview-frame" hidden><img id="media-preview" alt="" decoding="async"></div>
@@ -316,7 +331,7 @@
       <div class="actions"><button type="button" id="media-delete">Delete media</button><button type="button" id="media-download">Download file</button><button type="submit" class="primary">Save details</button></div>
     </form>
   </dialog>
-  <dialog id="carousel-dialog" aria-labelledby="carousel-dialog-title">
+  <dialog id="carousel-dialog" closedby="any" aria-labelledby="carousel-dialog-title">
     <div class="body-heading"><h2 id="carousel-dialog-title">Photo carousel</h2><button type="button" id="carousel-close">Close</button></div>
     <div class="actions" id="carousel-chooser" hidden><label>Choose a carousel <select id="carousel-select"></select></label><button type="button" id="carousel-new">New carousel</button></div>
     <form id="carousel-form">
@@ -327,20 +342,20 @@
     <p id="carousel-status" role="status"></p>
     <ol id="carousel-photos"></ol>
   </dialog>
-  <dialog id="share-dialog" aria-labelledby="share-title">
+  <dialog id="share-dialog" closedby="any" aria-labelledby="share-title">
     <div class="body-heading"><h2 id="share-title">Share entry</h2><button type="button" id="close-share">Close</button></div>
     <p id="share-notice"></p>
     <div class="share-link-row"><label>Link <input id="share-link" readonly></label><button type="button" class="primary" id="copy-share" autofocus>Copy link</button></div>
     <p id="share-status" role="status"></p>
   </dialog>
-  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-message">
+  <dialog id="delete-dialog" closedby="any" aria-labelledby="delete-title" aria-describedby="delete-message">
     <form method="dialog">
       <h2 id="delete-title">Delete item?</h2>
       <p id="delete-message"></p>
       <div class="actions"><button type="submit" value="cancel" autofocus>Cancel</button><button type="submit" class="danger" value="delete">Delete</button></div>
     </form>
   </dialog>
-  <dialog id="reference-dialog" aria-labelledby="reference-form-title">
+  <dialog id="reference-dialog" closedby="any" aria-labelledby="reference-form-title">
     <form id="reference-form">
       <h2 id="reference-form-title">New reference</h2>
       <label>Shortcut <input name="alias" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
@@ -350,7 +365,7 @@
       <div class="actions"><button type="button" id="cancel-reference">Cancel</button><button type="submit" class="primary">Save reference</button></div>
     </form>
   </dialog>
-  <dialog id="library-dialog" aria-labelledby="library-title">
+  <dialog id="library-dialog" closedby="any" aria-labelledby="library-title">
     <div class="body-heading"><h2 id="library-title">Image library</h2><div class="actions"><button type="button" class="icon-button" id="library-add" aria-label="Upload an image" title="Upload an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" id="library-close">Close</button></div></div>
     <input type="file" id="library-file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" hidden>
     <div class="help-row"><label for="library-search">Find an image</label><span class="field-help"><button type="button" aria-label="Help with the image library" aria-describedby="library-help">i</button><span id="library-help" role="tooltip">Search by title or alt text, then select an image to use it.</span></span></div><input id="library-search" type="search" autocomplete="off" disabled>

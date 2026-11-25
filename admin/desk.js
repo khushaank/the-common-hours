@@ -70,6 +70,11 @@ const draftButton = editor.querySelector('[value="draft"]');
 const publishButton = editor.querySelector('[value="publish"]');
 const shareButton = document.querySelector("#share-entry");
 const editTitle = document.querySelector("#edit-entry-title");
+const pollSettings = document.querySelector("#poll-settings");
+const pollQuestion = editor.elements.namedItem("poll_question");
+const pollOptionsField = editor.elements.namedItem("poll_options");
+const pollChoices = document.querySelector("#poll-choices");
+const addPollOption = document.querySelector("#poll-add-option");
 function showSettings(open) {
   entryDetails.hidden = !open;
   settingsButton.setAttribute("aria-expanded", String(open));
@@ -89,6 +94,11 @@ titleInput.addEventListener("keydown", event => {
   editTitle.focus();
 });
 settingsButton.addEventListener("click", () => showSettings(entryDetails.hidden));
+document.addEventListener("pointerdown", event => {
+  if (!entryDetails.hidden && !entryDetails.contains(event.target) &&
+      !settingsButton.contains(event.target) && !event.target.closest("dialog")) showSettings(false);
+  if (!tags.hidden && !tags.contains(event.target) && !tagInput.contains(event.target)) closeTags();
+});
 function closeSettings() {
   showSettings(false);
   settingsButton.focus();
@@ -114,7 +124,71 @@ const editorTools = setupEditorTools(editor, api, {
   uploadMedia,
   download: async id => fetchAttachment(id, await sessionToken()),
   carousel: openCarousels,
+  poll() {
+    showSettings(true);
+    pollSettings.open = true;
+    pollQuestion.focus();
+  },
 }, () => posts, () => references);
+
+function syncPollChoices() {
+  const inputs = [...pollChoices.querySelectorAll("input")];
+  pollOptionsField.value = inputs.map(input => input.value).join("\n");
+  addPollOption.disabled = inputs.length >= 6;
+}
+
+function appendPollChoice(value) {
+  const row = document.createElement("div");
+  const label = document.createElement("label");
+  const caption = document.createElement("span");
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.textContent = "×";
+  remove.className = "icon-button";
+  const index = pollChoices.children.length + 1;
+  caption.textContent = "Option " + index;
+  remove.setAttribute("aria-label", "Remove option " + index);
+  const input = document.createElement("input");
+  input.maxLength = 120;
+  input.value = value;
+  label.append(caption, input);
+  remove.addEventListener("click", () => {
+    clearPublishError(pollChoices.querySelector("input"));
+    row.remove();
+    syncPollChoices();
+    renderPollChoices();
+    pollOptionsField.dispatchEvent(new Event("input", { bubbles: true }));
+    (pollChoices.querySelectorAll("input")[index - 1] || addPollOption).focus();
+  });
+  row.append(label, remove);
+  pollChoices.append(row);
+  return input;
+}
+
+function renderPollChoices() {
+  const values = pollOptionsField.value.split(/\r?\n/).slice(0, 6);
+  pollChoices.replaceChildren();
+  while (values.length < 2) values.push("");
+  values.forEach(appendPollChoice);
+  addPollOption.disabled = values.length >= 6;
+}
+
+pollChoices.addEventListener("input", () => {
+  clearPublishError(pollChoices.querySelector("input"));
+  syncPollChoices();
+});
+addPollOption.addEventListener("click", () => {
+  const input = appendPollChoice("");
+  syncPollChoices();
+  input.focus();
+});
+document.querySelector("#poll-clear").addEventListener("click", () => {
+  clearPublishError(pollChoices.querySelector("input"));
+  pollQuestion.value = pollOptionsField.value = "";
+  renderPollChoices();
+  pollQuestion.dispatchEvent(new Event("input", { bubbles: true }));
+  pollQuestion.focus();
+});
 const photoTools = setupPhotoTools(api, editorTools.openImageLibrary, () => media?.invalidate());
 let originalBody = "";
 let session;
@@ -131,6 +205,7 @@ let references = [];
 let baseline;
 let busy = false;
 let stats;
+let statsPost;
 let media;
 let activePost;
 let draftOwner;
@@ -327,6 +402,8 @@ function recoverDraft() {
     else if (field.type === "checkbox") field.checked = value === "true";
     else field.value = value;
   }
+  renderPollChoices();
+  if (pollQuestion.value || pollOptionsField.value.trim()) pollSettings.open = true;
   tagInput.value = "";
   renderTagChips();
   updatePart();
@@ -434,7 +511,16 @@ function renderPostList() {
     share.addEventListener("click", () => shareEntry(post, share));
     const remove = entryIcon("Delete", post, "M4 7h16m-10 0V4h4v3M7 7l1 13h8l1-13m-6-9v4m2-4v4");
     remove.addEventListener("click", () => deleteEntry(post, remove));
-    li.append(number, button, share, remove);
+    const report = entryIcon("View stats for", post, "M4 19h16M7 16v-4m5 4V5m5 11V9");
+    report.disabled = !post.published;
+    report.addEventListener("click", () => {
+      if (busy || !canLeaveDraft()) return;
+      statsPost = post;
+      rememberEntry(post.id);
+      openSection("entry-stats", true);
+      document.querySelector("#entry-stats-title").focus({ preventScroll: true });
+    });
+    li.append(number, button, report, share, remove);
     postList.append(li);
   }
   postList.scrollTop = scrollTop;
@@ -778,6 +864,10 @@ function openEditor(post, draft, note = false, localSlot = note ? "new-note" : "
   for (const key of ["title", "slug", "tag", "excerpt", "published_on", "reader_prompt"]) {
     editor.elements.namedItem(key).value = record?.[key] ?? "";
   }
+  pollQuestion.value = record?.poll_question ?? record?.poll?.question ?? "";
+  pollOptionsField.value = record?.poll_options ?? record?.poll?.options?.join("\n") ?? "";
+  renderPollChoices();
+  pollSettings.open = Boolean(pollQuestion.value || pollOptionsField.value.trim());
   if (isNote && !record?.slug) editor.elements.namedItem("slug").value = "note-" + crypto.randomUUID();
   renderTagChips();
   setSeries(record?.series);
@@ -1181,7 +1271,8 @@ function clearPublishErrors() {
 function showPublishErrors(errors) {
   status.textContent = "Check the highlighted fields.";
   const fields = [...errors].map(([name, text]) => {
-    const field = name === "tag" ? tagInput : name === "body" ? editorTools.bodyControl() : editor.elements.namedItem(name);
+    const field = name === "tag" ? tagInput : name === "body" ? editorTools.bodyControl() :
+      name === "poll_options" ? pollChoices.querySelector("input") : editor.elements.namedItem(name);
     const message = document.createElement("span");
     message.id = "publish-error-" + name;
     message.className = "field-error";
@@ -1201,12 +1292,12 @@ function showPublishErrors(errors) {
   fields[0].scrollIntoView({ block: "nearest" });
 }
 
-function validateEntry(record) {
+function validateEntry(record, hasPoll = false) {
   const errors = new Map();
   if (!record.title) errors.set("title", "Enter a title.");
   if (record.is_note) {
     const { text, photos, carousels } = readNote(record.body);
-    if (!text.trim() && !photos.length && !carousels.length) errors.set("body", "Write a note or add a photo before publishing.");
+    if (!text.trim() && !photos.length && !carousels.length && !hasPoll) errors.set("body", "Write a note, add a photo, or add a poll before publishing.");
     else if ([...text.trim()].length > 500) errors.set("body", "Use 500 characters or fewer for the note.");
   } else if (!record.body) errors.set("body", "Write something in the entry body.");
   if (!record.tag) errors.set("tag", "Add at least one tag.");
@@ -1228,9 +1319,9 @@ editor.addEventListener("submit", event => {
   const fields = entryFields();
   const note = isNote ? readNote(fields.body) : null;
   if (note) {
-    fields.title = noteTitle(note);
+    fields.title = note.text.trim() || !fields.poll_question.trim() ? noteTitle(note) : fields.poll_question.trim();
     fields.tag ||= "Notes";
-    fields.excerpt = note.text.trim() || (note.photos.length || note.carousels.length ? fields.title : "");
+    fields.excerpt = note.text.trim() || (note.photos.length || note.carousels.length || fields.poll_question.trim() ? fields.title : "");
   }
   if (event.submitter.value === "draft") {
     const source = activeDraft?.source || activePost;
@@ -1245,17 +1336,29 @@ editor.addEventListener("submit", event => {
     return;
   }
   const record = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
+  const { poll_question: question, poll_options: choices } = record;
+  const pollOptions = choices.split(/\r?\n/).map(option => option.trim()).filter(Boolean);
+  delete record.poll_question;
+  delete record.poll_options;
   if (note) record.body = writeNote(note.text.trim(), note);
   const knownTags = new Map(entryTags(posts.map(post => post.tag).join(",")).map(tag => [tag.toLowerCase(), tag]));
   record.tag = entryTags(record.tag).map(tag => knownTags.get(tag.toLowerCase()) || tag).join(", ");
   record.slug ||= activeDraft?.source?.slug || slugFromTitle(record.title);
-  const errors = validateEntry(record);
+  const errors = validateEntry(record, Boolean(question));
+  if (question || pollOptions.length) {
+    if (!question) errors.set("poll_question", "Enter a question for the poll.");
+    if (pollOptions.length < 2 || pollOptions.length > 6 || pollOptions.some(option => option.length > 120) || new Set(pollOptions).size !== pollOptions.length) {
+      errors.set("poll_options", "Enter 2 to 6 different choices, each 120 characters or fewer.");
+    }
+    pollSettings.open = true;
+  }
   if (errors.size) {
     showPublishErrors(errors);
     return;
   }
   let fieldError;
   void run(event.submitter, async () => {
+    record.poll = question ? { question, options: pollOptions } : null;
     if (!record.excerpt && !record.is_note) {
       record.excerpt = await entryExcerpt(record.body, record.title, record.body !== originalBody || originalBody.startsWith(markdownMarker));
     }
@@ -1276,7 +1379,16 @@ editor.addEventListener("submit", event => {
     const options = { method: target ? "PATCH" : "POST", body: record, prefer: "return=representation" };
     let saved;
     try {
-      try { [saved] = await api(path, options); }
+      async function saveRecord() {
+        try { return await api(path, options); }
+        catch (error) {
+          if (!missingColumn(error)) throw error;
+          if (record.poll) throw new Error("Apply the reader polls database upgrade before publishing this poll. Your edits can be saved as a draft.");
+          delete record.poll;
+          return api(path, options);
+        }
+      }
+      try { [saved] = await saveRecord(); }
       catch (error) {
         if (!missingColumn(error)) throw error;
         if (record.reader_prompt) throw new Error("Apply the journal features database upgrade before publishing a reader prompt. Your edits can be saved as a draft.");
@@ -1293,6 +1405,7 @@ editor.addEventListener("submit", event => {
       return;
     }
     if (!saved) throw new Error("The entry could not be saved.");
+    entryReports.delete(saved.id);
     entriesRevision++;
     removeBackup();
     let cleared = true;
@@ -1446,7 +1559,13 @@ function sectionHash(section) {
 }
 
 function deskSection() {
+  if (location.hash === "#entry-stats") return entryStatsPost() ? "entry-stats" : "entries";
   return sections.find(button => sectionHash(button.dataset.section) === location.hash)?.dataset.section || "stats";
+}
+
+function entryStatsPost() {
+  const id = new URLSearchParams(location.search).get("entry");
+  return posts.find(post => post.id === id && post.published);
 }
 
 function composeAddress(section) {
@@ -1466,6 +1585,8 @@ function updateDeskAddress(section, navigate = false) {
   url.searchParams.delete("post");
   url.searchParams.delete("compose");
   url.searchParams.delete("local");
+  url.searchParams.delete("entry");
+  if (section === "entry-stats") url.searchParams.set("entry", statsPost.id);
   if (section === "compose") {
     if (activeDraft) {
       url.searchParams.set("draft", activeDraft.slot);
@@ -1650,6 +1771,44 @@ async function openStats(refreshData = false) {
   }
 }
 
+const entryReports = new Map();
+const entryStatsTitle = document.querySelector("#entry-stats-title");
+const entryStatsStatus = document.querySelector("#entry-stats-status");
+const entryStatsReport = document.querySelector("#entry-stats-report");
+const refreshEntryStats = document.querySelector("#refresh-entry-stats");
+const backEntryStats = document.querySelector("#back-entry-stats");
+let reportRevision = 0;
+
+async function showEntryStats(post, refreshData = false) {
+  const revision = ++reportRevision;
+  entryStatsTitle.textContent = post.title;
+  backEntryStats.textContent = listScreen === "notes" ? "← Back to Notes" : "← Back to Entries";
+  entryStatsReport.replaceChildren();
+  entryStatsStatus.textContent = "Loading stats…";
+  refreshEntryStats.disabled = true;
+  try {
+    const { renderEntryStats } = await import("./stats.js");
+    if (refreshData || !entryReports.has(post.id)) {
+      const pending = adminRpc("entry_stats", { p_post: post.id });
+      entryReports.set(post.id, pending);
+      void pending.catch(() => { if (entryReports.get(post.id) === pending) entryReports.delete(post.id); });
+    }
+    const data = await entryReports.get(post.id);
+    if (revision !== reportRevision) return;
+    entryStatsStatus.textContent = "";
+    entryStatsReport.innerHTML = renderEntryStats(data);
+  } catch {
+    if (revision === reportRevision) showFailure(entryStatsStatus, "Entry stats could not load.", () => showEntryStats(post, true));
+  } finally {
+    if (revision === reportRevision) refreshEntryStats.disabled = false;
+  }
+}
+refreshEntryStats.addEventListener("click", () => void showEntryStats(statsPost, true));
+backEntryStats.addEventListener("click", () => {
+  openSection(listScreen, true);
+  selectedEntryButton()?.focus({ preventScroll: true });
+});
+
 let carouselEditor;
 async function openCarousels(options) {
   const { setupCarouselEditor } = await import("./carousel-editor.js");
@@ -1699,7 +1858,12 @@ document.querySelector("#refresh-references").addEventListener("click", event =>
 document.querySelector("#refresh-featured").addEventListener("click", event => run(event.currentTarget, () => photoTools.loadPhoto({ preserve: true })));
 refreshDashboard.addEventListener("click", () => openStats(true));
 function openSection(section, navigate = false) {
+  if (section === "entry-stats" && !navigate) {
+    statsPost = entryStatsPost();
+    if (statsPost) listScreen = statsPost.is_note ? "notes" : "entries";
+  }
   showSection(section, navigate);
+  if (section === "entry-stats") return void showEntryStats(statsPost);
   if (section === "stats") return void openStats();
   if (section === "media") return void openMedia();
   if (openedSections.has(section)) return;
@@ -1735,7 +1899,7 @@ async function restoreDeskSection() {
     });
     return;
   }
-  if (isListScreen(screen) || document.querySelector("#" + screen + "-panel").hidden) openSection(screen);
+  if (isListScreen(screen) || screen === "entry-stats" || document.querySelector("#" + screen + "-panel").hidden) openSection(screen);
   else updateDeskAddress(screen);
 }
 window.addEventListener("popstate", restoreDeskSection);

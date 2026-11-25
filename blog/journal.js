@@ -1,8 +1,9 @@
 import { pageHref, pageParams } from "./page-url.js";
 import { url, publishableKey } from "./config.js";
 import { allRows, escape, fetchAttachment, markdownMarker, missingColumn, missingFeature, readMediaImage, request, showFailure, table } from "./common.js";
+import { mountReaderPoll } from "./reader-poll.js";
 import { publicData } from "./public-cache.js";
-import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNoteNavigation, renderNotes, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
+import { archiveTitle, commentCards, grouped, publicationRevision, renderArchive, renderLatest, renderNoteDetail, renderNotes, renderPostNavigation, renderRecentNotes, renderSidebar, renderTopics } from "./archive.js";
 import { seriesDirectory, seriesEntries, seriesMembership, seriesNavigation } from "./series.js";
 import { startIntroduction, startEmpty } from "./reading-copy.js";
 import { articleTopics } from "./text.js";
@@ -77,9 +78,15 @@ async function fetchPublicPosts() {
     try {
       const posts = await allRows(get, "posts?select=" + fields + extra + filter);
       if (!posts.some(post => post.is_note)) return posts;
-      const notes = await allRows(get, "posts?select=id,body&published=eq.true&is_note=eq.true&order=id.asc");
-      const bodies = new Map(notes.map(note => [note.id, note.body]));
-      return posts.map(post => post.is_note ? { ...post, body: bodies.get(post.id) } : post);
+      const noteFields = "&published=eq.true&is_note=eq.true&order=id.asc";
+      let notes;
+      try { notes = await allRows(get, "posts?select=id,body,poll" + noteFields); }
+      catch (error) {
+        if (!missingColumn(error)) throw error;
+        notes = await allRows(get, "posts?select=id,body" + noteFields);
+      }
+      const details = new Map(notes.map(note => [note.id, note]));
+      return posts.map(post => post.is_note ? { ...post, ...details.get(post.id) } : post);
     }
     catch (error) { if (!extra || !missingColumn(error)) throw error; }
   }
@@ -88,10 +95,9 @@ async function fetchPublicPosts() {
 function loadBody(currentSlug, maxAge) {
   return publicData("post:" + currentSlug, async () => {
     const read = select => get("posts?" + new URLSearchParams({ select, slug: "eq." + currentSlug, published: "eq.true" }));
-    try { return (await read("body,reader_prompt"))[0] || null; }
-    catch (error) {
-      if (!missingColumn(error)) throw error;
-      return (await read("body"))[0] || null;
+    for (const select of ["body,reader_prompt,poll", "body,reader_prompt", "body"]) {
+      try { return (await read(select))[0] || null; }
+      catch (error) { if (select === "body" || !missingColumn(error)) throw error; }
     }
   }, maxAge, { fallback: maxAge !== 0 || !content.dataset.prerendered || content.dataset.refreshPending !== undefined });
 }
@@ -121,6 +127,18 @@ async function resolveEntry(posts) {
   return posts.indexOf(target);
 }
 
+function arrivalSource(referrer, url, navigationType) {
+  if (!referrer || navigationType === "reload") return "direct";
+  const previous = new URL(referrer);
+  if (previous.origin !== url.origin) return "external";
+  const route = pageParams(previous.search, previous.pathname);
+  if (url.searchParams.get("from") === "next" && route.has("post")) return "next";
+  const folder = new URL(".", url).pathname;
+  if ([folder, folder + "index.html"].includes(previous.pathname) &&
+      !["view", "post", "series", "year", "month", "tag", "page"].some(key => route.has(key))) return "home";
+  return "internal";
+}
+
 function recordView(page, post = null) {
   if (demo || !navigator.onLine || navigator.globalPrivacyControl || navigator.doNotTrack === "1") return;
   let visit = true;
@@ -131,9 +149,17 @@ function recordView(page, post = null) {
     visit = !last || now < last || now - last >= 30 * 60 * 1000;
     sessionStorage.setItem(key, String(now));
   } catch { /* Count the view if storage is unavailable. */ }
-  const send = () => void request("/rest/v1/rpc/qmargin_b74_record_view", {
-    method: "POST", body: { p_page: page, p_post: post, p_visit: visit }, keepalive: true,
-  }).catch(() => {});
+  const body = { p_page: page, p_post: post, p_visit: visit };
+  const source = post && arrivalSource(document.referrer, new URL(location.href), performance.getEntriesByType("navigation")[0]?.type);
+  const legacy = () => request("/rest/v1/rpc/qmargin_b74_record_view", { method: "POST", body, keepalive: true });
+  const send = () => {
+    const record = source ? request("/rest/v1/rpc/qmargin_b74_record_view_source", {
+      method: "POST", body: { ...body, p_source: source }, keepalive: true,
+    }).catch(error => {
+      if (error.code === "PGRST202" || error.code === "42883") return legacy();
+    }) : legacy();
+    void record.catch(() => {});
+  };
   if ("requestIdleCallback" in window) requestIdleCallback(send, { timeout: 1500 });
   else setTimeout(send, 0);
 }
@@ -188,16 +214,13 @@ async function renderPost(posts, index, firstBody) {
     (!post.is_note || published.closest(".note-detail-layout"));
   const renderer = !retain && hasFormatting ? await import("./rich.js").catch(() => null) : null;
   document.title = post.title + " - The Common Hours";
-  const nav = (neighbor, label) => neighbor
-    ? `<a href="${postLink(neighbor)}"><span>${label}</span>${escape(neighbor.title)}</a>` : "<div></div>";
-  const previousNext = `<nav class="post-nav" aria-label="Adjacent posts">${nav(posts[index + 1], "← Previous post")}${nav(posts[index - 1], "Next post →")}</nav>`;
+  const previousNext = renderPostNavigation(posts, post);
   if (post.is_note) {
     if (!retain) content.innerHTML = renderNoteDetail(post, dateLabel);
-    const notes = posts.filter(item => item.is_note);
-    const navigation = renderNoteNavigation(notes, post);
+    mountReaderPoll(content.querySelector(".note-detail-layout .article"), post);
     const existingNav = content.querySelector(".note-detail-layout + .post-nav");
-    if (existingNav) existingNav.outerHTML = navigation;
-    else content.querySelector(".note-detail-layout").insertAdjacentHTML("afterend", navigation);
+    if (existingNav) existingNav.outerHTML = previousNext;
+    else content.querySelector(".note-detail-layout").insertAdjacentHTML("afterend", previousNext);
     const { restoreArticleAnchors } = await import("./reading.js");
     restoreArticleAnchors(content.querySelector("#entry-body"));
     recordView("post", post.id);
@@ -212,18 +235,21 @@ async function renderPost(posts, index, firstBody) {
     const existingSeries = content.querySelector(".series-navigation");
     if (existingSeries) existingSeries.outerHTML = navigation;
     else if (navigation) published.insertAdjacentHTML("afterend", navigation);
-    content.querySelector(".comments").insertAdjacentHTML("beforebegin", previousNext);
+    const existingNav = content.querySelector(".post-nav");
+    if (existingNav) existingNav.outerHTML = previousNext;
+    else content.querySelector(".comments").insertAdjacentHTML("beforebegin", previousNext);
   }
   const discussion = content.querySelector(".comments");
   discussion.insertAdjacentHTML("beforeend", `
     <form id="comment-form" method="post"><h3>Leave a comment</h3>
-    ${post.reader_prompt ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
+    ${post.reader_prompt && !post.poll ? `<p class="reader-prompt">${escape(post.reader_prompt)}</p>` : ""}
     <label>Display name <input name="display_name" autocomplete="name" required maxlength="60"></label>
     <label>Comment <textarea name="body" required maxlength="2000" rows="4"></textarea></label>
     <p class="status">${demo ? "Preview mode. Comments stay in this browser." : 'Approved comments are public. <a href="privacy">Privacy</a>'}</p>
     <button>Submit comment</button><p class="status" role="status" id="comment-status"></p></form>`);
   discussion.hidden = false;
   const bodyElement = document.querySelector("#entry-body");
+  mountReaderPoll(bodyElement.closest(".article"), post);
   if (retain) {
     if (bodyElement.querySelector("[data-player], .video-poster")) {
       void import("./rich.js").then(({ enhanceVideos }) => enhanceVideos(bodyElement)).catch(() => {});
@@ -353,6 +379,8 @@ async function start() {
         currentFeed.replaceWith(template.content);
       } else content.innerHTML = renderNotes(posts, dateLabel);
     }
+    const notes = posts.filter(post => post.is_note);
+    content.querySelectorAll(".notes-feed .note-copy").forEach((note, index) => mountReaderPoll(note, notes[index]));
     return;
   }
   if (unchanged && !slug) {

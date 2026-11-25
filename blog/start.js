@@ -45,6 +45,7 @@ setupNoteCarousels();
 const activate = selector => () => document.querySelector(selector).click();
 setupShortcuts("Journal shortcuts", [
   ["Alt + K", "Open journal search", activate("#search-link")],
+  ["/ or @", "Open journal search"],
   ["Alt + J", "Go to the journal", activate("#journal-link")],
   ["Alt + N", "Go to Notes", activate("#notes-link")],
   ["Alt + O", "Open the current note", () => currentNoteLink()?.click(), () => Boolean(currentNoteLink())],
@@ -126,6 +127,11 @@ function setupSearch() {
   });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !searchPanel.hidden && !event.defaultPrevented) showSearch(false);
+    if (!["/", "@"].includes(event.key) || event.defaultPrevented || event.isComposing ||
+        event.ctrlKey || event.metaKey || event.altKey ||
+        event.target.closest("input, textarea, select, [contenteditable], dialog[open]")) return;
+    event.preventDefault();
+    showSearch(true);
   });
   document.addEventListener("pointerdown", event => {
     if (!searchPanel.hidden && !searchPanel.contains(event.target) && !searchButton.contains(event.target)) {

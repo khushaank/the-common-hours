@@ -125,6 +125,10 @@ grouping script](supabase/group-existing-note-photos.sql) and publish again.
 Article comments still use the existing moderation workflow.
 Apply [the comment moderation upgrade](supabase/comment-moderation.sql) to
 enable the **Ignored** state and exclude it from the pending queue.
+Apply [the reader polls upgrade](supabase/reader-polls.sql) and then
+[the entry stats upgrade](supabase/entry-stats.sql) before deploying the desk.
+Type `/poll` in an entry or note to write a question and add two to six options.
+Use the stats button beside a published entry to see traffic, comments, and votes.
 
 Apply [`supabase/upgrade-featured-photo.sql`](supabase/upgrade-featured-photo.sql)
 after the Notes and live review upgrades. It carries the current homepage photos
